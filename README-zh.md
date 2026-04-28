@@ -37,6 +37,7 @@
 | | |
 |:---|:---|
 | **训练 WebUI** | 预设、TensorBoard、WD 标签器、标签编辑器同一入口；运行 `run_gui.ps1` / `run_gui.sh` 后打开 **`http://127.0.0.1:28000`**。 |
+| **本 fork 增量** | 左侧 sidebar 多出 **Anima LoRA**（Anima DiT + Qwen3 + T5）训练入口；训练日志通过 SSE 实时推送到独立页面 **`/train-log`**；新增 `MIKAZUKI_FRONTEND_DIST` 环境变量，无需动 submodule 即可换前端 dist 目录。 |
 | **后端** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)；SDXL RF 脉络来自 [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)；Anima 来自 [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)（<b>SD-reScripts</b>）。 |
 | **许可证与致谢** | 详见 [`NOTICE.md`](NOTICE.md)。 |
 
@@ -86,17 +87,41 @@ cd lora-scripts-next
 **安装：** `install.bash`  
 **训练：** `bash run_gui.sh`，同上地址。
 
+### Anima LoRA 训练
+
+启动 WebUI 后，左侧 sidebar 里点 **Anima LoRA** 进入（占用了原来 SD3 的位置——`model_train_type` 已经被改成 `anima-lora`，后端会调度到 [`scripts/dev/anima_train_network.py`](scripts/dev/anima_train_network.py)）。表单里需要填 4 个模型路径：
+
+| 字段 | 含义 |
+|---|---|
+| `pretrained_model_name_or_path` | Anima DiT 主权重，如 `./sd-models/anima-preview.safetensors` |
+| `vae` | Qwen Image VAE 模型路径（必填） |
+| `qwen3` | Qwen3 文本模型，可填 `.safetensors` / `.pt` 文件，或完整本地模型目录 |
+| `t5` | T5 文本编码器权重 |
+
+打开表单里的 **`enable_preview`** 开关后，采样会切到 Anima 推荐参数（1024×1024、CFG 4.5、40 步、seed 42，并自动填入 Anima 风格的正反向提示词）。Windows 用户也可以直接运行 [`run_gui_anima.bat`](run_gui_anima.bat)，会以 Anima 默认值启动 WebUI。
+
+> 提示：该页面 URL 仍是 `/lora/sd3.html`（SPA 路由复用了原槽位）。可见的标签、参数集合、底层训练脚本都是 Anima，**只有 URL 路径还是历史名字**。
+
+### 训练日志（SSE）
+
+WebUI 启动训练时，后端会捕获子进程 stdout 并按行通过 Server-Sent Events 转发，有两种用法：
+
+- **独立全屏查看器** —— 浏览器打开 `http://127.0.0.1:28000/train-log?task_id=<task_id>`，或用 `<iframe src="/train-log?task_id=…" />` 嵌进自己的页面。背后是 [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html)。
+- **原始流** —— `GET /api/train/log/stream/{task_id}` 直接返回 `text/event-stream`，适合 Agent / 仪表板 / AutoDL 等远端 GPU 监控。
+
+`task_id` 来自 `POST /api/run` 的返回值，浏览器也会缓存到 `localStorage` 里，方便查看器自动续上。
+
 ### 前端静态文件
 
-训练 GUI 后端默认加载 `frontend/dist`。当前 `frontend` 是预构建静态文件子模块，而不是前端源码目录；如果该子模块指向旧版 dist，启动后看到的也会是旧 UI（例如仍包含 SD3 页面）。
+训练 GUI 后端默认加载 `frontend/dist`。该目录是 `hanamizuki-ai/lora-gui-dist` 这个**只有编译产物的 submodule**，并不是前端源码——本仓库内没有 `package.json` 也没有前端构建步骤。你看到的 "Anima LoRA" 页面**并不在 dist 里**，而是由 `mikazuki/schema/sd3-lora.ts` 渲染出来的：本 fork 把这份 schema 整个改写成了 Anima 配置，后端把它喂给原版 UI，表单就跟着重新渲染了。
 
-如果要使用自定义或 next 版前端，请先构建前端源码得到 `dist`，然后用环境变量指定静态文件目录：
+如果想接入自己另外打包的前端 dist，把 `MIKAZUKI_FRONTEND_DIST` 指向那个目录即可，无需动 submodule：
 
 ```bash
-MIKAZUKI_FRONTEND_DIST=/path/to/frontend/dist python gui.py --listen
+MIKAZUKI_FRONTEND_DIST=/path/to/your/dist python gui.py --listen
 ```
 
-也可以更新 `frontend` 子模块到对应的 dist 仓库/commit。后端不会自动从前端源码构建 UI。
+也可以把 `frontend` submodule 的 URL 改到自己的 dist 仓库。后端不会自动从前端源码构建 UI。
 
 ### Docker
 

@@ -37,6 +37,7 @@
 | | |
 |:---|:---|
 | **Train WebUI** | Single dashboard: presets, tensorboard hook, tagger, tag editor — open **`http://127.0.0.1:28000`** after `run_gui.ps1` / `run_gui.sh`. |
+| **What this fork adds** | **Anima LoRA** training entry in the sidebar (Anima DiT + Qwen3 + T5), live training log over SSE at **`/train-log`**, and a `MIKAZUKI_FRONTEND_DIST` env var for swapping the static UI without touching the submodule. |
 | **Back end** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts); SDXL RF ideas from [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF); Anima path from [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) (**SD-reScripts**). |
 | **Docs** | Full attribution & licenses in [`NOTICE.md`](NOTICE.md). |
 
@@ -86,17 +87,41 @@ cd lora-scripts-next
 **Install:** `install.bash`  
 **Train:** `bash run_gui.sh` → same URL as above.
 
-### Frontend Static Files
+### Anima LoRA training
 
-The training GUI backend serves `frontend/dist` by default. The current `frontend` directory is a prebuilt static-file submodule, not the frontend source tree. If that submodule points to an older dist build, the running GUI will show that older UI, including pages such as SD3.
+After launching the WebUI, open the **Anima LoRA** entry in the left sidebar (it lives where SD3 used to be — the `model_train_type` is wired to `anima-lora`, and the backend dispatches to [`scripts/dev/anima_train_network.py`](scripts/dev/anima_train_network.py)). Fill in the four model paths the schema asks for:
 
-To use a custom or next UI build, build the frontend source first and point the backend at the generated `dist` directory:
+| Field | What it expects |
+|---|---|
+| `pretrained_model_name_or_path` | Anima DiT weights, e.g. `./sd-models/anima-preview.safetensors` |
+| `vae` | Qwen Image VAE checkpoint (required) |
+| `qwen3` | Qwen3 text model (`.safetensors` / `.pt` or a local model directory) |
+| `t5` | T5 text encoder weights |
+
+Toggling **`enable_preview`** in the form switches sample generation to Anima-friendly defaults (1024×1024, CFG 4.5, 40 steps, seed 42, with the Anima sample prompts pre-filled). Windows users can also run [`run_gui_anima.bat`](run_gui_anima.bat) which boots the WebUI with the Anima-oriented defaults.
+
+> Heads-up: the page is still served at the `/lora/sd3.html` URL (the SPA route is reused). The visible label, parameter set, and trainer script are all Anima — only the URL slug is legacy.
+
+### Live training log (SSE)
+
+Whenever the WebUI fires off a run, the backend captures stdout and republishes it line-by-line over Server-Sent Events. Two ways to consume it:
+
+- **Standalone full-screen viewer** — open `http://127.0.0.1:28000/train-log?task_id=<task_id>` in a new tab, or embed it as `<iframe src="/train-log?task_id=…" />`. Backed by [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html).
+- **Raw stream** — `GET /api/train/log/stream/{task_id}` returns `text/event-stream`; useful for agents, dashboards, or remote monitoring on AutoDL / cloud GPUs.
+
+The `task_id` is what `POST /api/run` returns when a training job is started, and is also persisted in the browser's `localStorage` so the viewer auto-resumes.
+
+### Frontend static files
+
+The training GUI backend serves `frontend/dist` by default. The directory is a prebuilt static-file submodule (`hanamizuki-ai/lora-gui-dist`), not the frontend source tree — there is no `package.json` or build step inside this repo. The "Anima LoRA" page you see does **not** live in `dist`; it is rendered from `mikazuki/schema/sd3-lora.ts`, which this fork rewrites into an Anima schema. The backend ships that schema to the original UI and the form re-renders accordingly.
+
+If you want to plug in a different UI build, set `MIKAZUKI_FRONTEND_DIST` to any directory and the backend will serve from there:
 
 ```bash
-MIKAZUKI_FRONTEND_DIST=/path/to/frontend/dist python gui.py --listen
+MIKAZUKI_FRONTEND_DIST=/path/to/your/dist python gui.py --listen
 ```
 
-Alternatively, update the `frontend` submodule to the dist repository/commit that contains the desired UI. The backend does not build frontend source automatically.
+Or point the `frontend` submodule URL at your own dist repository. The backend does not build frontend source automatically.
 
 ## Legacy: script-only training
 
