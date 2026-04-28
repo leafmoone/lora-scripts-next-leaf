@@ -134,6 +134,70 @@ class NetworkTrainer:
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
+    def get_flow_pixel_counts(self, args, batch, latents):
+        return None
+
+    def validate_rectified_flow_args(self, args):
+        if not getattr(args, "flow_model", False):
+            if getattr(args, "contrastive_flow_matching", False) and not args.v_parameterization:
+                raise ValueError(
+                    "`--contrastive_flow_matching` requires `--v_parameterization` or `--flow_model`."
+                    " / `--contrastive_flow_matching` 需要 v-parameterization 或 Rectified Flow。"
+                )
+            return
+
+        if not self.is_sdxl:
+            raise ValueError(
+                "`--flow_model` is currently supported for SDXL LoRA training only."
+                " / `--flow_model` 目前仅支持 SDXL LoRA 训练。"
+            )
+
+        logger.info("Using Rectified Flow training objective / 使用 Rectified Flow 训练目标。")
+        if args.v_parameterization:
+            raise ValueError(
+                "`--flow_model` is incompatible with `--v_parameterization`; Rectified Flow already predicts velocity."
+                " / `--flow_model` 与 `--v_parameterization` 不兼容；Rectified Flow 已预测速度。"
+            )
+
+        ignored_args = [
+            ("min_snr_gamma", None),
+            ("debiased_estimation_loss", False),
+            ("scale_v_pred_loss_like_noise_pred", False),
+            ("v_pred_like_loss", None),
+            ("zero_terminal_snr", False),
+            ("ip_noise_gamma", None),
+            ("noise_offset", None),
+            ("multires_noise_iterations", None),
+        ]
+        for name, disabled_value in ignored_args:
+            if getattr(args, name, None):
+                logger.warning(
+                    f"`--{name}` is ignored when Rectified Flow is enabled."
+                    f" / Rectified Flow 启用时会忽略 `--{name}`。"
+                )
+                setattr(args, name, disabled_value)
+
+        if getattr(args, "flow_use_ot", False):
+            logger.info("Using cosine optimal transport pairing / 使用余弦最优传输配对。")
+
+        distribution = getattr(args, "flow_timestep_distribution", "logit_normal")
+        if distribution == "logit_normal":
+            if args.flow_logit_std <= 0:
+                raise ValueError("`--flow_logit_std` must be positive / `--flow_logit_std` 必须为正数。")
+            logger.info(
+                f"Rectified Flow timestep sampling: logit-normal, mean={args.flow_logit_mean}, std={args.flow_logit_std}"
+            )
+        elif distribution == "uniform":
+            logger.info("Rectified Flow timestep sampling: uniform / Rectified Flow 时间步使用均匀分布。")
+        else:
+            raise ValueError(f"Unknown flow_timestep_distribution: {distribution}")
+
+        static_ratio = getattr(args, "flow_uniform_static_ratio", None)
+        if static_ratio is not None and static_ratio <= 0:
+            raise ValueError("`--flow_uniform_static_ratio` must be positive / 必须为正数。")
+        if getattr(args, "flow_uniform_base_pixels", None) is not None and args.flow_uniform_base_pixels <= 0:
+            raise ValueError("`--flow_uniform_base_pixels` must be positive / 必须为正数。")
+
     def train(self, args):
         session_id = random.randint(0, 2**32)
         training_started_at = time.time()
@@ -141,6 +205,7 @@ class NetworkTrainer:
         train_util.prepare_dataset_args(args, True)
         deepspeed_utils.prepare_deepspeed_args(args)
         setup_logging(args, reset=True)
+        self.validate_rectified_flow_args(args)
 
         cache_latents = args.cache_latents
         use_dreambooth_method = args.in_json is None
@@ -613,6 +678,16 @@ class NetworkTrainer:
             "ss_loss_type": args.loss_type,
             "ss_huber_schedule": args.huber_schedule,
             "ss_huber_c": args.huber_c,
+            "ss_flow_model": bool(args.flow_model),
+            "ss_flow_use_ot": bool(args.flow_use_ot),
+            "ss_flow_timestep_distribution": args.flow_timestep_distribution,
+            "ss_flow_logit_mean": args.flow_logit_mean,
+            "ss_flow_logit_std": args.flow_logit_std,
+            "ss_flow_uniform_shift": bool(args.flow_uniform_shift),
+            "ss_flow_uniform_base_pixels": args.flow_uniform_base_pixels,
+            "ss_flow_uniform_static_ratio": args.flow_uniform_static_ratio,
+            "ss_contrastive_flow_matching": bool(args.contrastive_flow_matching),
+            "ss_cfm_lambda": args.cfm_lambda,
         }
 
         if use_user_config:
@@ -951,8 +1026,9 @@ class NetworkTrainer:
 
                     # Sample noise, sample a random timestep for each image, and add noise to the latents,
                     # with noise offset and/or multires noise if specified
+                    pixel_counts = self.get_flow_pixel_counts(args, batch, latents)
                     noise, noisy_latents, timesteps, huber_c = train_util.get_noise_noisy_latents_and_timesteps(
-                        args, noise_scheduler, latents
+                        args, noise_scheduler, latents, pixel_counts=pixel_counts
                     )
 
                     # ensure the hidden state will require grad
@@ -975,7 +1051,9 @@ class NetworkTrainer:
                             weight_dtype,
                         )
 
-                    if args.v_parameterization:
+                    if args.flow_model:
+                        target = noise - latents
+                    elif args.v_parameterization:
                         # v-parameterization training
                         target = noise_scheduler.get_velocity(latents, noise, timesteps)
                     else:
@@ -984,6 +1062,18 @@ class NetworkTrainer:
                     loss = train_util.conditional_loss(
                         noise_pred.float(), target.float(), reduction="none", loss_type=args.loss_type, huber_c=huber_c
                     )
+                    if args.contrastive_flow_matching and latents.size(0) > 1:
+                        negative_latents = latents.roll(1, 0)
+                        negative_noise = noise.roll(1, 0)
+                        with torch.no_grad():
+                            if args.flow_model:
+                                target_negative = negative_noise - negative_latents
+                            else:
+                                target_negative = noise_scheduler.get_velocity(negative_latents, negative_noise, timesteps)
+                        loss_contrastive = torch.nn.functional.mse_loss(
+                            noise_pred.float(), target_negative.float(), reduction="none"
+                        )
+                        loss = loss - args.cfm_lambda * loss_contrastive
                     if args.masked_loss or ("alpha_masks" in batch and batch["alpha_masks"] is not None):
                         loss = apply_masked_loss(loss, batch)
                     loss = loss.mean([1, 2, 3])
@@ -1228,6 +1318,63 @@ def setup_parser() -> argparse.ArgumentParser:
     # parser.add_argument("--loraplus_lr_ratio", default=None, type=float, help="LoRA+ learning rate ratio")
     # parser.add_argument("--loraplus_unet_lr_ratio", default=None, type=float, help="LoRA+ UNet learning rate ratio")
     # parser.add_argument("--loraplus_text_encoder_lr_ratio", default=None, type=float, help="LoRA+ text encoder learning rate ratio")
+    parser.add_argument(
+        "--flow_model",
+        action="store_true",
+        help="enable Rectified Flow training objective instead of standard diffusion / 启用 Rectified Flow 训练目标",
+    )
+    parser.add_argument(
+        "--flow_use_ot",
+        action="store_true",
+        help="pair latents and noise with cosine optimal transport for Rectified Flow / RF 使用余弦最优传输配对 latent 与噪声",
+    )
+    parser.add_argument(
+        "--flow_timestep_distribution",
+        type=str,
+        default="logit_normal",
+        choices=["logit_normal", "uniform"],
+        help="sampling distribution over Rectified Flow timesteps / Rectified Flow 的时间步采样分布",
+    )
+    parser.add_argument(
+        "--flow_logit_mean",
+        type=float,
+        default=0.0,
+        help="mean of the logit-normal distribution for Rectified Flow / RF logit-normal 分布均值",
+    )
+    parser.add_argument(
+        "--flow_logit_std",
+        type=float,
+        default=1.0,
+        help="stddev of the logit-normal distribution for Rectified Flow / RF logit-normal 分布标准差",
+    )
+    parser.add_argument(
+        "--flow_uniform_shift",
+        action="store_true",
+        help="apply resolution-dependent shift to Rectified Flow timesteps / 对 RF 时间步应用分辨率相关偏移",
+    )
+    parser.add_argument(
+        "--flow_uniform_base_pixels",
+        type=float,
+        default=1024.0 * 1024.0,
+        help="reference pixel count for resolution-dependent timestep shift / 分辨率相关时间步偏移的基准像素数",
+    )
+    parser.add_argument(
+        "--flow_uniform_static_ratio",
+        type=float,
+        default=None,
+        help="use a fixed sqrt(m/n) ratio for RF timestep shift / 使用固定比例进行 RF 时间步偏移",
+    )
+    parser.add_argument(
+        "--contrastive_flow_matching",
+        action="store_true",
+        help="enable Contrastive Flow Matching (Delta FM) with v-parameterization or RF / 启用对比流匹配目标",
+    )
+    parser.add_argument(
+        "--cfm_lambda",
+        type=float,
+        default=0.05,
+        help="lambda weight for the contrastive term in Delta FM loss / 对比项损失权重",
+    )
     return parser
 
 

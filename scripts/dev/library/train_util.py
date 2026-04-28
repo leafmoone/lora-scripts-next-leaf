@@ -3562,6 +3562,7 @@ def get_sai_model_spec_dataclass(
     sd3: str = None,
     flux: str = None,
     lumina: str = None,
+    anima: str = None,
     optional_metadata: dict[str, str] | None = None
 ) -> sai_model_spec.ModelSpecMetadata:
     """
@@ -3591,6 +3592,8 @@ def get_sai_model_spec_dataclass(
         model_config["flux"] = flux
     if lumina is not None:
         model_config["lumina"] = lumina
+    if anima is not None:
+        model_config["anima"] = anima
 
     # Use the dataclass function directly
     return sai_model_spec.build_metadata_dataclass(

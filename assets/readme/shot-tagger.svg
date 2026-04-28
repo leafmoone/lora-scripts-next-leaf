@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" role="img" aria-label="WD Tagger">
+  <rect width="400" height="220" rx="10" fill="#0f172a"/>
+  <rect x="10" y="10" width="380" height="24" rx="4" fill="#312e81"/>
+  <text x="20" y="27" fill="#c4b5fd" font-family="system-ui,sans-serif" font-size="11" font-weight="600">WD 1.4 · Tagger</text>
+  <rect x="20" y="48" width="360" height="100" rx="6" fill="#1e293b"/>
+  <rect x="32" y="62" width="80" height="72" rx="4" fill="#334155"/>
+  <rect x="124" y="62" width="244" height="10" rx="2" fill="#64748b"/>
+  <rect x="124" y="82" width="200" height="8" rx="2" fill="#475569"/>
+  <rect x="124" y="98" width="180" height="8" rx="2" fill="#475569"/>
+  <rect x="124" y="114" width="220" height="8" rx="2" fill="#475569"/>
+  <rect x="20" y="162" width="360" height="44" rx="6" fill="#1e1b4b"/>
+  <text x="200" y="188" text-anchor="middle" fill="#a78bfa" font-family="system-ui,sans-serif" font-size="10">1girl, masterpiece, &</text>
+</svg>

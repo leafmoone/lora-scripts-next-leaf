@@ -4,8 +4,9 @@ import os
 import sys
 import webbrowser
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -77,6 +78,16 @@ async def add_cache_control_header(request, call_next):
 
 app.include_router(api_router, prefix="/api")
 # app.include_router(ipc_router, prefix="/ipc")
+
+_TRAIN_LOG_HTML = Path(__file__).resolve().parent.parent / "static" / "train_log.html"
+
+
+@app.get("/train-log")
+async def train_log_viewer():
+    """Fullscreen training log viewer (SSE). Embed: <iframe src="/train-log?task_id=…" />."""
+    if not _TRAIN_LOG_HTML.is_file():
+        raise HTTPException(status_code=404, detail="train_log.html not found")
+    return FileResponse(str(_TRAIN_LOG_HTML))
 
 
 @app.get("/")

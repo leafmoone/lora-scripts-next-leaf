@@ -9,6 +9,7 @@ from subprocess import Popen, PIPE, TimeoutExpired, CalledProcessError, Complete
 import psutil
 
 from mikazuki.log import log
+from mikazuki.train_log_hub import hub
 
 try:
     import msvcrt
@@ -65,9 +66,42 @@ class Task:
         self.process.wait()
         self.status = TaskStatus.FINISHED
 
+    def _stdout_pump(self):
+        """Drain child stdout into TrainLogHub (same thread started after Popen)."""
+        try:
+            if not self.process or self.process.stdout is None:
+                return
+            for line in iter(self.process.stdout.readline, ""):
+                hub.append_line(self.task_id, line)
+        except Exception as e:
+            hub.append_line(self.task_id, f"[stdout pump] {e}")
+        finally:
+            try:
+                if self.process and self.process.stdout:
+                    self.process.stdout.close()
+            except Exception:
+                pass
+            hub.mark_done(self.task_id)
+
     def execute(self):
         self.status = TaskStatus.RUNNING
-        self.process = subprocess.Popen(self.command, env=self.environ)
+        hub.start_task(self.task_id)
+        try:
+            self.process = subprocess.Popen(
+                self.command,
+                env=self.environ,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except Exception as e:
+            hub.append_line(self.task_id, f"[error] Failed to start training process: {e}")
+            hub.mark_done(self.task_id)
+            raise
+        threading.Thread(target=self._stdout_pump, daemon=True).start()
 
     def terminate(self):
         try:

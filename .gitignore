@@ -2,10 +2,16 @@
 .idea
 
 venv
+.venv*
 __pycache__
 
 output/*
 !output/.keep
+outputs/
+
+.tmp/
+
+scripts/dev/configs/
 
 assets/config.json
 

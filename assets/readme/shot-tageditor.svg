@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" role="img" aria-label="Tag Editor">
+  <rect width="400" height="220" rx="10" fill="#0c4a6e"/>
+  <rect x="10" y="10" width="380" height="24" rx="4" fill="#075985"/>
+  <text x="20" y="27" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="11" font-weight="600">Tag Editor</text>
+  <rect x="20" y="44" width="170" height="156" rx="6" fill="#082f49"/>
+  <rect x="200" y="44" width="180" height="156" rx="6" fill="#0c4a6e" stroke="#0284c7" stroke-width="1"/>
+  <rect x="212" y="56" width="156" height="10" rx="2" fill="#0369a1"/>
+  <rect x="212" y="74" width="140" height="8" rx="2" fill="#0e7490"/>
+  <rect x="212" y="90" width="148" height="8" rx="2" fill="#0e7490"/>
+  <rect x="212" y="106" width="130" height="8" rx="2" fill="#0e7490"/>
+  <rect x="30" y="56" width="150" height="12" rx="2" fill="#164e63"/>
+  <rect x="30" y="76" width="150" height="12" rx="2" fill="#164e63"/>
+  <rect x="30" y="96" width="150" height="12" rx="2" fill="#164e63"/>
+  <rect x="30" y="116" width="150" height="12" rx="2" fill="#155e75"/>
+</svg>

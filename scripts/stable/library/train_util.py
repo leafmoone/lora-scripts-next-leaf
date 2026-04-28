@@ -5195,8 +5195,24 @@ def save_sd_model_on_train_end_common(
             huggingface_util.upload(args, out_dir, "/" + model_name, force_sync_upload=True)
 
 
-def get_timesteps_and_huber_c(args, min_timestep, max_timestep, noise_scheduler, b_size, device):
-    timesteps = torch.randint(min_timestep, max_timestep, (b_size,), device="cpu")
+def cosine_optimal_transport(x: torch.Tensor, y: torch.Tensor):
+    """Pair rows by minimum cosine distance for Rectified Flow OT sampling."""
+    from scipy.optimize import linear_sum_assignment
+
+    x_norm = x / torch.clamp(torch.norm(x, dim=1, keepdim=True), min=1e-8)
+    y_norm = y / torch.clamp(torch.norm(y, dim=1, keepdim=True), min=1e-8)
+    cost = -torch.mm(x_norm, y_norm.t())
+    row_ind, col_ind = linear_sum_assignment(cost.to(torch.float32).detach().cpu().numpy())
+    rows = torch.from_numpy(row_ind).to(cost.device, torch.long)
+    cols = torch.from_numpy(col_ind).to(cost.device, torch.long)
+    return rows, cols
+
+
+def get_timesteps_and_huber_c(args, min_timestep, max_timestep, noise_scheduler, b_size, device, timesteps_override=None):
+    if timesteps_override is None:
+        timesteps = torch.randint(min_timestep, max_timestep, (b_size,), device="cpu")
+    else:
+        timesteps = timesteps_override.to("cpu")
 
     if args.loss_type == "huber" or args.loss_type == "smooth_l1":
         if args.huber_schedule == "exponential":
@@ -5220,7 +5236,7 @@ def get_timesteps_and_huber_c(args, min_timestep, max_timestep, noise_scheduler,
     return timesteps, huber_c
 
 
-def get_noise_noisy_latents_and_timesteps(args, noise_scheduler, latents):
+def get_noise_noisy_latents_and_timesteps(args, noise_scheduler, latents, pixel_counts=None):
     # Sample noise that we'll add to the latents
     noise = torch.randn_like(latents, device=latents.device)
     if args.noise_offset:
@@ -5234,23 +5250,77 @@ def get_noise_noisy_latents_and_timesteps(args, noise_scheduler, latents):
             noise, latents.device, args.multires_noise_iterations, args.multires_noise_discount
         )
 
-    # Sample a random timestep for each image
     b_size = latents.shape[0]
-    min_timestep = 0 if args.min_timestep is None else args.min_timestep
-    max_timestep = noise_scheduler.config.num_train_timesteps if args.max_timestep is None else args.max_timestep
+    flow_model_enabled = getattr(args, "flow_model", False)
 
-    timesteps, huber_c = get_timesteps_and_huber_c(args, min_timestep, max_timestep, noise_scheduler, b_size, latents.device)
-
-    # Add noise to the latents according to the noise magnitude at each timestep
-    # (this is the forward diffusion process)
-    if args.ip_noise_gamma:
-        if args.ip_noise_gamma_random_strength:
-            strength = torch.rand(1, device=latents.device) * args.ip_noise_gamma
+    if flow_model_enabled:
+        timestep_max = noise_scheduler.config.num_train_timesteps
+        distribution = getattr(args, "flow_timestep_distribution", "logit_normal")
+        if distribution == "logit_normal":
+            logits = torch.normal(
+                mean=getattr(args, "flow_logit_mean", 0.0),
+                std=getattr(args, "flow_logit_std", 1.0),
+                size=(b_size,),
+                device=latents.device,
+            )
+            sigmas = torch.sigmoid(logits)
+        elif distribution == "uniform":
+            sigmas = torch.rand((b_size,), device=latents.device)
         else:
-            strength = args.ip_noise_gamma
-        noisy_latents = noise_scheduler.add_noise(latents, noise + strength * torch.randn_like(latents), timesteps)
+            raise ValueError(f"Unknown flow_timestep_distribution: {distribution}")
+
+        shift_requested = (
+            getattr(args, "flow_uniform_shift", False) or getattr(args, "flow_uniform_static_ratio", None) is not None
+        )
+        if shift_requested:
+            static_ratio = getattr(args, "flow_uniform_static_ratio", None)
+            if static_ratio is not None:
+                ratios = torch.full((b_size,), float(static_ratio), device=latents.device, dtype=torch.float32)
+            else:
+                if pixel_counts is None:
+                    raise ValueError("Resolution-dependent Rectified Flow shift requires pixel_counts.")
+                base_pixels = getattr(args, "flow_uniform_base_pixels", 1024.0 * 1024.0)
+                ratios = torch.sqrt(torch.as_tensor(pixel_counts, device=latents.device, dtype=torch.float32) / float(base_pixels))
+
+            sigmas = ratios * sigmas / (1 + (ratios - 1) * sigmas)
+
+        timesteps_override = torch.clamp((sigmas * timestep_max).long(), 0, timestep_max - 1)
+        timesteps, huber_c = get_timesteps_and_huber_c(
+            args,
+            0,
+            noise_scheduler.config.num_train_timesteps,
+            noise_scheduler,
+            b_size,
+            latents.device,
+            timesteps_override=timesteps_override,
+        )
     else:
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+        # Sample a random timestep for each image
+        min_timestep = 0 if args.min_timestep is None else args.min_timestep
+        max_timestep = noise_scheduler.config.num_train_timesteps if args.max_timestep is None else args.max_timestep
+        timesteps, huber_c = get_timesteps_and_huber_c(
+            args, min_timestep, max_timestep, noise_scheduler, b_size, latents.device
+        )
+
+    if flow_model_enabled:
+        if getattr(args, "flow_use_ot", False) and b_size > 1:
+            with torch.no_grad():
+                _, col_indices = cosine_optimal_transport(latents.view(b_size, -1), noise.view(b_size, -1))
+                noise = noise[col_indices]
+
+        sigmas_view = sigmas.view(-1, 1, 1, 1)
+        noisy_latents = sigmas_view * noise + (1.0 - sigmas_view) * latents
+    else:
+        # Add noise to the latents according to the noise magnitude at each timestep
+        # (this is the forward diffusion process)
+        if args.ip_noise_gamma:
+            if args.ip_noise_gamma_random_strength:
+                strength = torch.rand(1, device=latents.device) * args.ip_noise_gamma
+            else:
+                strength = args.ip_noise_gamma
+            noisy_latents = noise_scheduler.add_noise(latents, noise + strength * torch.randn_like(latents), timesteps)
+        else:
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
     return noise, noisy_latents, timesteps, huber_c
 

@@ -26,6 +26,52 @@ Schema.intersect([
         ]),
     ]),
 
+    // SDXL 预测类型设置
+    Schema.union([
+        Schema.intersect([
+            Schema.object({
+                model_train_type: Schema.const("sdxl-lora").required(),
+            }),
+
+            Schema.object({
+                sdxl_prediction_type: Schema.union(["eps", "v_prediction", "rectified_flow"]).default("eps").description("SDXL 预测类型：普通 SDXL 通常选 EPS；v-pred 或 RF 模型请按模型说明选择"),
+            }).description("SDXL 预测类型"),
+
+            Schema.union([
+                Schema.object({
+                    sdxl_prediction_type: Schema.const("v_prediction").required(),
+                    scale_v_pred_loss_like_noise_pred: Schema.boolean().default(false).description("缩放 v-prediction 损失（仅 v-pred 模型需要时启用）"),
+                }),
+                Schema.object({}),
+            ]),
+
+            Schema.union([
+                Schema.object({
+                    sdxl_prediction_type: Schema.const("rectified_flow").required(),
+                    flow_use_ot: Schema.boolean().default(false).description("使用余弦最优传输配对 latent 和噪声"),
+                    flow_timestep_distribution: Schema.union(["logit_normal", "uniform"]).default("logit_normal").description("时间步采样分布"),
+                    flow_uniform_static_ratio: Schema.number().step(0.1).description("固定的时间步偏移比率，留空则不使用固定偏移"),
+                    flow_uniform_shift: Schema.boolean().default(false).description("启用分辨率相关的时间步偏移"),
+                    flow_uniform_base_pixels: Schema.number().min(1).default(1048576).description("分辨率偏移基准像素数，默认 1024*1024"),
+                    contrastive_flow_matching: Schema.boolean().default(false).description("启用对比流匹配 (Delta FM) 目标"),
+                    cfm_lambda: Schema.number().step(0.01).default(0.05).description("Delta FM 损失中对比项的权重"),
+                }),
+                Schema.object({}),
+            ]),
+
+            Schema.union([
+                Schema.object({
+                    sdxl_prediction_type: Schema.const("rectified_flow").required(),
+                    flow_timestep_distribution: Schema.const("logit_normal").required(),
+                    flow_logit_mean: Schema.number().step(0.1).default(0.0).description("logit-normal 分布的均值"),
+                    flow_logit_std: Schema.number().step(0.1).default(1.0).description("logit-normal 分布的标准差"),
+                }),
+                Schema.object({}),
+            ]),
+        ]),
+        Schema.object({}),
+    ]),
+
     // 数据集设置
     Schema.object(SHARED_SCHEMAS.RAW.DATASET_SETTINGS).description("数据集设置"),
 

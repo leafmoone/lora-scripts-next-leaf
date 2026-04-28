@@ -102,10 +102,15 @@ class Offloader:
         self.blocks_to_swap = blocks_to_swap
         self.device = device
         self.debug = debug
+        self._forward_only = False
 
         self.thread_pool = ThreadPoolExecutor(max_workers=1)
         self.futures = {}
         self.cuda_available = device.type == "cuda"
+
+    def set_forward_only(self, forward_only: bool) -> None:
+        """Anima toggles this for inference vs training; this offloader is forward-only in practice."""
+        self._forward_only = bool(forward_only)
 
     def swap_weight_devices(self, block_to_cpu: nn.Module, block_to_cuda: nn.Module):
         if self.cuda_available:

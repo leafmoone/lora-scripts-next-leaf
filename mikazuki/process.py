@@ -44,9 +44,10 @@ def run_train(toml_path: str,
     def _run():
         try:
             task.execute()
-            result = task.communicate()
-            if result.returncode != 0:
-                log.error(f"Training failed / 训练失败")
+            task.wait()
+            rc = task.process.returncode if task.process else -1
+            if rc != 0:
+                log.error(f"Training failed / 训练失败 (exit {rc})")
             else:
                 log.info(f"Training finished / 训练完成")
         except Exception as e:
@@ -55,4 +56,13 @@ def run_train(toml_path: str,
     coro = asyncio.to_thread(_run)
     asyncio.create_task(coro)
 
-    return APIResponse(status="success", message=f"Training started / 训练开始 ID: {task.task_id}")
+    return APIResponse(
+        status="success",
+        message=f"Training started / 训练开始 ID: {task.task_id}",
+        data={
+            "task_id": task.task_id,
+            "train_log_path": "/train-log",
+            "train_log_query": f"task_id={task.task_id}",
+            "train_log_stream": f"/api/train/log/stream/{task.task_id}",
+        },
+    )

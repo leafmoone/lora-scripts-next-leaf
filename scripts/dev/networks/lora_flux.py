@@ -330,10 +330,14 @@ class LoRAInfModule(LoRAModule):
     def set_network(self, network):
         self.network = network
 
+    def _base_module(self):
+        """Original Linear/Conv after apply_to runs (LoRAModule deletes org_module)."""
+        return self.org_module_ref[0]
+
     # freezeしてマージする
     def merge_to(self, sd, dtype, device):
         # extract weight from org_module
-        org_sd = self.org_module.state_dict()
+        org_sd = self._base_module().state_dict()
         weight = org_sd["weight"]
         org_dtype = weight.dtype
         org_device = weight.device
@@ -344,17 +348,22 @@ class LoRAInfModule(LoRAModule):
         if device is None:
             device = org_device
 
+        compute_device = org_device
+        compute_dtype = torch.float
+
         if self.split_dims is None:
             # get up/down weight
-            down_weight = sd["lora_down.weight"].to(torch.float).to(device)
-            up_weight = sd["lora_up.weight"].to(torch.float).to(device)
+            down_weight = sd["lora_down.weight"].to(dtype=compute_dtype, device=compute_device)
+            up_weight = sd["lora_up.weight"].to(dtype=compute_dtype, device=compute_device)
 
             # merge weight
             if len(weight.size()) == 2:
                 # linear
+                weight = weight.to(device=compute_device, dtype=compute_dtype)
                 weight = weight + self.multiplier * (up_weight @ down_weight) * self.scale
             elif down_weight.size()[2:4] == (1, 1):
                 # conv2d 1x1
+                weight = weight.to(device=compute_device, dtype=compute_dtype)
                 weight = (
                     weight
                     + self.multiplier
@@ -363,31 +372,33 @@ class LoRAInfModule(LoRAModule):
                 )
             else:
                 # conv2d 3x3
+                weight = weight.to(device=compute_device, dtype=compute_dtype)
                 conved = torch.nn.functional.conv2d(down_weight.permute(1, 0, 2, 3), up_weight).permute(1, 0, 2, 3)
                 # logger.info(conved.size(), weight.size(), module.stride, module.padding)
                 weight = weight + self.multiplier * conved * self.scale
 
             # set weight to org_module
-            org_sd["weight"] = weight.to(dtype)
-            self.org_module.load_state_dict(org_sd)
+            org_sd["weight"] = weight.to(dtype=dtype)
+            self._base_module().load_state_dict(org_sd)
         else:
             # split_dims
             total_dims = sum(self.split_dims)
+            weight = weight.to(device=compute_device, dtype=compute_dtype)
             for i in range(len(self.split_dims)):
                 # get up/down weight
-                down_weight = sd[f"lora_down.{i}.weight"].to(torch.float).to(device)  # (rank, in_dim)
-                up_weight = sd[f"lora_up.{i}.weight"].to(torch.float).to(device)  # (split dim, rank)
+                down_weight = sd[f"lora_down.{i}.weight"].to(dtype=compute_dtype, device=compute_device)  # (rank, in_dim)
+                up_weight = sd[f"lora_up.{i}.weight"].to(dtype=compute_dtype, device=compute_device)  # (split dim, rank)
 
                 # pad up_weight -> (total_dims, rank)
-                padded_up_weight = torch.zeros((total_dims, up_weight.size(0)), device=device, dtype=torch.float)
+                padded_up_weight = torch.zeros((total_dims, up_weight.size(0)), device=compute_device, dtype=compute_dtype)
                 padded_up_weight[sum(self.split_dims[:i]) : sum(self.split_dims[: i + 1])] = up_weight
 
                 # merge weight
                 weight = weight + self.multiplier * (up_weight @ down_weight) * self.scale
 
             # set weight to org_module
-            org_sd["weight"] = weight.to(dtype)
-            self.org_module.load_state_dict(org_sd)
+            org_sd["weight"] = weight.to(dtype=dtype)
+            self._base_module().load_state_dict(org_sd)
 
     # 復元できるマージのため、このモジュールのweightを返す
     def get_weight(self, multiplier=None):
