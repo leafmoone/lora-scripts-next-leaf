@@ -9,31 +9,37 @@ _✨ 享受 Stable Diffusion 训练！ ✨_
 </div>
 
 <p align="center">
-  <a href="https://github.com/Akegarasu/lora-scripts" style="margin: 2px;">
-    <img alt="GitHub 仓库星标" src="https://img.shields.io/github/stars/Akegarasu/lora-scripts">
+  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
+    <img alt="GitHub 仓库星标" src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next">
   </a>
-  <a href="https://github.com/Akegarasu/lora-scripts" style="margin: 2px;">
-    <img alt="GitHub 仓库分支" src="https://img.shields.io/github/forks/Akegarasu/lora-scripts">
+  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
+    <img alt="GitHub 仓库分支" src="https://img.shields.io/github/forks/wochenlong/lora-scripts-next">
   </a>
-  <a href="https://raw.githubusercontent.com/Akegarasu/lora-scripts/master/LICENSE" style="margin: 2px;">
-    <img src="https://img.shields.io/github/license/Akegarasu/lora-scripts" alt="许可证">
+  <a href="https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/LICENSE" style="margin: 2px;">
+    <img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next" alt="许可证">
   </a>
-  <a href="https://github.com/Akegarasu/lora-scripts/releases" style="margin: 2px;">
-    <img src="https://img.shields.io/github/v/release/Akegarasu/lora-scripts?color=blueviolet&include_prereleases" alt="发布版本">
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases" style="margin: 2px;">
+    <img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?color=blueviolet&include_prereleases" alt="发布版本">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Akegarasu/lora-scripts/releases">下载</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases">下载</a>
   ·
-  <a href="https://github.com/Akegarasu/lora-scripts/blob/main/README.md">文档</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README.md">文档</a>
   ·
-  <a href="https://github.com/Akegarasu/lora-scripts/blob/main/README-zh.md">中文README</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md">中文README</a>
 </p>
 
 LoRA-scripts（又名 SD-Trainer）
 
 LoRA & Dreambooth 训练图形界面 & 脚本预设 & 一键训练环境，用于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts.git)
+
+### 关于本仓库
+
+当前维护地址：**[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**。在 **秋叶一键训练包 / Akegarasu SD-Trainer**（[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)）与训练后端 **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)** 之上扩展。SDXL **Rectified Flow** 参考 **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**（RF 分支脉络）。**Anima** 相关实现参考 **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)**（**SD-reScripts**：对 LoRA-scripts 的维护型分支 / 延续开发）。许可与摘录说明见 `NOTICE.md`。
+
+*下方界面示意图与秋叶版（Akegarasu）一致。*
 
 ## ✨新特性: 训练 WebUI
 
@@ -57,7 +63,7 @@ Python 3.10 和 Git
 ### 克隆带子模块的仓库
 
 ```sh
-git clone --recurse-submodules https://github.com/Akegarasu/lora-scripts
+git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
 ```
 
 ## ✨ SD-Trainer GUI
@@ -171,6 +177,12 @@ source venv/bin/activate
 #### TensorBoard
 
 运行 `tensorboard.ps1` 将在 http://localhost:6006/ 启动 TensorBoard
+
+### Anima 单角色 LoRA：训练步数参考（经验值）
+
+在同一套数据与分辨率下对比 checkpoint 时，**约 1000～3000 次优化步**（`total optimization steps` 含义下的 step）往往已能呈现可用的角色外观；再往后更多是在细节与稳定性上微调。实际所需步数随**素材量与质量、repeat、bucket、网络维度、学习率与主观「够不够好」**变化很大，请以验证图 / 对比脚本为准。
+
+训练启动日志中的 **`num batches per epoch`**（即每 epoch 的 step 数）× **目标 epoch** ≈ 到该 epoch 结束时的累计步数；例如每 epoch 510 batch、训练到第 2 个 epoch 结束约 **1020** 步。
 
 ## 程序参数
 

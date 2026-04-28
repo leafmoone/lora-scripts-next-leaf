@@ -9,31 +9,37 @@ _✨ Enjoy Stable Diffusion Train！ ✨_
 </div>
 
 <p align="center">
-  <a href="https://github.com/Akegarasu/lora-scripts" style="margin: 2px;">
-    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/Akegarasu/lora-scripts">
+  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
+    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next">
   </a>
-  <a href="https://github.com/Akegarasu/lora-scripts" style="margin: 2px;">
-    <img alt="GitHub forks" src="https://img.shields.io/github/forks/Akegarasu/lora-scripts">
+  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
+    <img alt="GitHub forks" src="https://img.shields.io/github/forks/wochenlong/lora-scripts-next">
   </a>
-  <a href="https://raw.githubusercontent.com/Akegarasu/lora-scripts/master/LICENSE" style="margin: 2px;">
-    <img src="https://img.shields.io/github/license/Akegarasu/lora-scripts" alt="license">
+  <a href="https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/LICENSE" style="margin: 2px;">
+    <img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next" alt="license">
   </a>
-  <a href="https://github.com/Akegarasu/lora-scripts/releases" style="margin: 2px;">
-    <img src="https://img.shields.io/github/v/release/Akegarasu/lora-scripts?color=blueviolet&include_prereleases" alt="release">
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases" style="margin: 2px;">
+    <img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?color=blueviolet&include_prereleases" alt="release">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Akegarasu/lora-scripts/releases">Download</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases">Download</a>
   ·
-  <a href="https://github.com/Akegarasu/lora-scripts/blob/main/README.md">Documents</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README.md">Documents</a>
   ·
-  <a href="https://github.com/Akegarasu/lora-scripts/blob/main/README-zh.md">中文README</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md">中文README</a>
 </p>
 
 LoRA-scripts (a.k.a SD-Trainer)
 
 LoRA & Dreambooth training GUI & scripts preset & one key training environment for [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts.git)
+
+### About this repository
+
+Maintained at **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**. It extends the **Akegarasu SD-Trainer** stack (widely known as the **秋叶** training bundle): **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**. Training backend: **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**. SDXL **Rectified Flow** LoRA support follows **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)** (RF branch lineage). **Anima** LoRA support is adapted from **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)** — **SD-reScripts**, described upstream as a maintained fork / continuation of the LoRA-scripts line. See `NOTICE.md` for attribution and licenses.
+
+*Screenshots below match the upstream Akegarasu (秋叶) GUI layout.*
 
 ## ✨NEW: Train WebUI
 
@@ -57,7 +63,7 @@ Python 3.10 and Git
 ### Clone repo with submodules
 
 ```sh
-git clone --recurse-submodules https://github.com/Akegarasu/lora-scripts
+git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
 ```
 
 ## ✨ SD-Trainer GUI
@@ -114,6 +120,12 @@ Edit `train.sh`, and run it.
 #### TensorBoard
 
 Run `tensorboard.ps1` will start TensorBoard at http://localhost:6006/
+
+### Anima single-subject LoRA: step-count rule of thumb
+
+In our side-by-side checkpoint tests, **roughly 1k–3k optimizer steps** (the same “step” as `total optimization steps` in the training header) is often enough for a usable character likeness; longer runs mostly refine details and stability. Your mileage varies with dataset size/quality, repeats, buckets, network rank, LR, and how strict you are about “good enough”—always judge from validation samples.
+
+At startup, **`num batches per epoch` × epoch number** ≈ cumulative steps at the end of that epoch (e.g. 510 batches/epoch → ~1020 steps after epoch 2).
 
 ## Program arguments
 
