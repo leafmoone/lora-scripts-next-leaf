@@ -19,7 +19,14 @@
 
 ## 本仓库对 dist 的 patch 列表
 
-所有 patch 都在 commit [`23337dd`](../../../commit/23337dd)，目的是把上游写死的 SD3 字面量替换为 Anima LoRA，让 UI 文字与 `mikazuki/schema/sd3-lora.ts` 已经改写成的 Anima schema 对齐。
+VuePress 是 SSR + hydration 模式：每个页面的 HTML 文件里同时内嵌了首屏 SSR 内容（sidebar、页面 body、`<title>`），加载后由 JS chunk 接管。所以**同一处 UI 文字往往要在 JS 和 HTML 两层都 patch**，否则首屏会闪一下旧文字。本仓库的 patch 分两个 commit：
+
+- [`23337dd`](../../../commit/23337dd)：JS chunk 层的 6 处替换（运行时显示）
+- [`1048fbb`](../../../commit/1048fbb)：HTML SSR 层的 21 处替换（首屏显示，避免 SD3 闪烁）
+
+目的是把上游写死的 SD3 字面量替换为 Anima LoRA，让 UI 文字与 `mikazuki/schema/sd3-lora.ts` 已经改写成的 Anima schema 对齐。
+
+### JS chunk 层（commit `23337dd`）
 
 | 文件 | 改前 | 改后 |
 |---|---|---|
@@ -30,13 +37,26 @@
 | `assets/sd3.html.1a4bf31e.js`（多余段落） | `别问为什么新手模式不行，问就是你都用 SD3 了还想当新手？` | 删除该段，并把渲染数组 `l=[c,n,d,r]` 同步缩成 `l=[c,n,d]` |
 | `assets/sd3.html.eaeb05e1.js`（页面 metadata） | `"title":"SD3 训练 专家模式"` | `"title":"Anima LoRA 训练 专家模式"` |
 
+### HTML SSR 层（commit `1048fbb`）
+
+| 范围 | 改动 | 文件数 / 命中 |
+|---|---|---|
+| 16 个 HTML 的 sidebar `<a>` 项 | `aria-label="SD3.5"` → `aria-label="Anima LoRA"` | 16 处 |
+| 同上 | `<!--[--><!--]--> SD3.5 <!--[--><!--]--></a>` → `<!--[--><!--]--> Anima LoRA <!--[--><!--]--></a>` | 16 处 |
+| `lora/sd3.html` 的 `<title>` | `SD3 训练 专家模式 \| SD 训练 UI` → `Anima LoRA 训练 专家模式 \| SD 训练 UI` | 1 处 |
+| `lora/sd3.html` H1（`> SD3 训练 专家模式</h1>`） | `> Anima LoRA 训练 专家模式</h1>` | 1 处 |
+| `lora/sd3.html` 副标题（`<p>SD3 模型 LoRA ...</p>`） | `<p>Anima DiT 模型 LoRA ...</p>` | 1 处 |
+| `lora/sd3.html` 介绍段（`<p>支持 SD3.5 ...</p>`） | `<p>Anima DiT 训练入口，使用 Qwen3 + T5 + Anima 专用参数</p>` | 1 处 |
+| `lora/sd3.html` 抖机灵段（`<p>别问为什么...</p>`） | 删除整段 | 1 处 |
+
 ### 故意不动的字面量
 
 | 字面量 | 位置 | 原因 |
 |---|---|---|
-| `/lora/sd3.html` | URL 路由 | SPA 路由 key，改了会让所有指向 sd3 页面的链接 404 |
+| `/lora/sd3.html`、`/lora/sd3.md` | URL 路由 | SPA 路由 key，改了会让所有指向 sd3 页面的链接 404 |
 | `"trainType":"sd3-lora"` | `sd3.html.eaeb05e1.js` frontmatter | 后端 schema 路由 key，对应 `mikazuki/schema/sd3-lora.ts` |
-| `id:"sd3-训练-专家模式"` 这类锚点 id | sd3.html chunk | 不影响显示，保留以兼容历史 anchor 链接 |
+| `id:"sd3-训练-专家模式"`、`href="#sd3-..."` 锚点 | sd3.html、sd3.html.1a4bf31e.js | 不影响显示，保留以兼容历史 anchor 链接 |
+| `flux.html`、`index.html`、`assets/index.html.c6ef684b.js` 中的 SD3 字样 | flux 页面文案 / 首页 readme | 跟 Anima 训练入口无关，是上游对其他模型的描述 |
 
 ## 怎么重新 vendor 上游（如果上游恢复更新）
 
@@ -53,9 +73,12 @@ Remove-Item frontend\dist -Recurse -Force
 Copy-Item /tmp/new-dist frontend\dist -Recurse
 Move-Item _vendor_md_backup frontend\VENDOR.md
 
-# 4. 重新应用上面表格里的 6 处文字 patch（手工或脚本）
+# 4. 重新应用上面两张表里的 patch（一共 27 处，分两层）：
+#    - JS chunk 层 6 处：手工 StrReplace 即可（assets/app.*.js、assets/sd3.html.*.js）
+#    - HTML SSR 层 21 处：跨 16 个 HTML 文件，建议写 PowerShell 脚本批量替换
+#    具体 pattern 见上面两张表的"改前 / 改后"列。
 
-# 5. 更新本文件的"基线 commit"和"patch 列表"
+# 5. 更新本文件的"基线 commit"和上面 patch 列表里的 commit 引用
 
 # 6. 提交
 git add frontend/
@@ -64,4 +87,4 @@ git commit -m "vendor: refresh frontend/dist from hanamizuki-ai/lora-gui-dist <N
 
 ## 致谢
 
-`frontend/dist/` 中的全部静态资源版权与许可归原作者所有，详见上游 [`hanamizuki-ai/lora-gui-dist`](https://github.com/hanamizuki-ai/lora-gui-dist) 与 [`Akegarasu/lora-scripts-frontend`](https://github.com/Akegarasu/lora-scripts-frontend)。本仓库仅做最小 patch（见上表）以适配 Anima LoRA 训练入口的命名。
+`frontend/dist/` 中的全部静态资源版权与许可归原作者所有，详见上游 [`hanamizuki-ai/lora-gui-dist`](https://github.com/hanamizuki-ai/lora-gui-dist) 与 [`Akegarasu/lora-scripts-frontend`](https://github.com/Akegarasu/lora-scripts-frontend)。本仓库仅做最小 patch（见上面两张表，共 27 处文字替换）以适配 Anima LoRA 训练入口的命名。
