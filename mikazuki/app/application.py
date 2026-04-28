@@ -23,6 +23,16 @@ mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 
 
+def frontend_dist_path() -> Path:
+    frontend_dist = Path(os.environ.get("MIKAZUKI_FRONTEND_DIST", "frontend/dist"))
+    if not frontend_dist.is_absolute():
+        frontend_dist = Path.cwd() / frontend_dist
+    return frontend_dist
+
+
+_FRONTEND_DIST = frontend_dist_path()
+
+
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
         try:
@@ -92,11 +102,11 @@ async def train_log_viewer():
 
 @app.get("/")
 async def index():
-    return FileResponse("./frontend/dist/index.html")
+    return FileResponse(str(_FRONTEND_DIST / "index.html"))
 
 
 @app.get("/favicon.ico", response_class=FileResponse)
 async def favicon():
     return FileResponse("assets/favicon.ico")
 
-app.mount("/", SPAStaticFiles(directory="frontend/dist", html=True), name="static")
+app.mount("/", SPAStaticFiles(directory=str(_FRONTEND_DIST), html=True), name="static")

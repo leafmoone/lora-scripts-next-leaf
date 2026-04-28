@@ -86,6 +86,18 @@ cd lora-scripts-next
 **安装：** `install.bash`  
 **训练：** `bash run_gui.sh`，同上地址。
 
+### 前端静态文件
+
+训练 GUI 后端默认加载 `frontend/dist`。当前 `frontend` 是预构建静态文件子模块，而不是前端源码目录；如果该子模块指向旧版 dist，启动后看到的也会是旧 UI（例如仍包含 SD3 页面）。
+
+如果要使用自定义或 next 版前端，请先构建前端源码得到 `dist`，然后用环境变量指定静态文件目录：
+
+```bash
+MIKAZUKI_FRONTEND_DIST=/path/to/frontend/dist python gui.py --listen
+```
+
+也可以更新 `frontend` 子模块到对应的 dist 仓库/commit。后端不会自动从前端源码构建 UI。
+
 ### Docker
 
 #### 编译镜像

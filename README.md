@@ -86,6 +86,18 @@ cd lora-scripts-next
 **Install:** `install.bash`  
 **Train:** `bash run_gui.sh` → same URL as above.
 
+### Frontend Static Files
+
+The training GUI backend serves `frontend/dist` by default. The current `frontend` directory is a prebuilt static-file submodule, not the frontend source tree. If that submodule points to an older dist build, the running GUI will show that older UI, including pages such as SD3.
+
+To use a custom or next UI build, build the frontend source first and point the backend at the generated `dist` directory:
+
+```bash
+MIKAZUKI_FRONTEND_DIST=/path/to/frontend/dist python gui.py --listen
+```
+
+Alternatively, update the `frontend` submodule to the dist repository/commit that contains the desired UI. The backend does not build frontend source automatically.
+
 ## Legacy: script-only training
 
 ### Windows

@@ -50,7 +50,9 @@ def prepare_git():
 
 
 def prepare_submodules():
-    frontend_path = base_dir_path() / "frontend" / "dist"
+    frontend_path = Path(os.environ.get("MIKAZUKI_FRONTEND_DIST", "frontend/dist"))
+    if not frontend_path.is_absolute():
+        frontend_path = base_dir_path() / frontend_path
     tag_editor_path = base_dir_path() / "mikazuki" / "dataset-tag-editor" / "scripts"
 
     if not os.path.exists(frontend_path) or not os.path.exists(tag_editor_path):
