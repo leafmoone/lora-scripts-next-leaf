@@ -1,143 +1,122 @@
-<div align="center">
+<p align="center">
+  <img src="assets/readme/logo.svg" alt="lora-scripts-next" width="140" height="140" />
+</p>
 
-<img src="https://github.com/Akegarasu/lora-scripts/assets/36563862/3b177f4a-d92a-4da4-85c8-a0d163061a40" width="200" height="200" alt="SD-Trainer" style="border-radius: 25px">
-
-# SD-Trainer
-
-_✨ Enjoy Stable Diffusion Train！ ✨_
-
-</div>
+<h1 align="center">lora-scripts-next</h1>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
-    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next">
-  </a>
-  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
-    <img alt="GitHub forks" src="https://img.shields.io/github/forks/wochenlong/lora-scripts-next">
-  </a>
-  <a href="https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/LICENSE" style="margin: 2px;">
-    <img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next" alt="license">
-  </a>
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases" style="margin: 2px;">
-    <img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?color=blueviolet&include_prereleases" alt="release">
-  </a>
+  <strong>SD-Trainer</strong> — LoRA · Dreambooth · one-click training shell around <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a><br/>
+  <sub><em>A personal fork: ship faster experiments, keep the familiar GUI.</em></sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases">Download</a>
-  ·
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README.md">Documents</a>
-  ·
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md">中文README</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next"><img src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next?style=flat-square&label=stars&logo=github&color=8b5cf6" alt="stars"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next"><img src="https://img.shields.io/github/forks/wochenlong/lora-scripts-next?style=flat-square&label=forks&color=06b6d4" alt="forks"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE"><img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next?style=flat-square&color=ec4899" alt="license"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=flat-square&color=a78bfa" alt="release"/></a>
 </p>
 
-LoRA-scripts (a.k.a SD-Trainer)
+<p align="center">
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><b>Releases</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md"><b>中文 README</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>NOTICE</b></a>
+</p>
 
-LoRA & Dreambooth training GUI & scripts preset & one key training environment for [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts.git)
+---
 
-### About this repository
+<p align="center">
+  <sub>Maintainer: <b>@wochenlong</b> — this repo is where I wire <b>Anima</b>, <b>Rectified Flow</b>, and my own training habits into the classic “秋叶式” stack.</sub>
+</p>
 
-Maintained at **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**. It extends the **Akegarasu SD-Trainer** stack (widely known as the **秋叶** training bundle): **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**. Training backend: **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**. SDXL **Rectified Flow** LoRA support follows **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)** (RF branch lineage). **Anima** LoRA support is adapted from **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)** — **SD-reScripts**, described upstream as a maintained fork / continuation of the LoRA-scripts line. See `NOTICE.md` for attribution and licenses.
+<br/>
 
-*Screenshots below match the upstream Akegarasu (秋叶) GUI layout.*
+## At a glance
 
-## ✨NEW: Train WebUI
+| | |
+|:---|:---|
+| **Train WebUI** | Single dashboard: presets, tensorboard hook, tagger, tag editor — open **`http://127.0.0.1:28000`** after `run_gui.ps1` / `run_gui.sh`. |
+| **Back end** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts); SDXL RF ideas from [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF); Anima path from [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) (**SD-reScripts**). |
+| **Docs** | Full attribution & licenses in [`NOTICE.md`](NOTICE.md). |
 
-The **REAL** Stable Diffusion Training Studio. Everything in one WebUI.
+---
 
-Follow the installation guide below to install the GUI, then run `run_gui.ps1`(windows) or `run_gui.sh`(linux) to start the GUI.
+## Interface preview
 
-![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/d3fcf5ad-fb8f-4e1d-81f9-c903376c19c6)
+<p align="center">
+  <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer WebUI screenshot" width="920" />
+</p>
 
-| Tensorboard | WD 1.4 Tagger | Tag Editor |
-| ------------ | ------------ | ------------ |
-| ![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/b2ac5c36-3edf-43a6-9719-cb00b757fc76) | ![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/9504fad1-7d77-46a7-a68f-91fbbdbc7407) | ![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/4597917b-caa8-4e90-b950-8b01738996f2) |
+<p align="center"><sub>TensorBoard, WD 1.4 Tagger, and Tag Editor open inside the same WebUI.</sub></p>
 
+---
+
+<details>
+<summary><b>Lineage & upstream (click to expand)</b></summary>
+
+This fork lives at **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)** and inherits the **Akegarasu SD-Trainer / 秋叶一键训练包** UX from **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**. Training scripts come from **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**. SDXL **Rectified Flow** follows **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**. **Anima** support is adapted from **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)** — **SD-reScripts**, described upstream as a maintained fork / continuation of the LoRA-scripts line.
+
+</details>
+
+---
 
 # Usage
 
-### Required Dependencies
+### Dependencies
 
-Python 3.10 and Git
+Python **3.10** and **Git**.
 
-### Clone repo with submodules
+### Clone (with submodules)
 
 ```sh
 git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
 ```
 
-## ✨ SD-Trainer GUI
+## SD-Trainer GUI
 
 ### Windows
 
-#### Installation
-
-Run `install.ps1` will automatically create a venv for you and install necessary deps. 
-If you are in China mainland, please use `install-cn.ps1`
-
-#### Train
-
-run `run_gui.ps1`, then program will open [http://127.0.0.1:28000](http://127.0.0.1:28000) automanticlly
+**Install:** run `install.ps1` (mainland China: `install-cn.ps1`).  
+**Train:** run `run_gui.ps1` → opens **[http://127.0.0.1:28000](http://127.0.0.1:28000)**.
 
 ### Linux
 
-#### Installation
+**Install:** `install.bash`  
+**Train:** `bash run_gui.sh` → same URL as above.
 
-Run `install.bash` will create a venv and install necessary deps. 
-
-#### Train
-
-run `bash run_gui.sh`, then program will open [http://127.0.0.1:28000](http://127.0.0.1:28000) automanticlly
-
-## Legacy training through run script manually
+## Legacy: script-only training
 
 ### Windows
 
-#### Installation
-
-Run `install.ps1` will automatically create a venv for you and install necessary deps.
-
-#### Train
-
-Edit `train.ps1`, and run it.
+Install with `install.ps1`, then edit and run `train.ps1`.
 
 ### Linux
 
-#### Installation
+Activate venv first (`source venv/bin/activate`), edit `train.sh`, run it.
 
-Run `install.bash` will create a venv and install necessary deps.
+### TensorBoard
 
-#### Train
-
-Training script `train.sh` **will not** activate venv for you. You should activate venv first.
-
-```sh
-source venv/bin/activate
-```
-
-Edit `train.sh`, and run it.
-
-#### TensorBoard
-
-Run `tensorboard.ps1` will start TensorBoard at http://localhost:6006/
+`tensorboard.ps1` → [http://localhost:6006/](http://localhost:6006/)
 
 ### Anima single-subject LoRA: step-count rule of thumb
 
-In our side-by-side checkpoint tests, **roughly 1k–3k optimizer steps** (the same “step” as `total optimization steps` in the training header) is often enough for a usable character likeness; longer runs mostly refine details and stability. Your mileage varies with dataset size/quality, repeats, buckets, network rank, LR, and how strict you are about “good enough”—always judge from validation samples.
+In checkpoint sweeps, **~1k–3k optimizer steps** (same “step” as `total optimization steps` in the log header) is often enough for a usable character; beyond that is mostly polish. Depends on data, repeats, buckets, rank, LR, and taste—trust your samples.
 
-At startup, **`num batches per epoch` × epoch number** ≈ cumulative steps at the end of that epoch (e.g. 510 batches/epoch → ~1020 steps after epoch 2).
+**`num batches per epoch` × epoch** ≈ cumulative steps at epoch end (e.g. 510 batches/epoch → ~1020 steps after epoch 2).
 
 ## Program arguments
 
-| Parameter Name                | Type  | Default Value | Description                                      |
-|-------------------------------|-------|---------------|--------------------------------------------------|
-| `--host`                      | str   | "127.0.0.1"   | Hostname for the server                          |
-| `--port`                      | int   | 28000         | Port to run the server                           |
-| `--listen`                    | bool  | false         | Enable listening mode for the server             |
-| `--skip-prepare-environment`  | bool  | false         | Skip the environment preparation step            |
-| `--disable-tensorboard`       | bool  | false         | Disable TensorBoard                              |
-| `--disable-tageditor`         | bool  | false         | Disable tag editor                               |
-| `--tensorboard-host`          | str   | "127.0.0.1"   | Host to run TensorBoard                          |
-| `--tensorboard-port`          | int   | 6006          | Port to run TensorBoard                          |
-| `--localization`              | str   |               | Localization settings for the interface          |
-| `--dev`                       | bool  | false         | Developer mode to disale some checks             |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `--host` | str | `127.0.0.1` | Server host |
+| `--port` | int | `28000` | Server port |
+| `--listen` | bool | `false` | Listen on all interfaces |
+| `--skip-prepare-environment` | bool | `false` | Skip env prep |
+| `--disable-tensorboard` | bool | `false` | Disable TensorBoard |
+| `--disable-tageditor` | bool | `false` | Disable tag editor |
+| `--tensorboard-host` | str | `127.0.0.1` | TensorBoard host |
+| `--tensorboard-port` | int | `6006` | TensorBoard port |
+| `--localization` | str | | UI locale |
+| `--dev` | bool | `false` | Developer mode |

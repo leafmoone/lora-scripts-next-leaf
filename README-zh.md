@@ -1,200 +1,144 @@
-<div align="center">
+<p align="center">
+  <img src="assets/readme/logo.svg" alt="lora-scripts-next" width="140" height="140" />
+</p>
 
-<img src="https://github.com/Akegarasu/lora-scripts/assets/36563862/3b177f4a-d92a-4da4-85c8-a0d163061a40" width="200" height="200" alt="SD-Trainer" style="border-radius: 25px">
-
-# SD-Trainer
-
-_✨ 享受 Stable Diffusion 训练！ ✨_
-
-</div>
+<h1 align="center">lora-scripts-next</h1>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
-    <img alt="GitHub 仓库星标" src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next">
-  </a>
-  <a href="https://github.com/wochenlong/lora-scripts-next" style="margin: 2px;">
-    <img alt="GitHub 仓库分支" src="https://img.shields.io/github/forks/wochenlong/lora-scripts-next">
-  </a>
-  <a href="https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/LICENSE" style="margin: 2px;">
-    <img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next" alt="许可证">
-  </a>
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases" style="margin: 2px;">
-    <img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?color=blueviolet&include_prereleases" alt="发布版本">
-  </a>
+  <strong>SD-Trainer</strong> — LoRA · Dreambooth · 围绕 <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a> 的一站式训练封装<br/>
+  <sub><em>个人维护分支：在熟悉的秋叶系体验上，把 Anima、RF 和自用工作流接到一起。</em></sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases">下载</a>
-  ·
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README.md">文档</a>
-  ·
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md">中文README</a>
+  <a href="https://github.com/wochenlong/lora-scripts-next"><img src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next?style=flat-square&label=星标&logo=github&color=8b5cf6" alt="stars"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next"><img src="https://img.shields.io/github/forks/wochenlong/lora-scripts-next?style=flat-square&label=分支&color=06b6d4" alt="forks"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE"><img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next?style=flat-square&color=ec4899" alt="license"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=flat-square&color=a78bfa" alt="release"/></a>
 </p>
 
-LoRA-scripts（又名 SD-Trainer）
+<p align="center">
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><b>下载发布</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README.md"><b>English README</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>NOTICE</b></a>
+</p>
 
-LoRA & Dreambooth 训练图形界面 & 脚本预设 & 一键训练环境，用于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts.git)
+---
 
-### 关于本仓库
+<p align="center">
+  <sub>维护者：<b>@wochenlong</b> — 本仓库用于个人迭代；README 头图与界面截图为 <code>assets/readme/</code> 下随仓资源。</sub>
+</p>
 
-当前维护地址：**[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**。在 **秋叶一键训练包 / Akegarasu SD-Trainer**（[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)）与训练后端 **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)** 之上扩展。SDXL **Rectified Flow** 参考 **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**（RF 分支脉络）。**Anima** 相关实现参考 **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)**（**SD-reScripts**：对 LoRA-scripts 的维护型分支 / 延续开发）。许可与摘录说明见 `NOTICE.md`。
+<br/>
 
-*下方界面示意图与秋叶版（Akegarasu）一致。*
+## 一览
 
-## ✨新特性: 训练 WebUI
+| | |
+|:---|:---|
+| **训练 WebUI** | 预设、TensorBoard、WD 标签器、标签编辑器同一入口；运行 `run_gui.ps1` / `run_gui.sh` 后打开 **`http://127.0.0.1:28000`**。 |
+| **后端** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)；SDXL RF 脉络来自 [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)；Anima 来自 [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)（<b>SD-reScripts</b>）。 |
+| **许可证与致谢** | 详见 [`NOTICE.md`](NOTICE.md)。 |
 
-Stable Diffusion 训练工作台。一切集成于一个 WebUI 中。
+---
 
-按照下面的安装指南安装 GUI，然后运行 `run_gui.ps1`(Windows) 或 `run_gui.sh`(Linux) 来启动 GUI。
+## 界面预览
 
-![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/d3fcf5ad-fb8f-4e1d-81f9-c903376c19c6)
+<p align="center">
+  <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer 训练 WebUI 截图" width="920" />
+</p>
 
-| Tensorboard | WD 1.4 标签器 | 标签编辑器 |
-| ------------ | ------------ | ------------ |
-| ![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/b2ac5c36-3edf-43a6-9719-cb00b757fc76) | ![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/9504fad1-7d77-46a7-a68f-91fbbdbc7407) | ![image](https://github.com/Akegarasu/lora-scripts/assets/36563862/4597917b-caa8-4e90-b950-8b01738996f2) |
+<p align="center"><sub>同一 WebUI 内可切到 TensorBoard、WD 1.4 标签器、标签编辑器等工具.</sub></p>
 
+---
+
+<details>
+<summary><b>上游与血缘（展开）</b></summary>
+
+当前仓库：**[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**。界面与打包体验源自 **秋叶一键训练包 / [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**，训练后端为 **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**。SDXL **Rectified Flow** 参考 **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**。**Anima** 实现参考 **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)**（**SD-reScripts**：对 LoRA-scripts 的维护型分支 / 延续开发）。
+
+</details>
+
+---
 
 # 使用方法
 
 ### 必要依赖
 
-Python 3.10 和 Git
+Python **3.10** 与 **Git**。
 
-### 克隆带子模块的仓库
+### 克隆（含子模块）
 
 ```sh
 git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
 ```
 
-## ✨ SD-Trainer GUI
+## SD-Trainer GUI
 
 ### Windows
 
-#### 安装
-
-运行 `install-cn.ps1` 将自动为您创建虚拟环境并安装必要的依赖。 
-
-#### 训练
-
-运行 `run_gui.ps1`，程序将自动打开 [http://127.0.0.1:28000](http://127.0.0.1:28000)
+**安装：** 运行 `install-cn.ps1`（或 `install.ps1`）。  
+**训练：** 运行 `run_gui.ps1`，浏览器打开 **[http://127.0.0.1:28000](http://127.0.0.1:28000)**。
 
 ### Linux
 
-#### 安装
-
-运行 `install.bash` 将创建虚拟环境并安装必要的依赖。
-
-#### 训练
-
-运行 `bash run_gui.sh`，程序将自动打开 [http://127.0.0.1:28000](http://127.0.0.1:28000)
+**安装：** `install.bash`  
+**训练：** `bash run_gui.sh`，同上地址。
 
 ### Docker
 
 #### 编译镜像
 
 ```bash
-# 国内镜像优化版本
-# 其中 akegarasu_lora-scripts:latest 为镜像及其 tag 名，根据镜像托管服务商实际进行修改
-docker build -t akegarasu_lora-scripts:latest -f Dockfile-for-Mainland-China .
-docker push akegarasu_lora-scripts:latest
+docker build -t lora-scripts-next:latest -f Dockerfile-for-Mainland-China .
 ```
 
-#### 使用镜像
-
-> 提供一个本人已打包好并推送到 `aliyuncs` 上的镜像，此镜像压缩归档大小约 `10G` 左右，请耐心等待拉取。
+#### 使用镜像（示例）
 
 ```bash
-docker run --gpus all -p 28000:28000 -p 6006:6006 registry.cn-hangzhou.aliyuncs.com/go-to-mirror/akegarasu_lora-scripts:latest 
+docker run --gpus all -p 28000:28000 -p 6006:6006 registry.cn-hangzhou.aliyuncs.com/go-to-mirror/akegarasu_lora-scripts:latest
 ```
 
-或者使用 `docker-compose.yaml` 。
+亦可配合仓库内 `docker-compose.yaml`。镜像体积较大，拉取请耐心等待。GPU 与驱动问题请自行查阅文档。
 
-```yaml
-services:
-  lora-scripts:
-    container_name: lora-scripts
-    build:
-      context: .
-      dockerfile: Dockerfile-for-Mainland-China
-    image: "registry.cn-hangzhou.aliyuncs.com/go-to-mirror/akegarasu_lora-scripts:latest"
-    ports:
-      - "28000:28000"
-      - "6006:6006"  
-    # 共享本地文件夹（请根据实际修改）
-    #volumes:
-      # - "/data/srv/lora-scripts:/app/lora-scripts"
-      # 共享 comfyui 大模型
-      # - "/data/srv/comfyui/models/checkpoints:/app/lora-scripts/sd-models/comfyui"
-      # 共享 sd-webui 大模型
-      # - "/data/srv/stable-diffusion-webui/models/Stable-diffusion:/app/lora-scripts/sd-models/sd-webui"
-    environment:
-      - HF_HOME=huggingface
-      - PYTHONUTF8=1
-    security_opt:
-      - "label=type:nvidia_container_t"
-    runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']
-              capabilities: [gpu]
-```
- 
-关于容器使用 GPU 相关依赖安装问题，请自行搜索查阅资料解决。
-
-## 通过手动运行脚本的传统训练方式
+## 通过脚本的传统训练方式
 
 ### Windows
 
-#### 安装
-
-运行 `install.ps1` 将自动为您创建虚拟环境并安装必要的依赖。
-
-#### 训练
-
-编辑 `train.ps1`，然后运行它。
+运行 `install.ps1` 安装依赖后，编辑并运行 `train.ps1`。
 
 ### Linux
 
-#### 安装
-
-运行 `install.bash` 将创建虚拟环境并安装必要的依赖。
-
-#### 训练
-
-训练
-
-脚本 `train.sh` **不会** 为您激活虚拟环境。您应该先激活虚拟环境。
+先激活虚拟环境：
 
 ```sh
 source venv/bin/activate
 ```
 
-编辑 `train.sh`，然后运行它。
+编辑 `train.sh` 并运行。
 
-#### TensorBoard
+### TensorBoard
 
-运行 `tensorboard.ps1` 将在 http://localhost:6006/ 启动 TensorBoard
+`tensorboard.ps1` → [http://localhost:6006/](http://localhost:6006/)
 
 ### Anima 单角色 LoRA：训练步数参考（经验值）
 
-在同一套数据与分辨率下对比 checkpoint 时，**约 1000～3000 次优化步**（`total optimization steps` 含义下的 step）往往已能呈现可用的角色外观；再往后更多是在细节与稳定性上微调。实际所需步数随**素材量与质量、repeat、bucket、网络维度、学习率与主观「够不够好」**变化很大，请以验证图 / 对比脚本为准。
+在同一套数据与分辨率下对比 checkpoint 时，**约 1000～3000 次优化步**（`total optimization steps` 含义下的 step）往往已能呈现可用的角色外观；再往后更多是在细节与稳定性上微调。实际所需步数随**素材量与质量、repeat、bucket、网络维度、学习率与主观「够不够好」**变化很大，请以验证图为准。
 
-训练启动日志中的 **`num batches per epoch`**（即每 epoch 的 step 数）× **目标 epoch** ≈ 到该 epoch 结束时的累计步数；例如每 epoch 510 batch、训练到第 2 个 epoch 结束约 **1020** 步。
+训练启动日志中的 **`num batches per epoch`** × **目标 epoch** ≈ 到该 epoch 结束时的累计步数；例如每 epoch 510 batch、第 2 个 epoch 结束约 **1020** 步。
 
 ## 程序参数
 
-| 参数名称                     | 类型  | 默认值       | 描述                                            |
-|------------------------------|-------|--------------|-------------------------------------------------|
-| `--host`                     | str   | "127.0.0.1"  | 服务器的主机名                                  |
-| `--port`                     | int   | 28000        | 运行服务器的端口                                |
-| `--listen`                   | bool  | false        | 启用服务器的监听模式                            |
-| `--skip-prepare-environment` | bool  | false        | 跳过环境准备步骤                                |
-| `--disable-tensorboard`      | bool  | false        | 禁用 TensorBoard                                |
-| `--disable-tageditor`        | bool  | false        | 禁用标签编辑器                                  |
-| `--tensorboard-host`         | str   | "127.0.0.1"  | 运行 TensorBoard 的主机                         |
-| `--tensorboard-port`         | int   | 6006         | 运行 TensorBoard 的端口                          |
-| `--localization`             | str   |              | 界面的本地化设置                                |
-| `--dev`                      | bool  | false        | 开发者模式，用于禁用某些检查                     |
+| 参数名称 | 类型 | 默认值 | 描述 |
+|----------|------|--------|------|
+| `--host` | str | `127.0.0.1` | 服务器主机名 |
+| `--port` | int | `28000` | 服务端口 |
+| `--listen` | bool | `false` | 监听所有网卡 |
+| `--skip-prepare-environment` | bool | `false` | 跳过环境准备 |
+| `--disable-tensorboard` | bool | `false` | 禁用 TensorBoard |
+| `--disable-tageditor` | bool | `false` | 禁用标签编辑器 |
+| `--tensorboard-host` | str | `127.0.0.1` | TensorBoard 主机 |
+| `--tensorboard-port` | int | `6006` | TensorBoard 端口 |
+| `--localization` | str | | 界面语言 |
+| `--dev` | bool | `false` | 开发者模式 |
