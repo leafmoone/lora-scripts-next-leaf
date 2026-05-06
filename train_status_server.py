@@ -118,8 +118,12 @@ def latest_training_config() -> dict:
         except OSError:
             continue
         config = {}
-        for key in ("output_dir", "output_name"):
+        for key in ("output_dir", "output_name", "max_train_epochs"):
             match = re.search(rf'^{key}\s*=\s*["\'](?P<value>.*?)["\']\s*$', text, flags=re.MULTILINE)
+            if match:
+                config[key] = match.group("value")
+                continue
+            match = re.search(rf'^{key}\s*=\s*(?P<value>[0-9.]+)\s*$', text, flags=re.MULTILINE)
             if match:
                 config[key] = match.group("value")
         output_dir = config.get("output_dir")
@@ -145,6 +149,10 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
     config = latest_training_config()
     output_dir = resolve_repo_path(str(config.get("output_dir", "")))
     output_name = str(config.get("output_name", "")).strip()
+    try:
+        max_epochs = int(float(str(config.get("max_train_epochs", "")).strip()))
+    except ValueError:
+        max_epochs = 0
     roots = []
     if output_dir is not None:
         roots.extend([output_dir / "sample", output_dir])
@@ -181,13 +189,22 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
     for index, p in enumerate(unique_files):
         st = p.stat()
         rel = p.relative_to(REPO)
+        epoch_match = re.search(r"_e(?P<epoch>\d{6})_", p.name)
+        epoch = int(epoch_match.group("epoch")) if epoch_match else None
+        role = ""
+        if index == 0 and len(unique_files) > 1:
+            role = "基线图"
+        elif index == len(unique_files) - 1:
+            role = "最新图"
         out.append({
             "name": p.name,
             "path": str(p),
             "size": human_size(st.st_size),
             "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
             "url": f"/preview-image?path={quote(str(rel))}",
-            "role": "基线图" if index == 0 and len(all_files) > 1 else "最新图",
+            "role": role,
+            "epoch": epoch,
+            "max_epoch": max_epochs,
         })
     return out
 
@@ -582,14 +599,20 @@ def render_page(status: dict) -> bytes:
     .follow-state.paused {{ color:var(--warn); }}
     button {{ border:1px solid var(--line); border-radius:999px; padding:6px 10px; background:#172033; color:var(--text); cursor:pointer; }}
     button:hover {{ border-color:#60a5fa; }}
+    button.primary {{ border-color:#38bdf8; background:linear-gradient(135deg,#2563eb,#0891b2); color:white; font-weight:700; }}
     button.hidden {{ display:none; }}
     details summary {{ cursor:pointer; color:var(--muted); }}
     .details-body {{ margin-top:12px; }}
     .preview-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; max-width:980px; }}
-    .preview-card {{ overflow:hidden; border:1px solid var(--line); border-radius:12px; background:#050816; }}
+    .preview-card {{ overflow:hidden; border:1px solid var(--line); border-radius:12px; background:#050816; position:relative; }}
     .preview-card img {{ display:block; width:100%; height:180px; object-fit:cover; background:#050816; }}
     .preview-meta {{ padding:8px 10px; color:var(--muted); font-size:12px; }}
-    .preview-role {{ display:inline-flex; margin-bottom:4px; padding:2px 7px; border-radius:999px; background:#172033; color:#bfdbfe; border:1px solid var(--line); font-size:11px; }}
+    .preview-role {{ position:absolute; left:8px; top:8px; display:inline-flex; padding:2px 7px; border-radius:999px; background:rgba(15,23,42,.82); color:#bfdbfe; border:1px solid rgba(191,219,254,.35); font-size:11px; backdrop-filter:blur(4px); }}
+    .preview-step {{ color:var(--text); font-size:15px; font-weight:800; line-height:1.2; }}
+    .preview-epoch {{ color:#bfdbfe; font-size:12px; font-weight:650; margin-top:2px; }}
+    .preview-file {{ color:var(--muted); font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+    .preview-hidden {{ padding:14px; border:1px dashed var(--line); border-radius:10px; background:#0b1224; color:var(--muted); }}
+    .preview-hidden strong {{ display:block; color:var(--text); margin-bottom:4px; }}
     .privacy-note {{ color:var(--muted); font-size:12px; }}
     pre {{ margin:0; padding:12px; border-radius:10px; background:#050816; color:#dbeafe; overflow:auto; max-height:56vh; white-space:pre-wrap; word-break:break-word; font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; }}
     ul {{ margin:0; padding-left:18px; }}
@@ -629,7 +652,7 @@ def render_page(status: dict) -> bytes:
         </div>
         <button id="togglePreview" type="button">开启预览图</button>
       </div>
-      <div id="previewArea"><div class="muted">预览图已隐藏。</div></div>
+      <div id="previewArea"><div class="preview-hidden"><strong>预览图未加载</strong>点击右侧“开启预览图”后，当前浏览器才会加载训练图片。</div></div>
     </section>
     <section class="panel">
       <div class="panel-head">
@@ -902,13 +925,29 @@ def render_page(status: dict) -> bytes:
 
     function renderPreviewToggle() {{
       togglePreview.textContent = previewEnabled ? "关闭预览图" : "开启预览图";
+      togglePreview.classList.toggle("primary", !previewEnabled);
       if (!previewEnabled) {{
-        document.getElementById("previewArea").innerHTML = '<div class="muted">预览图已隐藏。点击“开启预览图”后，当前浏览器才会加载训练图片。</div>';
+        document.getElementById("previewArea").innerHTML = '<div class="preview-hidden"><strong>预览图未加载</strong>点击右侧“开启预览图”后，当前浏览器才会加载训练图片；关闭时不会请求图片，适合公开端口截图。</div>';
         lastPreviewKey = "";
       }}
     }}
 
-    function renderPreviews(previews) {{
+    function previewProgressParts(item, metrics) {{
+      const epoch = Number(item.epoch);
+      const maxEpoch = Number(item.max_epoch);
+      const totalSteps = Number(metrics && metrics.total_steps);
+      if (Number.isFinite(epoch)) {{
+        let stepText = epoch === 0 ? "Step 0" : "";
+        if (Number.isFinite(maxEpoch) && maxEpoch > 0 && Number.isFinite(totalSteps) && totalSteps > 0) {{
+          const step = Math.round(totalSteps * epoch / maxEpoch);
+          stepText = "Step " + step;
+        }}
+        return {{ step: stepText || "Step -", epoch: "Epoch " + epoch }};
+      }}
+      return {{ step: item.role || "预览图", epoch: "Epoch -" }};
+    }}
+
+    function renderPreviews(previews, metrics) {{
       const area = document.getElementById("previewArea");
       if (!previewEnabled) {{
         renderPreviewToggle();
@@ -927,29 +966,33 @@ def render_page(status: dict) -> bytes:
       if (previewKey === lastPreviewKey) return;
       lastPreviewKey = previewKey;
       area.innerHTML = '<div class="preview-grid">' + previews.map(function(item) {{
+        const progress = previewProgressParts(item, metrics || {{}});
         return '<div class="preview-card">' +
+          (item.role ? '<span class="preview-role">' + escapeHtml(item.role) + '</span>' : '') +
           '<img loading="lazy" src="' + escapeHtml(item.url) + '" alt="' + escapeHtml(item.name) + '">' +
-          '<div class="preview-meta"><span class="preview-role">' + escapeHtml(item.role || "预览图") + '</span><br><code>' + escapeHtml(item.name) + '</code><br>' +
-          escapeHtml(item.size) + ' · ' + escapeHtml(item.mtime) + '</div>' +
+          '<div class="preview-meta">' +
+          '<div class="preview-step">' + escapeHtml(progress.step) + '</div>' +
+          '<div class="preview-epoch">' + escapeHtml(progress.epoch) + '</div>' +
+          '<div class="preview-file" title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</div></div>' +
           '</div>';
       }}).join("") + '</div>';
     }}
 
     function renderStatus(status) {{
       document.getElementById("updatedAt").textContent = status.time || "";
+      const metrics = status.metrics || {{}};
       const error = status.error || status.log_error || "";
       const errorBox = document.getElementById("errorBox");
       errorBox.textContent = error;
       errorBox.style.display = error ? "block" : "none";
       renderHero(status);
       renderCards(status);
-      renderLossChart(status.metrics || {{}});
-      renderPreviews(status.previews);
+      renderLossChart(metrics);
+      renderPreviews(status.previews, metrics);
       document.getElementById("resultFiles").innerHTML = renderResult(status.outputs);
-      renderResultDuration(status.metrics || {{}});
+      renderResultDuration(metrics);
 
       const logLines = status.log_lines || [];
-      const metrics = status.metrics || {{}};
       const hasLogError = Boolean(error || metrics.has_error);
       const hasLogWarning = Boolean(metrics.needs_attention || metrics.progress_stalled || metrics.has_warning);
       logSummary.textContent = hasLogError
