@@ -346,10 +346,13 @@ async def get_files(pick_type) -> APIResponse:
             else:
                 files = [f for f in path.glob("**/*") if f.is_file()]
             for file in files:
+                stat = file.stat()
                 result_list.append({
                     "path": str(file.resolve().absolute()).replace("\\", "/"),
                     "name": file.name,
-                    "size": f"{round(file.stat().st_size / (1024**3),2)} GB"
+                    "size": f"{round(stat.st_size / (1024**3),2)} GB",
+                    "size_bytes": stat.st_size,
+                    "mtime": int(stat.st_mtime),
                 })
         elif file_type == "folder":
             folders = [f for f in path.iterdir() if f.is_dir()]

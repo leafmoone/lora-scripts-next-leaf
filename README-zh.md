@@ -118,10 +118,10 @@ git submodule update --init --recursive
 
 WebUI 启动训练时，后端会捕获子进程 stdout 并按行通过 Server-Sent Events 转发，有两种用法：
 
-- **独立全屏查看器** —— 浏览器打开 `http://127.0.0.1:28000/train-log?task_id=<task_id>`，或用 `<iframe src="/train-log?task_id=…" />` 嵌进自己的页面。背后是 [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html)。
+- **独立监控页面** —— 浏览器打开 `http://127.0.0.1:28000/train-log` 即可。页面会**自动找到当前正在运行的任务**，把 kohya 的 stdout 解析成实时卡片（状态 / 进度 / Epoch / ETA / Loss / LR / it/s），并展示 `./output` 下按修改时间排序的 `safetensors` 输出文件。日志区使用**粘性底部滚动**——上翻看历史不会被新日志一直拖回去，回到底部就自动恢复跟随。想盯住特定任务在 URL 后加 `?task_id=<uuid>`；也可以用 `<iframe src="/train-log?task_id=…" />` 嵌进自己的页面。背后是 [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html)。
 - **原始流** —— `GET /api/train/log/stream/{task_id}` 直接返回 `text/event-stream`，适合 Agent / 仪表板 / AutoDL 等远端 GPU 监控。
 
-`task_id` 来自 `POST /api/run` 的返回值，浏览器也会缓存到 `localStorage` 里，方便查看器自动续上。
+`task_id` 来自 `POST /api/run` 的返回值。如果 URL 里没带 `task_id`，监控页会自动查询 `GET /api/train/tasks` 选取最新的 `RUNNING`（或最近一个）任务接上。
 
 ### 前端静态文件
 

@@ -124,10 +124,10 @@ Toggling **`enable_preview`** in the form switches sample generation to Anima-fr
 
 Whenever the WebUI fires off a run, the backend captures stdout and republishes it line-by-line over Server-Sent Events. Two ways to consume it:
 
-- **Standalone full-screen viewer** — open `http://127.0.0.1:28000/train-log?task_id=<task_id>` in a new tab, or embed it as `<iframe src="/train-log?task_id=…" />`. Backed by [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html).
+- **Standalone monitor page** — open `http://127.0.0.1:28000/train-log` in a new tab. The page auto-discovers the currently running task, parses kohya stdout into live cards (status / progress / epoch / ETA / loss / lr / it/s), lists the most recently written `safetensors` under `./output`, and uses **sticky-bottom scrolling** — so scrolling up to read history isn't fought by every new line, and returning to the bottom resumes auto-follow. Pin a specific task with `?task_id=<uuid>`; also embeddable as `<iframe src="/train-log?task_id=…" />`. Backed by [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html).
 - **Raw stream** — `GET /api/train/log/stream/{task_id}` returns `text/event-stream`; useful for agents, dashboards, or remote monitoring on AutoDL / cloud GPUs.
 
-The `task_id` is what `POST /api/run` returns when a training job is started, and is also persisted in the browser's `localStorage` so the viewer auto-resumes.
+The `task_id` is what `POST /api/run` returns when a training job is started. When the URL has no `task_id`, the monitor page queries `GET /api/train/tasks` and picks the latest `RUNNING` (or otherwise most recent) task automatically.
 
 ### Frontend static files
 
