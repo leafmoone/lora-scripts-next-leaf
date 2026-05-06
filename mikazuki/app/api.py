@@ -33,11 +33,18 @@ router = APIRouter()
 
 ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora"}
 ANIMA_DEFAULT_SAMPLE_POSITIVE = (
-    "masterpiece, best quality, score_7, safe, newest, highres"
+    "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looki"
+    "ng at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukat"
+    "a, choker, split mouth, side ponytail, bow, brown hair"
 )
 ANIMA_DEFAULT_SAMPLE_NEGATIVE = (
-    "worst quality, low quality, score_1, score_2, score_3, artist name, jpeg artifacts"
+    "nsfw, explicit, sexual content, nude, naked, nipples, areola, genitals, cleavage, breast"
+    "s, ass, buttocks, thighs, underwear, lingerie, bikini, swimsuit, erotic, suggestive, lew"
+    "d, spread legs, close-up body, transparent clothes, worst quality, low quality, score_1,"
+    " score_2, score_3, artist name, jpeg artifacts"
 )
+ANIMA_DEFAULT_UNET_LR = 5e-5
+ANIMA_LEGACY_UNET_LR = {"0.0001", "1e-4", "1E-4"}
 
 avaliable_scripts = [
     "networks/extract_lora_from_models.py",
@@ -102,7 +109,7 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
     train_data_dir = config["train_data_dir"]
     sub_dir = [dir for dir in glob(os.path.join(train_data_dir, '*')) if os.path.isdir(dir)]
 
-    use_anima_defaults = model_train_type in ANIMA_TRAIN_TYPES and config.get("enable_preview") is True
+    use_anima_defaults = model_train_type in ANIMA_TRAIN_TYPES and is_preview_enabled(config)
     default_positive = ANIMA_DEFAULT_SAMPLE_POSITIVE if use_anima_defaults else None
     default_negative = ANIMA_DEFAULT_SAMPLE_NEGATIVE if use_anima_defaults else ''
     default_width = 1024 if use_anima_defaults else 512
@@ -162,6 +169,23 @@ def apply_sdxl_prediction_type(config: dict, model_train_type: str):
     config["contrastive_flow_matching"] = False
 
 
+def is_preview_enabled(config: dict) -> bool:
+    return config.get("enable_preview") in (True, "true", "True", "1", 1)
+
+
+def apply_anima_training_defaults(config: dict, model_train_type: str):
+    if model_train_type not in ANIMA_TRAIN_TYPES:
+        return
+
+    if str(config.get("unet_lr", "")).strip() in ANIMA_LEGACY_UNET_LR:
+        config["unet_lr"] = ANIMA_DEFAULT_UNET_LR
+    elif isinstance(config.get("unet_lr"), str):
+        config["unet_lr"] = float(config["unet_lr"])
+
+    if is_preview_enabled(config) or config.get("sample_prompts"):
+        config["sample_at_first"] = True
+
+
 @router.post("/run")
 async def create_toml_file(request: Request):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -177,6 +201,7 @@ async def create_toml_file(request: Request):
     model_train_type = config.pop("model_train_type", "sd-lora")
     trainer_file = trainer_mapping[model_train_type]
     apply_sdxl_prediction_type(config, model_train_type)
+    apply_anima_training_defaults(config, model_train_type)
 
     if model_train_type != "sdxl-finetune":
         if not train_utils.validate_data_dir(config["train_data_dir"]):
@@ -205,6 +230,8 @@ async def create_toml_file(request: Request):
         except ValueError as e:
             log.error(f"Error while processing prompts: {e}")
             return APIResponseFail(message=str(e))
+
+    apply_anima_training_defaults(config, model_train_type)
 
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
@@ -443,6 +470,22 @@ async def train_log_stream(task_id: str):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/train/log/tail/{task_id}")
+async def train_log_tail(task_id: str, limit: int = 240):
+    """Recent training stdout lines for the lightweight monitor page."""
+    if task_id not in tm.tasks:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+
+    limit = max(1, min(limit, 2000))
+    lines, total, done = train_log_hub.snapshot_from(task_id, 0)
+    return APIResponseSuccess(data={
+        "task_id": task_id,
+        "lines": lines[-limit:],
+        "total": total,
+        "done": done,
+    })
 
 
 @router.get("/train/tasks")

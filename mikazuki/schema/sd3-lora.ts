@@ -1,9 +1,9 @@
 Schema.intersect([
     Schema.object({
         model_train_type: Schema.string().default("anima-lora").disabled().description("训练种类"),
-        pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima-preview.safetensors").description("Anima 主 DiT / transformer 权重路径，例如 anima-preview.safetensors"),
-        vae: Schema.string().role('filepicker', { type: "model-file" }).description("Qwen Image VAE 模型路径（Anima 训练必填）"),
-        qwen3: Schema.string().role('filepicker', { type: "model-file" }).description("Qwen3 文本模型路径。可填写 safetensors / pt 文件，或完整本地模型目录"),
+        pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/anima-preview3-base.safetensors").description("Anima 主 DiT / transformer 权重路径，例如 anima-preview3-base.safetensors"),
+        vae: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_image_vae.safetensors").description("Qwen Image VAE 模型路径（Anima 训练必填）"),
+        qwen3: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_3_06b_base.safetensors").description("Qwen3 文本模型路径。可填写 safetensors / pt 文件，或完整本地模型目录"),
         llm_adapter_path: Schema.string().role('filepicker', { type: "model-file" }).description("单独的 LLM Adapter 权重路径（可选）。填写后会覆盖主模型内置 Adapter"),
         t5_tokenizer_path: Schema.string().role('filepicker', { type: "folder" }).description("T5 tokenizer 目录路径（可选，留空使用内置 configs/t5_old）"),
         resume: Schema.string().role('filepicker', { type: "folder" }).description("从某个 `save_state` 保存的中断状态继续训练，填写文件路径"),
@@ -47,7 +47,12 @@ Schema.intersect([
         network_train_text_encoder_only: Schema.boolean().default(false).description("仅训练 Qwen3 文本编码器"),
     }).description("训练相关参数"),
 
-    SHARED_SCHEMAS.LR_OPTIMIZER,
+    Schema.intersect([
+        SHARED_SCHEMAS.LR_OPTIMIZER,
+        Schema.object({
+            unet_lr: Schema.string().default("5e-5").description("U-Net 学习率。Anima 小数据集默认更保守，降低过快贴图和过拟合风险"),
+        }),
+    ]),
 
     Schema.intersect([
         Schema.object({
@@ -134,8 +139,8 @@ Schema.intersect([
         Schema.union([
             Schema.object({
                 enable_preview: Schema.const(true).required(),
-                positive_prompts: Schema.string().role('textarea').default("masterpiece, best quality, score_7, safe, newest, highres").description("预览 Prompt。默认值按 Anima 官方推荐的质量、分级与 1MP 预览习惯配置，不预设角色性别，可按角色或风格自行追加"),
-                negative_prompts: Schema.string().role('textarea').default("worst quality, low quality, score_1, score_2, score_3, artist name, jpeg artifacts").description("Negative Prompt / 负面提示词。默认值按 Anima 官方推荐配置"),
+                positive_prompts: Schema.string().role('textarea').default("1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looking at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukata, choker, split mouth, side ponytail, bow, brown hair").description("预览 Prompt。默认使用偏保守的人物半身预览；用户自定义后以后端实际提交值为准"),
+                negative_prompts: Schema.string().role('textarea').default("nsfw, explicit, sexual content, nude, naked, nipples, areola, genitals, cleavage, breasts, ass, buttocks, thighs, underwear, lingerie, bikini, swimsuit, erotic, suggestive, lewd, spread legs, close-up body, transparent clothes, worst quality, low quality, score_1, score_2, score_3, artist name, jpeg artifacts").description("Negative Prompt / 负面提示词。默认压制 NSFW、裸露和身体特写，适合公开预览页"),
                 sample_width: Schema.number().default(1024).description("预览图宽"),
                 sample_height: Schema.number().default(1024).description("预览图高"),
                 sample_cfg: Schema.number().min(1).max(30).default(4.5).description("CFG Scale。Anima 官方建议 4-5"),
@@ -143,6 +148,7 @@ Schema.intersect([
                 sample_steps: Schema.number().min(1).max(300).default(40).description("推理步数。Anima 官方建议 30-50"),
                 sample_sampler: Schema.union(["euler", "k_euler"]).default("euler").description("Anima 训练预览采样器（当前为内置 Rectified Flow Euler 预览）"),
                 sample_scheduler: Schema.union(["simple"]).default("simple").description("Anima 预览调度器"),
+                sample_at_first: Schema.boolean().default(true).description("训练开始前生成 step 0 预览图，用作未训练基线对照。建议开启"),
                 sample_every_n_epochs: Schema.number().default(2).description("每 N 个 epoch 生成一次预览图"),
             }),
             Schema.object({}),
