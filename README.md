@@ -43,6 +43,21 @@
 
 ---
 
+## Credits & upstream
+
+This repo is built on top of the following open-source projects. Thank you to all the authors.
+
+| Project | Role in this fork |
+|:--------|:------------------|
+| [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | GUI framework & one-click training UX ("秋叶式" stack) |
+| [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | Core training scripts backend |
+| [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF) | SDXL Rectified Flow training implementation reference |
+| [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) | Anima LoRA training integration reference (SD-reScripts) |
+
+Full license attribution in [`NOTICE.md`](NOTICE.md). If anything is missing or incorrectly attributed, please open an issue — we will fix it promptly.
+
+---
+
 ## Interface preview
 
 <p align="center">
@@ -50,15 +65,6 @@
 </p>
 
 <p align="center"><sub>TensorBoard, WD 1.4 Tagger, and Tag Editor open inside the same WebUI.</sub></p>
-
----
-
-<details>
-<summary><b>Lineage & upstream (click to expand)</b></summary>
-
-This fork lives at **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)** and inherits the **Akegarasu SD-Trainer / 秋叶一键训练包** UX from **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**. Training scripts come from **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**. SDXL **Rectified Flow** follows **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**. **Anima** support is adapted from **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)** — **SD-reScripts**, described upstream as a maintained fork / continuation of the LoRA-scripts line.
-
-</details>
 
 ---
 
