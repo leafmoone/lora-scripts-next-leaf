@@ -183,7 +183,8 @@ def load_models_from_sdxl_checkpoint(model_version, ckpt_path, map_location, dty
         epoch = None
         global_step = None
     else:
-        checkpoint = torch.load(ckpt_path, map_location=map_location)
+        # NOTE(wochenlong): 同 stable/library/sdxl_model_util.py 注释，PyTorch 2.6+ 兼容传统 ckpt。
+        checkpoint = torch.load(ckpt_path, map_location=map_location, weights_only=False)
         if "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
             epoch = checkpoint.get("epoch", 0)

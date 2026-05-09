@@ -4666,7 +4666,10 @@ def prepare_dtype(args: argparse.Namespace):
 
 def _load_target_model(args: argparse.Namespace, weight_dtype, device="cpu", unet_use_linear_projection_in_v2=False):
     name_or_path = args.pretrained_model_name_or_path
-    name_or_path = os.path.realpath(name_or_path) if os.path.islink(name_or_path) else name_or_path
+    # NOTE(wochenlong): 上游原本会用 os.path.realpath() 解析 symlink，
+    # 但 AutoDL 共享盘的 .safetensors 常以 SHA256 hash 命名（无后缀），
+    # realpath 会让 is_safetensors() 误判成 ckpt 走 torch.load 触发 UnpicklingError。
+    # os.path.isfile() 自身就会跟随 symlink，realpath 完全多余，因此移除。
     load_stable_diffusion_format = os.path.isfile(name_or_path)  # determine SD or Diffusers
     if load_stable_diffusion_format:
         logger.info(f"load StableDiffusion checkpoint: {name_or_path}")

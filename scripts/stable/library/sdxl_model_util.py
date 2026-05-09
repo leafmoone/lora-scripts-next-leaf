@@ -183,7 +183,9 @@ def load_models_from_sdxl_checkpoint(model_version, ckpt_path, map_location, dty
         epoch = None
         global_step = None
     else:
-        checkpoint = torch.load(ckpt_path, map_location=map_location)
+        # NOTE(wochenlong): PyTorch 2.6+ 默认 weights_only=True，对 SD 1.x/SDXL 老式 ckpt 会直接抛
+        # `Weights only load failed ... Unsupported operand 80`。这里显式 weights_only=False 兼容传统 pickle 检查点。
+        checkpoint = torch.load(ckpt_path, map_location=map_location, weights_only=False)
         if "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
             epoch = checkpoint.get("epoch", 0)

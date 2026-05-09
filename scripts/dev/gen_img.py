@@ -1542,7 +1542,8 @@ def main(args):
         if len(files) == 1:
             args.ckpt = files[0]
 
-    name_or_path = os.readlink(args.ckpt) if os.path.islink(args.ckpt) else args.ckpt
+    # NOTE(wochenlong): 同 stable/gen_img.py 注释。移除 readlink，避免 hash 命名共享盘被误判。
+    name_or_path = args.ckpt
     use_stable_diffusion_format = os.path.isfile(name_or_path)  # determine SD or Diffusers
 
     # SDXLかどうかを判定する

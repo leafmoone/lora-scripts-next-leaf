@@ -975,7 +975,9 @@ def load_checkpoint_with_text_encoder_conversion(ckpt_path, device="cpu"):
         checkpoint = None
         state_dict = load_file(ckpt_path)  # , device) # may causes error
     else:
-        checkpoint = torch.load(ckpt_path, map_location=device)
+        # NOTE(wochenlong): PyTorch 2.6+ 默认 weights_only=True，会拒绝传统 SD 1.x ckpt 报
+        # `Weights only load failed ... Unsupported operand 80`。这里显式关闭以兼容老式 pickle 检查点。
+        checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
         if "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
         else:

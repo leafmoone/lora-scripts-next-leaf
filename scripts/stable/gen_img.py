@@ -1504,7 +1504,9 @@ def main(args):
         if len(files) == 1:
             args.ckpt = files[0]
 
-    name_or_path = os.readlink(args.ckpt) if os.path.islink(args.ckpt) else args.ckpt
+    # NOTE(wochenlong): 见 library/sdxl_train_util.py 同模式注释。AutoDL 共享盘 hash 命名 + readlink
+    # 会让 is_safetensors() 误判走 torch.load。os.path.isfile() 自身跟随 symlink，readlink 多余。
+    name_or_path = args.ckpt
     use_stable_diffusion_format = os.path.isfile(name_or_path)  # determine SD or Diffusers
 
     # SDXLかどうかを判定する

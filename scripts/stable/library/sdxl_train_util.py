@@ -67,7 +67,10 @@ def _load_target_model(
     name_or_path: str, vae_path: Optional[str], model_version: str, weight_dtype, device="cpu", model_dtype=None, disable_mmap=False
 ):
     # model_dtype only work with full fp16/bf16
-    name_or_path = os.readlink(name_or_path) if os.path.islink(name_or_path) else name_or_path
+    # NOTE(wochenlong): 上游原本会用 os.readlink() 解析 symlink 后再判断格式，
+    # 但 AutoDL 共享盘的 .safetensors 文件常以 SHA256 hash 命名（无后缀），
+    # readlink 会让 is_safetensors() 误判为 ckpt 走 torch.load 触发 UnpicklingError。
+    # os.path.isfile() 本身就会跟随 symlink，readlink 完全多余，因此移除。
     load_stable_diffusion_format = os.path.isfile(name_or_path)  # determine SD or Diffusers
 
     if load_stable_diffusion_format:

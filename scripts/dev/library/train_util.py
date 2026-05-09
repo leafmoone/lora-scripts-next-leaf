@@ -5494,7 +5494,8 @@ def prepare_dtype(args: argparse.Namespace):
 
 def _load_target_model(args: argparse.Namespace, weight_dtype, device="cpu", unet_use_linear_projection_in_v2=False):
     name_or_path = args.pretrained_model_name_or_path
-    name_or_path = os.path.realpath(name_or_path) if os.path.islink(name_or_path) else name_or_path
+    # NOTE(wochenlong): 见 stable/library/train_util.py 同函数注释。AutoDL 共享盘 hash 命名 + realpath
+    # 会让 is_safetensors() 误判，移除该行。os.path.isfile() 自身会跟随 symlink。
     load_stable_diffusion_format = os.path.isfile(name_or_path)  # determine SD or Diffusers
     if load_stable_diffusion_format:
         logger.info(f"load StableDiffusion checkpoint: {name_or_path}")

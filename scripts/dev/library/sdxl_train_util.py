@@ -66,7 +66,8 @@ def _load_target_model(
     name_or_path: str, vae_path: Optional[str], model_version: str, weight_dtype, device="cpu", model_dtype=None, disable_mmap=False
 ):
     # model_dtype only work with full fp16/bf16
-    name_or_path = os.readlink(name_or_path) if os.path.islink(name_or_path) else name_or_path
+    # NOTE(wochenlong): 见 stable/library/sdxl_train_util.py 同函数注释。
+    # AutoDL 共享盘 hash 命名 + readlink 会让 is_safetensors() 误判，移除该行。
     load_stable_diffusion_format = os.path.isfile(name_or_path)  # determine SD or Diffusers
 
     if load_stable_diffusion_format:

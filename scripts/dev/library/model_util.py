@@ -974,7 +974,8 @@ def load_checkpoint_with_text_encoder_conversion(ckpt_path, device="cpu"):
         checkpoint = None
         state_dict = load_file(ckpt_path)  # , device) # may causes error
     else:
-        checkpoint = torch.load(ckpt_path, map_location=device)
+        # NOTE(wochenlong): 同 stable/library/model_util.py 注释，PyTorch 2.6+ 兼容传统 ckpt。
+        checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
         if "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
         else:
