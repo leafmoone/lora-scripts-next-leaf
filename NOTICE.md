@@ -12,10 +12,14 @@ This project includes Rectified Flow training support for SDXL LoRA inspired by 
 
 The referenced repository is licensed under AGPL-3.0. Its RF training ideas include the Rectified Flow objective, sigma timestep sampling, optional cosine optimal transport pairing, and SDXL resolution-dependent timestep shift controls.
 
-### Anima LoRA (SD-reScripts)
+### Anima LoRA
 
-This project also includes Anima LoRA training support adapted from:
+Active Anima backend maintenance is based on:
 
-- `WhitecrowAurora/lora-rescripts` (**SD-reScripts** — a maintained fork / continuation of the LoRA-scripts line): https://github.com/WhitecrowAurora/lora-rescripts
+- `kohya-ss/sd-scripts`: https://github.com/kohya-ss/sd-scripts
 
-The referenced repository is licensed under AGPL-3.0. The adapted Anima support includes the Anima training entrypoint, Qwen3/Qwen Image VAE loading utilities, Anima dataset/text-encoding strategies, and Anima LoRA network modules.
+Earlier Anima integration work also referenced:
+
+- `WhitecrowAurora/lora-rescripts` (**SD-reScripts** — historical fork / continuation of the LoRA-scripts line): https://github.com/WhitecrowAurora/lora-rescripts
+
+The historical reference repository is licensed under AGPL-3.0. Current Anima training should be synchronized from `kohya-ss/sd-scripts`; local code is limited to the WebUI compatibility wrapper, config adapter, defaults, and launch orchestration.

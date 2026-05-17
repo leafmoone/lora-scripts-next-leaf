@@ -1,3 +1,6 @@
 [submodule "mikazuki/dataset-tag-editor"]
 	path = mikazuki/dataset-tag-editor
 	url = https://github.com/Akegarasu/dataset-tag-editor
+[submodule "vendor/sd-scripts"]
+	path = vendor/sd-scripts
+	url = https://github.com/kohya-ss/sd-scripts.git

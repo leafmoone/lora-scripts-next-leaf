@@ -38,7 +38,7 @@
 |:---|:---|
 | **训练 WebUI** | 预设、TensorBoard、WD 标签器、标签编辑器同一入口；运行 `run_gui.ps1` / `run_gui.sh` 后打开 **`http://127.0.0.1:28000`**。 |
 | **本 fork 增量** | 左侧 sidebar 多出 **Anima LoRA**（Anima DiT + Qwen3 + T5）训练入口；训练日志通过 SSE 实时推送到独立页面 **`/train-log`**；新增 `MIKAZUKI_FRONTEND_DIST` 环境变量，无需动 submodule 即可换前端 dist 目录。 |
-| **后端** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)；SDXL RF 脉络来自 [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)；Anima 来自 [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)（<b>SD-reScripts</b>）。 |
+| **后端** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) 是主要训练后端，并负责 Anima 训练；SDXL RF 脉络来自 [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)。 |
 | **许可证与致谢** | 详见 [`NOTICE.md`](NOTICE.md)。 |
 
 ---
@@ -56,7 +56,7 @@
 <details>
 <summary><b>上游与血缘（展开）</b></summary>
 
-当前仓库：**[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**。界面与打包体验源自 **秋叶一键训练包 / [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**，训练后端为 **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**。SDXL **Rectified Flow** 参考 **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**。**Anima** 实现参考 **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)**（**SD-reScripts**：对 LoRA-scripts 的维护型分支 / 延续开发）。
+当前仓库：**[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)**。界面与打包体验源自 **秋叶一键训练包 / [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**，训练后端为 **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**。SDXL **Rectified Flow** 参考 **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**。**Anima** 曾参考 **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)**（**SD-reScripts**），但当前维护基线已经迁移到 **kohya-ss/sd-scripts**。
 
 </details>
 
@@ -90,6 +90,8 @@ cd lora-scripts-next
 ### Anima LoRA 训练
 
 启动 WebUI 后，左侧 sidebar 里点 **Anima LoRA** 进入（占用了原来 SD3 的位置——`model_train_type` 已经被改成 `anima-lora`，后端会调度到 [`scripts/dev/anima_train_network.py`](scripts/dev/anima_train_network.py)）。表单里需要填 4 个模型路径：
+
+本地入口是兼容 wrapper：它会适配 GUI 生成的 TOML，并把真正的 Anima 训练委托给 [`config/anima_backend.toml`](config/anima_backend.toml) 中固定的 `kohya-ss/sd-scripts` 后端。维护说明见 [`docs/anima-backend.md`](docs/anima-backend.md)。
 
 | 字段 | 含义 |
 |---|---|

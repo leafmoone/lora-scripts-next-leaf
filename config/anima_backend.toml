@@ -1,0 +1,10 @@
+[backend]
+mode = "pinned-sd-scripts"
+upstream_repo = "https://github.com/kohya-ss/sd-scripts"
+upstream_path = "vendor/sd-scripts"
+pinned_commit = "502cc3fab2aa22c106580e2e05c4692cfde5e5ff"
+entrypoint = "anima_train_network.py"
+
+[compatibility]
+local_entrypoint = "scripts/dev/anima_train_network.py"
+train_types = ["anima-lora", "sd3-lora"]

@@ -18,7 +18,8 @@ from urllib.request import urlopen
 
 HOST = "0.0.0.0"
 PORT = 6008
-GUI_API = "http://127.0.0.1:6006/api"
+_GUI_API_PORT = int(os.environ.get("MIKAZUKI_PORT", 28000))
+GUI_API = f"http://127.0.0.1:{_GUI_API_PORT}/api"
 REPO = Path(__file__).resolve().parent
 OUTPUT_DIR = REPO / "output"
 LOG_DIR = REPO / "logs"

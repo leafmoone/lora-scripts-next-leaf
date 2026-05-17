@@ -19,7 +19,7 @@ Schema.intersect([
         logit_mean: Schema.number().step(0.01).description("logit_normal 权重策略的均值"),
         logit_std: Schema.number().step(0.01).description("logit_normal 权重策略的标准差"),
         mode_scale: Schema.number().step(0.01).description("mode 权重策略的缩放系数"),
-        attn_mode: Schema.union(["", "torch", "xformers", "sageattn", "flash"]).default("").description("Attention 实现。留空时由训练脚本自动选择"),
+        attn_mode: Schema.union(["", "torch", "xformers", "sageattn", "flash"]).default("xformers").description("Attention 实现。留空时由训练脚本自动选择。xformers 需要 A100+（算力≥8.0），RTX 20/30 系等老卡请改用 torch"),
         split_attn: Schema.boolean().default(false).description("拆分 attention 计算以降低显存占用，通常会牺牲训练速度"),
         vae_chunk_size: Schema.number().min(2).description("VAE 编码/解码分块大小（需为偶数）"),
         vae_disable_cache: Schema.boolean().default(false).description("禁用内部 VAE 缓存机制"),

@@ -38,7 +38,7 @@
 |:---|:---|
 | **Train WebUI** | Single dashboard: presets, tensorboard hook, tagger, tag editor — open **`http://127.0.0.1:28000`** after `run_gui.ps1` / `run_gui.sh`. |
 | **What this fork adds** | **Anima LoRA** training entry in the sidebar (Anima DiT + Qwen3 + T5), live training log over SSE at **`/train-log`**, and a `MIKAZUKI_FRONTEND_DIST` env var for swapping the static UI without touching the submodule. |
-| **Back end** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts); SDXL RF ideas from [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF); Anima path from [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) (**SD-reScripts**). |
+| **Back end** | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) is the primary backend, including Anima training; SDXL RF ideas from [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF). |
 | **Docs** | Full attribution & licenses in [`NOTICE.md`](NOTICE.md). |
 
 ---
@@ -52,7 +52,7 @@ This repo is built on top of the following open-source projects. Thank you to al
 | [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | GUI framework & one-click training UX ("秋叶式" stack) |
 | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | Core training scripts backend |
 | [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF) | SDXL Rectified Flow training implementation reference |
-| [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) | Anima LoRA training integration reference (SD-reScripts) |
+| [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) | Historical Anima integration reference only; active Anima backend maintenance now tracks `kohya-ss/sd-scripts` |
 
 Full license attribution in [`NOTICE.md`](NOTICE.md). If anything is missing or incorrectly attributed, please open an issue — we will fix it promptly.
 
@@ -96,6 +96,8 @@ cd lora-scripts-next
 ### Anima LoRA training
 
 After launching the WebUI, open the **Anima LoRA** entry in the left sidebar (it lives where SD3 used to be — the `model_train_type` is wired to `anima-lora`, and the backend dispatches to [`scripts/dev/anima_train_network.py`](scripts/dev/anima_train_network.py)). Fill in the four model paths the schema asks for:
+
+The local entrypoint is a compatibility wrapper. It adapts the GUI-generated TOML and delegates real Anima training to the pinned `kohya-ss/sd-scripts` backend configured in [`config/anima_backend.toml`](config/anima_backend.toml). See [`docs/anima-backend.md`](docs/anima-backend.md) for maintenance notes.
 
 | Field | What it expects |
 |---|---|
