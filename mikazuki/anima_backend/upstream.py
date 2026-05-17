@@ -72,6 +72,54 @@ def _is_initialized_git_checkout(upstream_path: Path) -> bool:
     return toplevel == upstream_path.resolve()
 
 
+def _auto_init_disabled() -> bool:
+    return os.environ.get("ANIMA_SKIP_AUTO_INIT", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _try_init_submodule(root: Path, upstream_path: Path) -> bool:
+    """Best-effort `git submodule update --init --recursive` for upstream_path.
+
+    Returns True if the submodule appears initialized afterwards. The function
+    swallows all errors; callers should still re-check with
+    ``_is_initialized_git_checkout`` and raise a friendly error if False.
+    """
+
+    if _auto_init_disabled():
+        return _is_initialized_git_checkout(upstream_path)
+    if not (root / ".git").exists():
+        # Not a git checkout (e.g. ZIP download) — nothing we can do.
+        return _is_initialized_git_checkout(upstream_path)
+    try:
+        rel = upstream_path.resolve().relative_to(root.resolve())
+    except ValueError:
+        rel = Path("vendor") / "sd-scripts"
+
+    print(
+        f"[Anima backend] vendor/sd-scripts submodule not initialized; "
+        f"running `git submodule update --init --recursive -- {rel}` ...",
+        file=sys.stderr,
+    )
+    try:
+        subprocess.run(
+            ["git", "-C", str(root), "submodule", "update",
+             "--init", "--recursive", "--", str(rel)],
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        print(
+            f"[Anima backend] Auto-init failed: {exc}. "
+            "Falling back to manual instructions.",
+            file=sys.stderr,
+        )
+        return False
+    return _is_initialized_git_checkout(upstream_path)
+
+
 def current_upstream_commit(upstream_path: Path) -> str:
     if not _is_initialized_git_checkout(upstream_path):
         raise RuntimeError(_SUBMODULE_HINT.format(path=upstream_path))
@@ -97,6 +145,9 @@ def verify_pinned_commit(root: Path, config_path: Path | None = None) -> str:
     upstream_path = resolve_upstream_path(root, config_path)
     expected = pinned_commit(root, config_path)
 
+    if not _is_initialized_git_checkout(upstream_path):
+        # Best-effort auto-init before giving up.
+        _try_init_submodule(root, upstream_path)
     if not _is_initialized_git_checkout(upstream_path):
         raise RuntimeError(_SUBMODULE_HINT.format(path=upstream_path))
 

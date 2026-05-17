@@ -144,6 +144,43 @@ class AnimaBackendUpstreamTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"ANIMA_ALLOW_COMMIT_DRIFT": "1"}):
                 self.assertEqual(verify_pinned_commit(root), actual_head)
 
+    def test_verify_pinned_commit_skips_auto_init_when_env_set(self):
+        from mikazuki.anima_backend import upstream as upstream_mod
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, _ = self._make_fake_repo(temp_dir, "deadbeef", upstream_initialized=False)
+            with mock.patch.dict(os.environ, {"ANIMA_SKIP_AUTO_INIT": "1"}), \
+                    mock.patch.object(upstream_mod.subprocess, "run") as run_mock:
+                with self.assertRaises(RuntimeError):
+                    verify_pinned_commit(root)
+                # No git submodule update --init should have been attempted.
+                for call in run_mock.call_args_list:
+                    args = call.args[0] if call.args else []
+                    self.assertNotIn("submodule", args)
+
+    def test_verify_pinned_commit_attempts_auto_init(self):
+        from mikazuki.anima_backend import upstream as upstream_mod
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, upstream = self._make_fake_repo(temp_dir, "deadbeef", upstream_initialized=False)
+
+            # Simulate a successful submodule update by initializing the
+            # upstream as a real git repo when the auto-init command runs.
+            real_run = upstream_mod.subprocess.run
+
+            def fake_run(cmd, *args, **kwargs):
+                if isinstance(cmd, list) and len(cmd) >= 4 and cmd[3] == "submodule":
+                    self._init_repo_with_commit(upstream, "file.txt", "init")
+                    return subprocess.CompletedProcess(cmd, 0, "", "")
+                return real_run(cmd, *args, **kwargs)
+
+            with mock.patch.object(upstream_mod.subprocess, "run", side_effect=fake_run):
+                # Drift is expected (pinned != actual) but auto-init must have
+                # run before the drift check kicks in.
+                with self.assertRaises(RuntimeError) as ctx:
+                    verify_pinned_commit(root)
+                self.assertIn("commit mismatch", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

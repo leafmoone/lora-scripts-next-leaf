@@ -70,10 +70,20 @@ Python **3.10** 与 **Git**。
 
 ### 克隆（含子模块）
 
+> ⚠️ **Anima / SD3 LoRA 训练必需。** 训练引擎位于 `vendor/sd-scripts` 子模块，普通 `git clone` 不会拉取，会导致一启动训练就报错退出。
+
 ```sh
 git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
 ```
+
+忘了加 `--recurse-submodules`，或者直接下载了 ZIP？在仓库根目录执行一次：
+
+```sh
+git submodule update --init --recursive
+```
+
+`install.ps1` / `install.bash` 以及 GUI 启动时也会自动尝试拉取子模块；如需关闭可设置环境变量 `ANIMA_SKIP_AUTO_INIT=1`。
 
 ## SD-Trainer GUI
 

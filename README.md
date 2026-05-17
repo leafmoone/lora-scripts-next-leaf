@@ -76,10 +76,20 @@ Python **3.10** and **Git**.
 
 ### Clone (with submodules)
 
+> ⚠️ **Required for Anima/SD3 LoRA training.** The training engine lives in the `vendor/sd-scripts` submodule; a plain `git clone` will leave it empty.
+
 ```sh
 git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
 ```
+
+Forgot the flag (or downloaded the ZIP)? Run this once from the repo root:
+
+```sh
+git submodule update --init --recursive
+```
+
+The `install.ps1` / `install.bash` scripts and the GUI itself will also try to auto-init the submodule on first run; set `ANIMA_SKIP_AUTO_INIT=1` to opt out.
 
 ## SD-Trainer GUI
 
