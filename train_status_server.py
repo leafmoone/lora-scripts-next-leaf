@@ -664,7 +664,7 @@ def render_page(status: dict) -> bytes:
       </div>
       <div class="trend-headline" id="lossTrendHeadline">等待 Loss 数据</div>
       <div class="trend-copy" id="lossTrendCopy">开始训练后会显示相对初始值的下降趋势。</div>
-      <svg class="trend-chart" id="lossTrendChart" viewBox="0 0 600 138" preserveAspectRatio="none" aria-label="Loss 相对趋势"></svg>
+      <svg class="trend-chart" id="lossTrendChart" width="100%" height="138" viewBox="0 0 600 138" preserveAspectRatio="none" aria-label="Loss 相对趋势"></svg>
     </section>
     <details class="panel" id="logDetails">
       <summary id="logSummary">训练日志</summary>
