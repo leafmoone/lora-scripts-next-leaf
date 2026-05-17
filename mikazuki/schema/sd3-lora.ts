@@ -51,7 +51,7 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            lora_type: Schema.union(["lora", "lora_fa", "vera", "tlora", "lokr"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
+            lora_type: Schema.union(["lora", "lora_fa", "vera", "tlora", "loha", "lokr"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
             network_weights: Schema.string().role('filepicker').description("从已有 LoRA / LoKr 模型继续训练，填写路径"),
             network_dim: Schema.number().min(1).default(16).description("网络维度，常用 4~128，不是越大越好"),
             network_alpha: Schema.number().min(1).default(16).description("常用值：等于 network_dim 或 network_dim/2 或 1"),
@@ -104,11 +104,21 @@ Schema.intersect([
                 dropout: Schema.number().hidden(),
             }),
             Schema.object({
+                lora_type: Schema.const("loha").required(),
+                network_module: Schema.const("networks.loha").default("networks.loha").hidden(),
+                network_dropout: Schema.number().step(0.01).default(0).description("LoHa dropout 概率"),
+                pissa_init: Schema.boolean().hidden(),
+                lycoris_algo: Schema.string().hidden(),
+                lokr_factor: Schema.number().hidden(),
+                dropout: Schema.number().hidden(),
+            }),
+            Schema.object({
                 lora_type: Schema.const("lokr").required(),
-                network_module: Schema.const("networks.lora_anima").default("networks.lora_anima").hidden(),
-                lycoris_algo: Schema.const("lokr").default("lokr").hidden(),
+                network_module: Schema.const("networks.lokr").default("networks.lokr").hidden(),
                 lokr_factor: Schema.number().min(-1).default(8).description("LoKr 分解因子"),
                 dropout: Schema.number().step(0.01).default(0).description("LoKr dropout 概率"),
+                pissa_init: Schema.boolean().hidden(),
+                lycoris_algo: Schema.string().hidden(),
                 network_dropout: Schema.number().hidden(),
             }),
         ]),
