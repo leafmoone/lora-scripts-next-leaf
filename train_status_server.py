@@ -579,8 +579,8 @@ def render_page(status: dict) -> bytes:
     .loss-summary {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:13px; }}
     .pill {{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:999px; padding:3px 8px; background:#0b1224; color:var(--text); }}
     .pill.good {{ color:#86efac; border-color:#166534; background:#052e1a; }}
-    .loss-chart {{ width:100%; height:96px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
-    .trend-chart {{ width:100%; height:138px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
+    .loss-chart {{ display:block; width:100%; height:96px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
+    .trend-chart {{ display:block; width:100%; height:138px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
     .loss-line {{ fill:none; stroke:#34d399; stroke-width:2.5; vector-effect:non-scaling-stroke; }}
     .loss-area {{ fill:rgba(52,211,153,.12); }}
     .card {{ padding:14px; }}
