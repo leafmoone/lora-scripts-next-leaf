@@ -2,7 +2,7 @@
 # 创建启动脚本
 
 param(
-    [string]$BuildDir = "F:\code\lora-scripts-next\build\sd-trainer-portable"
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\sd-trainer-portable")
 )
 
 $ErrorActionPreference = "Stop"

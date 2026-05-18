@@ -2,7 +2,7 @@
 # 创建 ZIP 压缩包
 
 param(
-    [string]$BuildDir = "F:\code\lora-scripts-next\build",
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build"),
     [string]$Version = "1.0.0"
 )
 

@@ -2,7 +2,7 @@
 # 一键创建 Windows 便携式整合包
 
 param(
-    [string]$ProjectRoot = "F:\code\lora-scripts-next",
+    [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
     [string]$Version = "1.0.0",
     [switch]$SkipZip,
     [switch]$Clean

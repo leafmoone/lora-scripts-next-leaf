@@ -2,8 +2,8 @@
 # 安装依赖到便携式环境
 
 param(
-    [string]$BuildDir = "F:\code\lora-scripts-next\build\sd-trainer-portable",
-    [string]$ProjectRoot = "F:\code\lora-scripts-next"
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\sd-trainer-portable"),
+    [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent)
 )
 
 $ErrorActionPreference = "Stop"

@@ -2,8 +2,8 @@
 # 复制项目文件到便携式环境（排除模型目录）
 
 param(
-    [string]$BuildDir = "F:\code\lora-scripts-next\build\sd-trainer-portable",
-    [string]$ProjectRoot = "F:\code\lora-scripts-next"
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\sd-trainer-portable"),
+    [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent)
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,11 +43,11 @@ $excludeDirs = @(
 # 使用 robocopy 复制
 Write-Host "复制项目文件（排除模型目录）..."
 $excludeArgs = $excludeDirs | ForEach-Object { "/XD", $_ }
-$result = robocopy $ProjectRoot $targetDir /E /NFL /NDL /NJH /NJS /NC @excludeArgs
+robocopy $ProjectRoot $targetDir /E /NFL /NDL /NJH /NJS /NC @excludeArgs | Out-Null
 
 # robocopy 返回码: 0-7 表示成功
-if ($result -gt 7) {
-    throw "复制文件失败"
+if ($LASTEXITCODE -gt 7) {
+    throw "复制文件失败 (robocopy exit code: $LASTEXITCODE)"
 }
 
 Write-Host "项目文件复制完成" -ForegroundColor Green
