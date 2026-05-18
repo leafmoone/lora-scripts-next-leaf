@@ -33,3 +33,11 @@ config/presets/test*.toml
 
 huggingface/hub/models*
 huggingface/hub/version_diffusers_cache.txt
+
+# Build outputs
+build/
+.sd-trainer-portable/
+
+# IDE/Tool directories
+.sisyphus/
+.playwright-mcp/
