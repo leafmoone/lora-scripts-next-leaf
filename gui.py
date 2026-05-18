@@ -15,7 +15,7 @@ parser.add_argument("--port", type=int, default=28000, help="Port to run the ser
 parser.add_argument("--listen", action="store_true")
 parser.add_argument("--skip-prepare-environment", action="store_true")
 parser.add_argument("--skip-prepare-onnxruntime", action="store_true")
-parser.add_argument("--disable-tensorboard", action="store_true", default=True)
+parser.add_argument("--disable-tensorboard", action="store_true", default=False)
 parser.add_argument("--disable-tageditor", action="store_true")
 parser.add_argument("--disable-train-monitor", action="store_true")
 parser.add_argument("--disable-auto-mirror", action="store_true")
