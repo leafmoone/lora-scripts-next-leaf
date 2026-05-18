@@ -121,7 +121,7 @@ pip install flash-attn --no-build-isolation
 
 | Date | Update |
 |------|--------|
-| 2026-05-19 | **v2.0.0** — Portable package release, Flash Attention 2 auto-acceleration, AMD GPU detection, auto bf16/fp16 fix, vendor sd-scripts (no more submodule), update check |
+| 2026-05-19 | **v2.0.0** — Portable package, Flash Attention 2 auto-acceleration, AMD GPU detection, auto bf16/fp16 fix, fix LoKr conv_dim/conv_alpha undefined bug, `--browser chrome/edge`, vendor sd-scripts, update check |
 | 2026-05-18 | T-LoRA support, interactive Loss chart, LoKr standardization, Windows portable package, AutoDL script |
 | 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
 | 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |

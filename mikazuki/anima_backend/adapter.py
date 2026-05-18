@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -131,6 +132,8 @@ TLORA_NETWORK_ARG_FIELDS = {
 LYCORIS_NETWORK_ARG_MAP: dict[str, str] = {
     "lycoris_algo": "algo",
     "lokr_factor": "factor",
+    "conv_dim": "conv_dim",
+    "conv_alpha": "conv_alpha",
     "use_cp": "use_cp",
     "use_scalar": "use_scalar",
     "decompose_both": "decompose_both",
@@ -143,6 +146,17 @@ LYCORIS_NETWORK_ARG_MAP: dict[str, str] = {
     "train_norm": "train_norm",
     "dropout": "dropout",
 }
+
+
+def _is_empty_value(value: Any) -> bool:
+    """Check if a value is empty/invalid (None, NaN, 'undefined', 'null', '')."""
+    if value is None or value is False:
+        return True
+    if isinstance(value, float) and math.isnan(value):
+        return True
+    if isinstance(value, str) and value.strip().lower() in {"", "undefined", "null", "nan"}:
+        return True
+    return False
 
 
 def _normalize_network_args(values: Any) -> list[str]:
@@ -225,7 +239,7 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
         network_args = list(source.get("network_args") or [])
         for ui_field, arg_key in LYCORIS_NETWORK_ARG_MAP.items():
             value = source.pop(ui_field, None)
-            if value is None or value is False:
+            if _is_empty_value(value):
                 continue
             network_args.append(f"{arg_key}={value}")
         if network_args:
@@ -237,7 +251,7 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
         network_args = list(source.get("network_args") or [])
         for field in TLORA_NETWORK_ARG_FIELDS:
             value = source.pop(field, None)
-            if value is not None:
+            if not _is_empty_value(value):
                 network_args.append(f"{field}={value}")
         if network_args:
             source["network_args"] = network_args
@@ -245,8 +259,9 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
     for key, value in source.items():
         if key in UI_ONLY_FIELDS or key in TLORA_NETWORK_ARG_FIELDS or key in LYCORIS_NETWORK_ARG_MAP:
             continue
+        if _is_empty_value(value):
+            continue
         if key in SUPPORTED_FIELDS:
-            # skip empty string for optional fields that expect None or a real value
             if key == "attn_mode" and value in ("", None):
                 continue
             adapted[key] = value
