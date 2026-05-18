@@ -61,7 +61,7 @@ def _sd_trainer_dir():
 
 # ──────────────────── UI helpers ────────────────────
 
-_TOTAL_STEPS = 4
+_TOTAL_STEPS = 5
 
 
 def _banner():
@@ -107,6 +107,25 @@ def check_disk_space():
         _fail(f"磁盘空间不足: 可用 {free_gb:.1f} GB，需要至少 {DISK_SPACE_REQUIRED_GB} GB")
         return False
     return True
+
+
+def detect_gpu():
+    """Detect GPU vendor via WMI. Returns 'nvidia', 'amd', or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ["wmic", "path", "Win32_VideoController", "get", "Name"],
+            capture_output=True, text=True, timeout=10,
+        )
+        output = result.stdout.lower()
+        has_nvidia = "nvidia" in output or "geforce" in output or "rtx" in output
+        has_amd = "amd" in output or "radeon" in output
+        if has_nvidia:
+            return "nvidia"
+        if has_amd:
+            return "amd"
+    except Exception:
+        pass
+    return "unknown"
 
 
 def detect_network():
@@ -169,6 +188,17 @@ def install_requirements(region):
     return _run_pip(args)
 
 
+def install_flash_attn(region):
+    """Try to install flash-attn for training acceleration. Non-fatal on failure."""
+    cfg = MIRROR_PROFILES[region]
+    args = ["install", "flash-attn", "--no-build-isolation", "--no-warn-script-location"]
+    if region == "china" and cfg.get("pip_index_url"):
+        args += ["-i", cfg["pip_index_url"]]
+        if cfg.get("pip_trusted_host"):
+            args += ["--trusted-host", cfg["pip_trusted_host"]]
+    return _run_pip(args)
+
+
 def write_mirror_env(region):
     """Persist mirror settings so subsequent launches use them too."""
     cfg = MIRROR_PROFILES[region]
@@ -202,6 +232,25 @@ def main():
     if check_already_installed():
         print("  环境已安装，跳过安装步骤。")
         return 0
+
+    # GPU check — warn AMD users early
+    gpu = detect_gpu()
+    if gpu == "amd":
+        print("  ╔══════════════════════════════════════════════╗")
+        print("  ║          检测到 AMD 显卡 (Radeon)            ║")
+        print("  ╠══════════════════════════════════════════════╣")
+        print("  ║  当前版本仅支持 NVIDIA GPU 进行训练。        ║")
+        print("  ║  AMD GPU (ROCm) 支持正在开发中，敬请期待！  ║")
+        print("  ║                                              ║")
+        print("  ║  Linux 用户可参考 ROCm 方案:                 ║")
+        print("  ║  https://rocm.docs.amd.com                   ║")
+        print("  ╚══════════════════════════════════════════════╝")
+        print()
+        try:
+            input("  按回车键退出，或等待 AMD 支持后再试...")
+        except EOFError:
+            pass
+        return 1
 
     if not check_disk_space():
         return 1
@@ -241,6 +290,15 @@ def main():
         _fail("训练组件安装失败，请检查网络连接后重新运行 run_gui.bat")
         return 1
     _ok("训练组件安装完成")
+
+    # 5 — flash-attn (optional acceleration)
+    _separator()
+    _step(5, "安装 Flash Attention 2 训练加速 (可选)...")
+    print()
+    if install_flash_attn(region):
+        _ok("Flash Attention 2 安装成功，训练将自动启用加速")
+    else:
+        print("  >>> Flash Attention 2 安装失败（不影响训练，将使用 PyTorch SDPA）")
 
     # Verify
     _separator()

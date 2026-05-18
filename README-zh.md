@@ -64,9 +64,11 @@ cd lora-scripts-next
 
 - **多模型支持** — SD 1.5 / SDXL / Flux / **Anima** 全部开箱即用
 - **Anima LoRA 训练** — 侧边栏一键进入，支持 LoRA / LoKr（LyCORIS）/ **T-LoRA**
+- **Flash Attention 2 训练加速** — 自动检测并启用最优 Attention 后端（优先 Flash Attention 2，其次 xformers，最后 PyTorch SDPA）。整合包首次安装时自动安装 `flash-attn`
 - **T-LoRA** — 基于扩散时间步的动态 Rank LoRA，正交初始化，防止过拟合（[论文](https://github.com/ControlGenAI/T-LoRA)）
 - **训练监控页** — 随 GUI 自动启动，ECharts 交互式 Loss 图表（滚轮缩放 / 拖拽平移 / 一键复位），实时进度和预览图
 - **TensorBoard 内置** — 侧边栏直接查看，无需额外操作
+- **显卡检测** — 首次安装自动检测 NVIDIA / AMD 显卡，AMD 用户会收到友好提示及 ROCm 方案指引
 - **AutoDL 适配** — 提供专用启动脚本 `start_autodl.sh`
 
 ---
@@ -102,7 +104,7 @@ cd lora-scripts-next
 
 | 日期 | 内容 |
 |------|------|
-| 2026-05-19 | **v2.0.0** — 整合包发布、自动修复 bf16/fp16 精度问题、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
+| 2026-05-19 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速、AMD 显卡检测、自动修复 bf16/fp16 精度问题、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
 | 2026-05-18 | T-LoRA 训练支持、交互式 Loss 图表、LoKr 标准化、Windows 便携包、AutoDL 脚本 |
 | 2026-05-17 | Anima 训练后端完全迁移至 kohya-ss/sd-scripts |
 | 2026-05-06 | 训练监控页重构：实时 Loss 卡片 + 粘性滚动 |

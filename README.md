@@ -64,9 +64,11 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 
 - **Multi-model** — SD 1.5 / SDXL / Flux / **Anima** all work out of the box
 - **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS) / **T-LoRA**
+- **Flash Attention 2 acceleration** — Auto-detected and enabled when available; falls back to xformers or PyTorch SDPA. Portable package installs `flash-attn` automatically on first run
 - **T-LoRA** — Timestep-Dependent LoRA with dynamic rank and orthogonal init ([paper](https://github.com/ControlGenAI/T-LoRA))
 - **Train Monitor** — Auto-opens with GUI, interactive ECharts Loss chart (zoom / pan / restore), real-time progress and preview samples
 - **Built-in TensorBoard** — Accessible from the sidebar, no extra setup
+- **GPU detection** — Detects NVIDIA / AMD GPUs on first run; AMD users get a friendly notice with ROCm guidance
 - **AutoDL ready** — Dedicated startup script `start_autodl.sh`
 
 ---
@@ -102,7 +104,7 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 
 | Date | Update |
 |------|--------|
-| 2026-05-19 | **v2.0.0** — Portable package release, auto bf16/fp16 fix, vendor sd-scripts (no more submodule), update check |
+| 2026-05-19 | **v2.0.0** — Portable package release, Flash Attention 2 auto-acceleration, AMD GPU detection, auto bf16/fp16 fix, vendor sd-scripts (no more submodule), update check |
 | 2026-05-18 | T-LoRA support, interactive Loss chart, LoKr standardization, Windows portable package, AutoDL script |
 | 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
 | 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |

@@ -72,4 +72,9 @@ echo "Installing deps..."
 cd "$script_dir" || exit
 pip install --upgrade -r requirements.txt
 
+echo "Installing Flash Attention 2 (optional, for training acceleration)..."
+pip install flash-attn --no-build-isolation 2>/dev/null && \
+    echo "Flash Attention 2 installed successfully" || \
+    echo "Flash Attention 2 install failed (non-fatal, will use PyTorch SDPA)"
+
 echo "Install completed"

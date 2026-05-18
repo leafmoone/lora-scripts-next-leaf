@@ -225,6 +225,21 @@ def is_preview_enabled(config: dict) -> bool:
     return config.get("enable_preview") in (True, "true", "True", "1", 1)
 
 
+def _detect_best_attn_mode() -> str:
+    """Auto-detect the best available attention backend for Anima training."""
+    try:
+        import flash_attn  # noqa: F401
+        return "flash"
+    except ImportError:
+        pass
+    try:
+        import xformers  # noqa: F401
+        return "xformers"
+    except ImportError:
+        pass
+    return "torch"
+
+
 def apply_anima_training_defaults(config: dict, model_train_type: str):
     if model_train_type not in ANIMA_TRAIN_TYPES:
         return
@@ -242,6 +257,11 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
         config["full_bf16"] = True
     elif mixed == "fp16" and not config.get("full_fp16"):
         config["full_fp16"] = True
+
+    if not config.get("attn_mode"):
+        best = _detect_best_attn_mode()
+        config["attn_mode"] = best
+        log.info(f"Anima attn_mode auto-detected: {best}")
 
 
 @router.post("/run")
