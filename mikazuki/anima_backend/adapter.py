@@ -125,14 +125,61 @@ UI_ONLY_FIELDS = {
 }
 
 
+def _normalize_network_args(values: Any) -> list[str]:
+    """
+    Normalize network_args from UI payload:
+    - keep string items only
+    - drop empty / malformed items
+    - drop `key=undefined` and `key=null`
+    - for duplicate keys, keep the last value (so custom args override earlier defaults)
+    """
+    if not isinstance(values, list):
+        return []
+
+    ordered: list[str] = []
+    key_index: dict[str, int] = {}
+
+    for raw in values:
+        if not isinstance(raw, str):
+            continue
+        item = raw.strip()
+        if not item or "=" not in item:
+            continue
+
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if value.lower() in {"undefined", "null"}:
+            continue
+
+        normalized = f"{key}={value}"
+        if key in key_index:
+            ordered[key_index[key]] = normalized
+        else:
+            key_index[key] = len(ordered)
+            ordered.append(normalized)
+
+    return ordered
+
+
 def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     source = deepcopy(config)
     adapted: dict[str, Any] = {}
     warnings: list[str] = []
 
     custom_network_args = source.pop("network_args_custom", None)
-    if custom_network_args:
-        source["network_args"] = custom_network_args
+    merged_network_args: list[str] = []
+    if isinstance(source.get("network_args"), list):
+        merged_network_args.extend(source["network_args"])
+    if isinstance(custom_network_args, list):
+        merged_network_args.extend(custom_network_args)
+    normalized_network_args = _normalize_network_args(merged_network_args)
+    if normalized_network_args:
+        source["network_args"] = normalized_network_args
+    elif "network_args" in source:
+        source.pop("network_args", None)
 
     for key, value in source.items():
         if key in UI_ONLY_FIELDS:
