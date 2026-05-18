@@ -78,6 +78,16 @@ Full license attribution in [`NOTICE.md`](NOTICE.md). If anything is missing or 
 
 <p align="center"><sub>TensorBoard, WD 1.4 Tagger, and Tag Editor open inside the same WebUI.</sub></p>
 
+### Train Monitor
+
+A dedicated train monitor page (port 6008) auto-opens with the GUI, showing real-time training status, Loss trend, preview samples, and more — no extra configuration needed.
+
+<p align="center">
+  <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor" width="920" />
+</p>
+
+<p align="center"><sub>Train Monitor: real-time Loss, progress, and preview at a glance. Works out of the box alongside TensorBoard.</sub></p>
+
 ---
 
 <details>

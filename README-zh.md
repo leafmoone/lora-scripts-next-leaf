@@ -63,6 +63,16 @@
 
 <p align="center"><sub>同一 WebUI 内可切到 TensorBoard、WD 1.4 标签器、标签编辑器等工具.</sub></p>
 
+### 训练监控页
+
+启动 GUI 后会自动打开训练监控页（默认端口 6008），实时显示训练状态、Loss 趋势、预览图等信息，无需手动配置。
+
+<p align="center">
+  <img src="assets/readme/screenshot-train-monitor.png" alt="训练监控页" width="920" />
+</p>
+
+<p align="center"><sub>训练监控页：实时 Loss、进度、预览图一目了然。独立于 TensorBoard，开箱即用。</sub></p>
+
 ---
 
 <details>
