@@ -43,6 +43,18 @@
 
 ---
 
+## Changelog
+
+| Date | Update |
+|------|--------|
+| 2026-05-18 | Anima LoKr training standardized (lycoris.kohya backend) |
+| 2026-05-18 | Train monitor auto-starts with GUI; added AutoDL startup script |
+| 2026-05-18 | One-click Windows portable package build scripts |
+| 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
+| 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |
+
+---
+
 ## Credits & upstream
 
 This repo is built on top of the following open-source projects. Thank you to all the authors.
