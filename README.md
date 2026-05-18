@@ -5,8 +5,8 @@
 <h1 align="center">lora-scripts-next</h1>
 
 <p align="center">
-  <strong>SD-Trainer</strong> — LoRA · Dreambooth · one-click training shell around <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a><br/>
-  <sub><em>A personal fork: ship faster experiments, keep the familiar GUI.</em></sub>
+  <strong>SD-Trainer</strong> — One-click LoRA training GUI for SD / SDXL / Flux / <b>Anima</b><br/>
+  <sub>Powered by <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>, with the familiar Akegarasu GUI experience.</sub>
 </p>
 
 <p align="center">
@@ -17,33 +17,77 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><b>Releases</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><b>Download</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md"><b>中文 README</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md"><b>中文文档</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>NOTICE</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>Credits & License</b></a>
 </p>
 
 ---
+
+## Quick Start
+
+### Windows Portable Package (recommended for beginners)
+
+Download the portable package from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
+
+### Install from Source
+
+```sh
+git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
+```
+
+| OS | Install | Launch |
+|----|---------|--------|
+| Windows | Run `install-cn.ps1` | Run `run_gui.ps1` |
+| Linux | `bash install.bash` | `bash run_gui.sh` |
+
+The browser auto-opens **http://127.0.0.1:28000** on launch.
+
+> **Python version:** 3.10 recommended (full compatibility). 3.11–3.12 mostly works. 3.13+ is not supported.
+
+---
+
+## Features
+
+- **Multi-model** — SD 1.5 / SDXL / Flux / **Anima** all work out of the box
+- **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS)
+- **Train Monitor** — Auto-opens with GUI, real-time Loss, progress, and preview samples
+- **Built-in TensorBoard** — Accessible from the sidebar, no extra setup
+- **AutoDL ready** — Dedicated startup script `start_autodl.sh`
+
+---
+
+## Interface Preview
 
 <p align="center">
-  <sub>Maintainer: <b>@wochenlong</b> — this repo is where I wire <b>Anima</b>, <b>Rectified Flow</b>, and my own training habits into the classic “秋叶式” stack.</sub>
+  <img src="assets/readme/screenshot-webui.png" alt="Training WebUI" width="920" />
 </p>
 
-<br/>
+<p align="center">
+  <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor" width="920" />
+</p>
 
-## At a glance
-
-| | |
-|:---|:---|
-| **Train WebUI** | Single dashboard: presets, tensorboard hook, tagger, tag editor — open **`http://127.0.0.1:28000`** after `run_gui.ps1` / `run_gui.sh`. |
-| **What this fork adds** | **Anima LoRA** training entry in the sidebar (Anima DiT + Qwen3 + T5), live training log over SSE at **`/train-log`**, and a `MIKAZUKI_FRONTEND_DIST` env var for swapping the static UI without touching the submodule. |
-| **Back end** | All training types (SD / SDXL / Flux / **Anima**) now run on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts). SDXL RF ideas from [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF). |
-| **Docs** | Full attribution & licenses in [`NOTICE.md`](NOTICE.md). |
+<p align="center"><sub>Top: Training GUI &nbsp;|&nbsp; Bottom: Train Monitor (port 6008, auto-opens)</sub></p>
 
 ---
 
-## Changelog
+## Documentation
+
+| Topic | Link |
+|-------|------|
+| Anima LoRA Training Guide | [docs/anima-training.md](docs/anima-training.md) |
+| Train Monitor & SSE API | [docs/train-monitor.md](docs/train-monitor.md) |
+| Frontend Customization | [docs/frontend-customization.md](docs/frontend-customization.md) |
+| Docker Deployment | [docs/docker.md](docs/docker.md) |
+| CLI Arguments | [docs/cli-args.md](docs/cli-args.md) |
+
+---
+
+<details>
+<summary><b>Changelog</b></summary>
 
 | Date | Update |
 |------|--------|
@@ -53,160 +97,21 @@
 | 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
 | 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |
 
----
-
-## Credits & upstream
-
-This repo is built on top of the following open-source projects. Thank you to all the authors.
-
-| Project | Role in this fork |
-|:--------|:------------------|
-| [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | GUI framework & one-click training UX ("秋叶式" stack) |
-| [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | Core training scripts backend |
-| [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF) | SDXL Rectified Flow training implementation reference |
-| [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) | Historical Anima integration reference only; active Anima backend maintenance now tracks `kohya-ss/sd-scripts` |
-
-Full license attribution in [`NOTICE.md`](NOTICE.md). If anything is missing or incorrectly attributed, please open an issue — we will fix it promptly.
-
----
-
-## Interface preview
-
-<p align="center">
-  <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer WebUI screenshot" width="920" />
-</p>
-
-<p align="center"><sub>TensorBoard, WD 1.4 Tagger, and Tag Editor open inside the same WebUI.</sub></p>
-
-### Train Monitor
-
-A dedicated train monitor page (port 6008) auto-opens with the GUI, showing real-time training status, Loss trend, preview samples, and more — no extra configuration needed.
-
-<p align="center">
-  <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor" width="920" />
-</p>
-
-<p align="center"><sub>Train Monitor: real-time Loss, progress, and preview at a glance. Works out of the box alongside TensorBoard.</sub></p>
-
----
+</details>
 
 <details>
-<summary><b>Lineage & upstream (click to expand)</b></summary>
+<summary><b>Credits & Upstream</b></summary>
 
-This fork lives at **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)** and inherits the **Akegarasu SD-Trainer / 秋叶一键训练包** UX from **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**. All training backends (SD / SDXL / Flux / **Anima**) are unified on **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**. SDXL **Rectified Flow** follows **[bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF)**. Earlier Anima work referenced **[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)** (SD-reScripts), but active maintenance has fully migrated to kohya-ss/sd-scripts.
+| Project | Role |
+|---------|------|
+| [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | GUI framework & one-click training UX |
+| [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | Core training backend |
+| [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF) | SDXL Rectified Flow reference |
+
+Full attribution in [`NOTICE.md`](NOTICE.md).
 
 </details>
 
 ---
-# Usage
 
-### Dependencies
-
-Python **3.10** (recommended) and **Git**.
-
-> **Version notes:**
-> - **3.10** — 推荐版本，所有依赖完美兼容，kohya-ss 官方测试基准。
-> - **3.11 – 3.12** — 基本可用，少数依赖可能需要额外处理。
-> - **3.13+** — **不支持**，torch / triton / xformers / bitsandbytes 无兼容 wheel。
-
-### Clone (with submodules)
-
-> ⚠️ **Required for Anima/SD3 LoRA training.** The training engine lives in the `vendor/sd-scripts` submodule; a plain `git clone` will leave it empty.
-
-```sh
-git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
-```
-
-Forgot the flag (or downloaded the ZIP)? Run this once from the repo root:
-
-```sh
-git submodule update --init --recursive
-```
-
-The `install.ps1` / `install.bash` scripts and the GUI itself will also try to auto-init the submodule on first run; set `ANIMA_SKIP_AUTO_INIT=1` to opt out.
-
-## SD-Trainer GUI
-
-### Windows
-
-**Install:** run `install.ps1` (mainland China: `install-cn.ps1`).  
-**Train:** run `run_gui.ps1` → opens **[http://127.0.0.1:28000](http://127.0.0.1:28000)**.
-
-### Linux
-
-**Install:** `install.bash`  
-**Train:** `bash run_gui.sh` → same URL as above.
-
-### Anima LoRA training
-
-After launching the WebUI, open the **Anima LoRA** entry in the left sidebar (it lives where SD3 used to be — the `model_train_type` is wired to `anima-lora`, and the backend dispatches to [`scripts/dev/anima_train_network.py`](scripts/dev/anima_train_network.py)). Fill in the four model paths the schema asks for:
-
-The local entrypoint is a compatibility wrapper. It adapts the GUI-generated TOML and delegates real Anima training to the pinned `kohya-ss/sd-scripts` backend configured in [`config/anima_backend.toml`](config/anima_backend.toml). See [`docs/anima-backend.md`](docs/anima-backend.md) for maintenance notes.
-
-| Field | What it expects |
-|---|---|
-| `pretrained_model_name_or_path` | Anima DiT weights, e.g. `./sd-models/anima-preview.safetensors` |
-| `vae` | Qwen Image VAE checkpoint (required) |
-| `qwen3` | Qwen3 text model (`.safetensors` / `.pt` or a local model directory) |
-| `t5` | T5 text encoder weights |
-
-Toggling **`enable_preview`** in the form switches sample generation to Anima-friendly defaults (1024×1024, CFG 4.5, 40 steps, seed 42, with the Anima sample prompts pre-filled). Windows users can also run [`run_gui_anima.bat`](run_gui_anima.bat) which boots the WebUI with the Anima-oriented defaults.
-
-> Heads-up: the page is still served at the `/lora/sd3.html` URL (the SPA route is reused). The visible label, parameter set, and trainer script are all Anima — only the URL slug is legacy.
-
-### Live training log (SSE)
-
-Whenever the WebUI fires off a run, the backend captures stdout and republishes it line-by-line over Server-Sent Events. Two ways to consume it:
-
-- **Standalone monitor page** — open `http://127.0.0.1:28000/train-log` in a new tab. The page auto-discovers the currently running task, parses kohya stdout into live cards (status / progress / epoch / ETA / loss / lr / it/s), lists the most recently written `safetensors` under `./output`, and uses **sticky-bottom scrolling** — so scrolling up to read history isn't fought by every new line, and returning to the bottom resumes auto-follow. Pin a specific task with `?task_id=<uuid>`; also embeddable as `<iframe src="/train-log?task_id=…" />`. Backed by [`mikazuki/static/train_log.html`](mikazuki/static/train_log.html).
-- **Raw stream** — `GET /api/train/log/stream/{task_id}` returns `text/event-stream`; useful for agents, dashboards, or remote monitoring on AutoDL / cloud GPUs.
-
-The `task_id` is what `POST /api/run` returns when a training job is started. When the URL has no `task_id`, the monitor page queries `GET /api/train/tasks` and picks the latest `RUNNING` (or otherwise most recent) task automatically.
-
-### Frontend static files
-
-The training GUI backend serves `frontend/dist` by default. The directory is a prebuilt static-file submodule (`hanamizuki-ai/lora-gui-dist`), not the frontend source tree — there is no `package.json` or build step inside this repo. The "Anima LoRA" page you see does **not** live in `dist`; it is rendered from `mikazuki/schema/sd3-lora.ts`, which this fork rewrites into an Anima schema. The backend ships that schema to the original UI and the form re-renders accordingly.
-
-If you want to plug in a different UI build, set `MIKAZUKI_FRONTEND_DIST` to any directory and the backend will serve from there:
-
-```bash
-MIKAZUKI_FRONTEND_DIST=/path/to/your/dist python gui.py --listen
-```
-
-Or point the `frontend` submodule URL at your own dist repository. The backend does not build frontend source automatically.
-
-## Legacy: script-only training
-
-### Windows
-
-Install with `install.ps1`, then edit and run `train.ps1`.
-
-### Linux
-
-Activate venv first (`source venv/bin/activate`), edit `train.sh`, run it.
-
-### TensorBoard
-
-`tensorboard.ps1` → [http://localhost:6006/](http://localhost:6006/)
-
-### Anima single-subject LoRA: step-count rule of thumb
-
-In checkpoint sweeps, **~1k–3k optimizer steps** (same “step” as `total optimization steps` in the log header) is often enough for a usable character; beyond that is mostly polish. Depends on data, repeats, buckets, rank, LR, and taste—trust your samples.
-
-**`num batches per epoch` × epoch** ≈ cumulative steps at epoch end (e.g. 510 batches/epoch → ~1020 steps after epoch 2).
-
-## Program arguments
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `--host` | str | `127.0.0.1` | Server host |
-| `--port` | int | `28000` | Server port |
-| `--listen` | bool | `false` | Listen on all interfaces |
-| `--skip-prepare-environment` | bool | `false` | Skip env prep |
-| `--disable-tensorboard` | bool | `false` | Disable TensorBoard |
-| `--disable-tageditor` | bool | `false` | Disable tag editor |
-| `--tensorboard-host` | str | `127.0.0.1` | TensorBoard host |
-| `--tensorboard-port` | int | `6006` | TensorBoard port |
-| `--localization` | str | | UI locale |
-| `--dev` | bool | `false` | Developer mode |
+<p align="center"><sub>Maintainer: <b>@wochenlong</b></sub></p>
