@@ -30,7 +30,17 @@
 
 ### Windows 整合包（推荐小白用户）
 
-从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载整合包，解压后双击 `run_gui.bat` 即可启动。
+从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.0.0.7z`**（~15 MB），解压后双击 `run_gui.bat` 即可启动。
+
+首次启动会自动安装 PyTorch + CUDA + 所有依赖（~3 GB 下载），国内用户自动走阿里云/清华镜像加速。
+
+| 文件 | 用途 |
+|------|------|
+| `run_gui.bat` | 启动训练 GUI（http://127.0.0.1:28000） |
+| `Update-SD-Trainer.bat` | 从 GitHub 拉取最新代码 |
+| `Download-Anima-Model.bat` | 从 ModelScope 下载 Anima 基础模型 |
+
+> **系统要求：** Windows 10/11 64 位，NVIDIA 显卡（RTX 20 系列以上），~7 GB 硬盘空间。
 
 ### 从源码安装
 
@@ -92,6 +102,7 @@ cd lora-scripts-next
 
 | 日期 | 内容 |
 |------|------|
+| 2026-05-19 | **v2.0.0** — 整合包发布、自动修复 bf16/fp16 精度问题、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
 | 2026-05-18 | T-LoRA 训练支持、交互式 Loss 图表、LoKr 标准化、Windows 便携包、AutoDL 脚本 |
 | 2026-05-17 | Anima 训练后端完全迁移至 kohya-ss/sd-scripts |
 | 2026-05-06 | 训练监控页重构：实时 Loss 卡片 + 粘性滚动 |

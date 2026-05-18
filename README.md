@@ -30,7 +30,17 @@
 
 ### Windows Portable Package (recommended for beginners)
 
-Download the portable package from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
+Download **`SD-Trainer-v2.0.0.7z`** (~15 MB) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
+
+First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). Chinese users get mirror acceleration automatically.
+
+| File | Purpose |
+|------|---------|
+| `run_gui.bat` | Launch training GUI (http://127.0.0.1:28000) |
+| `Update-SD-Trainer.bat` | Pull latest code from GitHub |
+| `Download-Anima-Model.bat` | Download Anima base model from ModelScope |
+
+> **Requirements:** Windows 10/11 64-bit, NVIDIA GPU (RTX 20+), ~7 GB disk space.
 
 ### Install from Source
 
@@ -92,6 +102,7 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 
 | Date | Update |
 |------|--------|
+| 2026-05-19 | **v2.0.0** — Portable package release, auto bf16/fp16 fix, vendor sd-scripts (no more submodule), update check |
 | 2026-05-18 | T-LoRA support, interactive Loss chart, LoKr standardization, Windows portable package, AutoDL script |
 | 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
 | 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |
