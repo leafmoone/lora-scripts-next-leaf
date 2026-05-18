@@ -1,3 +1,10 @@
+# T-LoRA (Anima): Timestep-Dependent Low-Rank Adaptation — Anima model variant
+# Based on https://github.com/ControlGenAI/T-LoRA
+# Original work: Copyright (c) 2025 AIRI (https://airi.net)
+# Licensed under the MIT License — see https://github.com/ControlGenAI/T-LoRA/blob/main/LICENSE
+#
+# Modifications for Anima/sd-scripts integration by lora-scripts-next contributors.
+
 import ast
 import os
 from functools import partial
@@ -24,6 +31,9 @@ def _parse_string_bool(value, default: bool = False) -> bool:
 
 
 class TLoRAAnimaNetwork(anima_lora.LoRANetwork):
+    TRAIN_NORM_PREFIX_ANIMA = anima_lora.LoRANetwork.LORA_PREFIX_ANIMA
+    TRAIN_NORM_PREFIX_TEXT_ENCODER = anima_lora.LoRANetwork.LORA_PREFIX_TEXT_ENCODER
+
     def __init__(
         self,
         text_encoders,
@@ -32,10 +42,12 @@ class TLoRAAnimaNetwork(anima_lora.LoRANetwork):
         tlora_min_rank: Optional[int] = None,
         tlora_rank_schedule: Optional[str] = None,
         tlora_orthogonal_init: bool = False,
+        train_norm: bool = False,
         module_class=None,
         **kwargs,
     ):
         self.current_timestep = None
+        self.train_norm = train_norm
         self.tlora_min_rank = int(tlora_min_rank if tlora_min_rank is not None else 1)
         self.tlora_rank_schedule = _normalize_schedule(tlora_rank_schedule)
         self.tlora_orthogonal_init = _parse_bool_arg(tlora_orthogonal_init, default=False)
@@ -50,6 +62,11 @@ class TLoRAAnimaNetwork(anima_lora.LoRANetwork):
 
         super().__init__(text_encoders, unet, *args, module_class=module_class, **kwargs)
         self.adapter_type = "tlora"
+
+        if not hasattr(self, "text_encoder_norms"):
+            self.text_encoder_norms = []
+        if not hasattr(self, "unet_norms"):
+            self.unet_norms = []
 
     def set_current_timestep(self, timestep):
         self.current_timestep = timestep
@@ -97,7 +114,7 @@ def create_network(
     if network_alpha is None:
         network_alpha = 1.0
 
-    train_norm = anima_lora._parse_bool_arg(kwargs.get("train_norm", None), default=False)
+    train_norm = _parse_bool_arg(kwargs.get("train_norm", None), default=False)
 
     train_llm_adapter = kwargs.get("train_llm_adapter", "false")
     train_llm_adapter = _parse_string_bool(train_llm_adapter, default=False)

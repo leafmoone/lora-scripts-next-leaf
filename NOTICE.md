@@ -23,3 +23,25 @@ Earlier Anima integration work also referenced:
 - `WhitecrowAurora/lora-rescripts` (**SD-reScripts** — historical fork / continuation of the LoRA-scripts line): https://github.com/WhitecrowAurora/lora-rescripts
 
 The historical reference repository is licensed under AGPL-3.0. Current Anima training should be synchronized from `kohya-ss/sd-scripts`; local code is limited to the WebUI compatibility wrapper, config adapter, defaults, and launch orchestration.
+
+### LyCORIS
+
+LoKr, LoHa, and other advanced LoRA variants are powered by:
+
+- `KohakuBlueleaf/LyCORIS`: https://github.com/KohakuBlueleaf/LyCORIS
+
+LyCORIS (Lora beYond Conventional methods, Other Rank adaptation Implementations for Stable diffusion) is licensed under the **Apache License 2.0**. It provides the network modules for LoKr (Low-Rank Kronecker Product), LoHa (Low-Rank Hadamard Product), and other parameter-efficient fine-tuning methods used in this project.
+
+**Paper**: Yeh et al. *Navigating Text-To-Image Customization: From LyCORIS Fine-Tuning to Model Evaluation*. ICLR 2024.
+
+### T-LoRA (Timestep-Dependent LoRA)
+
+T-LoRA support is adapted from:
+
+- `ControlGenAI/T-LoRA`: https://github.com/ControlGenAI/T-LoRA
+
+The referenced repository is licensed under the **MIT License** (Copyright (c) 2025 AIRI, https://airi.net).
+
+T-LoRA introduces dynamic rank adjustment based on diffusion timesteps and orthogonal initialization. Local files `networks/tlora.py` and `networks/tlora_anima.py` are adapted from the original implementation with modifications for Anima model integration within the sd-scripts training pipeline.
+
+**Paper**: Nikita Balagansky, Daniil Gavrilov. *T-LoRA: Timestep-Dependent Low-Rank Adaptation for Diffusion Models*. 2025.

@@ -42,3 +42,22 @@
 本地入口 [`scripts/dev/anima_train_network.py`](../scripts/dev/anima_train_network.py) 是兼容 wrapper：它适配 GUI 生成的 TOML，并委托给 `vendor/sd-scripts` 中的 kohya-ss 后端执行训练。
 
 配置文件：[`config/anima_backend.toml`](../config/anima_backend.toml)
+
+## 进阶：LoKr 训练参数推荐（来自 LyCORIS 作者）
+
+对于 Anima 这样的图像模型，由于其 Attention 矩阵是 Dense（高秩）的，传统的 LoRA（低秩）可能在表达能力上存在瓶颈。**LoKr (Kronecker product) 天生适合这种需要高秩、高稀疏度的场景**。
+
+以下是 LyCORIS 作者（琥珀青叶）针对图像模型使用 LoKr 的参数调优建议：
+
+1. **初始推荐参数**：
+   - `factor = 16`
+   - `full_matrix = True`
+   - **学习率 (Learning Rate)**：可以适当给高一点（例如 `1e-3`），LoKr 非常耐高学习率。
+
+2. **效果不佳时的降级策略**：
+   - 如果效果不好，将 `factor` 逐步降低：`12` -> `8` -> `6` -> `4`。
+   - 随着 `factor` 的降低，稍微拉低学习率（虽然不是严格的线性关系，但可以先按线性估算）。
+   - **注意**：`factor` 越小，参数量越大。`factor=4` 大概相当于本体模型的 1/16 参数量，基本上 `factor=4` 已经足够当作全量微调来练了。
+
+3. **混合训练**：
+   - 如果觉得单独使用 LoKr 不够好用，可以尝试将 **LoKr 与 LoRA 结合一起训练**，两者的性质刚好互补。

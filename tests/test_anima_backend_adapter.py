@@ -61,6 +61,56 @@ class AnimaBackendAdapterTests(unittest.TestCase):
         self.assertEqual(adapted["future_sd_scripts_option"], "enabled")
         self.assertIn("Unknown field passed through to sd-scripts: future_sd_scripts_option", warnings)
 
+    def test_tlora_fields_injected_into_network_args(self):
+        config = {
+            "network_module": "networks.tlora_anima",
+            "network_dim": 16,
+            "network_alpha": 16,
+            "tlora_min_rank": 2,
+            "tlora_rank_schedule": "linear",
+            "tlora_orthogonal_init": True,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        self.assertIn("network_args", adapted)
+        self.assertIn("tlora_min_rank=2", adapted["network_args"])
+        self.assertIn("tlora_rank_schedule=linear", adapted["network_args"])
+        self.assertIn("tlora_orthogonal_init=True", adapted["network_args"])
+        self.assertNotIn("tlora_min_rank", adapted)
+        self.assertNotIn("tlora_rank_schedule", adapted)
+        self.assertNotIn("tlora_orthogonal_init", adapted)
+        self.assertEqual(warnings, [])
+
+    def test_tlora_fields_merge_with_existing_network_args(self):
+        config = {
+            "network_module": "networks.tlora_anima",
+            "network_args": ["verbose=True"],
+            "tlora_min_rank": 4,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        self.assertIn("verbose=True", adapted["network_args"])
+        self.assertIn("tlora_min_rank=4", adapted["network_args"])
+
+    def test_non_tlora_module_ignores_tlora_fields(self):
+        config = {
+            "network_module": "networks.lora_anima",
+            "tlora_min_rank": 2,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        self.assertNotIn("tlora_min_rank", adapted)
+        self.assertEqual(warnings, [])
+
+    def test_lora_type_is_ui_only(self):
+        config = {
+            "lora_type": "tlora",
+            "network_module": "networks.tlora_anima",
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        self.assertNotIn("lora_type", adapted)
+
 
 if __name__ == "__main__":
     unittest.main()

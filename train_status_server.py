@@ -288,6 +288,22 @@ def update_progress_health(task_id: str, task_status: str, metrics: dict) -> Non
     metrics["progress_stalled"] = stalled_seconds >= PROGRESS_STALL_SECONDS and not sampling.get("active")
 
 
+def _infer_adapter_type(source: str) -> str:
+    if "enable tlora" in source or "tlora_anima" in source or '"tlora"' in source or "lora_type = \"tlora\"" in source:
+        return "T-LoRA"
+    if "lokrmodule" in source or "algo=lokr" in source or "algo = lokr" in source or '"lokr"' in source or "lora_type = \"lokr\"" in source:
+        return "LoKr"
+    if "lohamodule" in source or "networks.loha" in source:
+        return "LoHa"
+    if "lora_type = \"lora_fa\"" in source or '"lora_fa"' in source:
+        return "LoRA-FA"
+    if "lora_type = \"vera\"" in source or '"vera"' in source:
+        return "VeRA"
+    if "lycoris.kohya" in source:
+        return "LyCORIS"
+    return "LoRA"
+
+
 def infer_model_type(lines: list[str]) -> str:
     text = "\n".join(lines[-1000:]).lower()
     config_text = ""
@@ -298,14 +314,15 @@ def infer_model_type(lines: list[str]) -> str:
         except OSError:
             config_text = ""
     source = text + "\n" + config_text
-    if "anima_train_network" in source or "lora_anima" in source or "qwen3" in source:
-        return "Anima LoRA"
+    adapter = _infer_adapter_type(source)
+    if "anima_train_network" in source or "lora_anima" in source or "tlora_anima" in source or "qwen3" in source:
+        return f"Anima {adapter}"
     if "flux_train_network" in source or "flux-lora" in source or "t5xxl" in source:
-        return "Flux LoRA"
+        return f"Flux {adapter}"
     if "sdxl_train_network" in source or "sdxl-lora" in source or "v_prediction" in source:
-        return "SDXL LoRA"
+        return f"SDXL {adapter}"
     if "train_network.py" in source:
-        return "LoRA"
+        return adapter
     return "未知类型"
 
 
@@ -581,17 +598,6 @@ def render_page(status: dict) -> bytes:
     .pill {{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:999px; padding:3px 8px; background:#0b1224; color:var(--text); }}
     .pill.good {{ color:#86efac; border-color:#166534; background:#052e1a; }}
     .loss-chart {{ display:block; width:100%; height:96px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
-    .trend-chart {{ display:block; width:100%; aspect-ratio:16/10; height:auto; border:1px solid var(--line); border-radius:12px; background:#050816; }}
-    .loss-line {{ fill:none; stroke:#34d399; stroke-width:2; vector-effect:non-scaling-stroke; stroke-linejoin:round; stroke-linecap:round; }}
-    .loss-area {{ fill:rgba(52,211,153,.14); }}
-    .loss-grid {{ stroke:#1e2a44; stroke-width:1; stroke-dasharray:3 4; }}
-    .loss-baseline {{ stroke:#3a486a; stroke-width:1; stroke-dasharray:6 6; }}
-    .loss-axis-text {{ fill:#7286a3; font:11px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }}
-    .loss-axis-text.right {{ text-anchor:end; }}
-    .loss-axis-text.center {{ text-anchor:middle; }}
-    .loss-current-dot {{ fill:#34d399; stroke:#0b1224; stroke-width:2; }}
-    .loss-current-label-bg {{ fill:rgba(11,18,36,.92); stroke:#34d399; stroke-width:1; }}
-    .loss-current-label-text {{ fill:#bbf7d0; font:600 12px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }}
     .trend-layout {{ display:grid; grid-template-columns:minmax(0,1fr) 240px; gap:14px; align-items:end; max-width:1080px; }}
     @media (max-width: 820px) {{ .trend-layout {{ grid-template-columns:1fr; max-width:none; }} }}
     .trend-stats {{ display:grid; grid-template-columns:1fr; gap:8px; align-content:start; }}
@@ -640,6 +646,7 @@ def render_page(status: dict) -> bytes:
     code {{ color:#bfdbfe; }}
     .err {{ color:var(--err); }}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 </head>
 <body>
   <header>
@@ -678,13 +685,14 @@ def render_page(status: dict) -> bytes:
       <div class="panel-head">
         <div>
           <h2>Loss 趋势</h2>
-          <div class="privacy-note">相对初始 Loss 展示，更适合判断训练是否稳定收敛。</div>
+          <div class="privacy-note">相对初始 Loss 展示，更适合判断训练是否稳定收敛。滚轮缩放、拖拽平移，双击或点按钮恢复。</div>
         </div>
+        <button id="lossChartReset" class="hidden" type="button">恢复最新</button>
       </div>
       <div class="trend-headline" id="lossTrendHeadline">等待 Loss 数据</div>
       <div class="trend-copy" id="lossTrendCopy">开始训练后会显示相对初始值的下降趋势。</div>
       <div class="trend-layout">
-        <svg class="trend-chart" id="lossTrendChart" viewBox="0 0 720 450" preserveAspectRatio="xMidYMid meet" aria-label="Loss 相对趋势"></svg>
+        <div id="lossTrendChart" style="width:100%;aspect-ratio:16/10;min-height:280px;border:1px solid var(--line);border-radius:12px;background:#050816;"></div>
         <div class="trend-stats" id="lossTrendStats">
           <div class="trend-stat"><span class="label">当前</span><span class="value" id="statLossCurrent">-</span></div>
           <div class="trend-stat"><span class="label">最低</span><span class="value" id="statLossMin">-</span></div>
@@ -862,11 +870,26 @@ def render_page(status: dict) -> bytes:
       return n.toExponential(2);
     }}
 
+    var lossChart = null;
+    var lossChartFollowing = true;
+
+    (function initLossChartControls() {{
+      var resetBtn = document.getElementById("lossChartReset");
+      resetBtn.addEventListener("click", function() {{
+        lossChartFollowing = true;
+        resetBtn.classList.add("hidden");
+        if (lossChart) {{
+          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 0, start: 0, end: 100 }});
+          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 1, start: 0, end: 100 }});
+        }}
+      }});
+    }})();
+
     function renderLossChart(metrics) {{
-      const trendChart = document.getElementById("lossTrendChart");
       const trendHeadline = document.getElementById("lossTrendHeadline");
       const trendCopy = document.getElementById("lossTrendCopy");
       const summary = document.getElementById("lossSummary");
+      const resetBtn = document.getElementById("lossChartReset");
       const points = (metrics && metrics.loss_points) || [];
       const relativePoints = (metrics && metrics.relative_loss_points) || [];
       const trend = metrics && metrics.loss_trend ? metrics.loss_trend : "等待趋势";
@@ -917,102 +940,180 @@ def render_page(status: dict) -> bytes:
       statTrendPill.className = trendClass;
       statTrendPill.textContent = trend;
 
-      if (points.length < 2) {{
-        trendChart.innerHTML = '<text x="20" y="74" fill="#91a0b8" font-size="13">等待更多 loss 数据...</text>';
+      if (relativePoints.length < 2) {{
         trendHeadline.textContent = "等待 Loss 数据";
         trendCopy.textContent = "训练开始后会显示相对初始值的下降趋势。";
         return;
       }}
 
-      if (relativePoints.length >= 2) {{
-        const relValues = relativePoints.map(function(p) {{ return Number(p.relative); }}).filter(Number.isFinite);
-        const currentRel = relValues[relValues.length - 1];
-        const relativeDrop = Math.max(0, 100 - currentRel);
-        trendHeadline.textContent = "当前 Loss " + loss + " · 较初始下降 " + relativeDrop.toFixed(1) + "% · " + trend;
-        trendCopy.textContent = "以训练初期 Loss 为 100%，曲线越往下说明相对初始值下降越明显。";
-        const tw = 720;
-        const th = 450;
-        const padTop = 26;
-        const padRight = 28;
-        const padBottom = 44;
-        const padLeft = 60;
-        const plotW = tw - padLeft - padRight;
-        const plotH = th - padTop - padBottom;
+      const relValues = relativePoints.map(function(p) {{ return Number(p.relative); }}).filter(Number.isFinite);
+      const stepValues = relativePoints.map(function(p) {{ return Number(p.step) || 0; }});
+      const currentRel = relValues[relValues.length - 1];
+      const relativeDrop = Math.max(0, 100 - currentRel);
+      trendHeadline.textContent = "当前 Loss " + loss + " · 较初始下降 " + relativeDrop.toFixed(1) + "% · " + trend;
+      trendCopy.textContent = "以训练初期 Loss 为 100%，曲线越往下说明相对初始值下降越明显。滚轮缩放 · 拖拽平移 · 双击复位。";
 
-        const minRelActual = Math.min.apply(null, relValues);
-        const yMax = 100;
-        let yMin = Math.max(0, Math.floor((minRelActual - 4) / 5) * 5);
-        if (yMin >= yMax) yMin = yMax - 5;
-        const yTicks = 5;
-        const yStep = (yMax - yMin) / (yTicks - 1);
-
-        const stepValues = relativePoints.map(function(p) {{ return Number(p.step) || 0; }});
-        const xMin = stepValues[0];
-        const xMax = stepValues[stepValues.length - 1];
-        const xRange = Math.max(1, xMax - xMin);
-        const xTicks = Math.min(6, Math.max(2, relativePoints.length));
-
-        function xToPx(step) {{
-          return padLeft + ((step - xMin) / xRange) * plotW;
-        }}
-        function yToPx(rel) {{
-          return padTop + (1 - (rel - yMin) / Math.max(1, yMax - yMin)) * plotH;
-        }}
-
-        let gridSvg = "";
-        for (let i = 0; i < yTicks; i++) {{
-          const v = yMin + i * yStep;
-          const y = yToPx(v).toFixed(1);
-          const cls = Math.abs(v - 100) < 0.01 ? "loss-baseline" : "loss-grid";
-          gridSvg += '<line class="' + cls + '" x1="' + padLeft + '" y1="' + y +
-                     '" x2="' + (padLeft + plotW) + '" y2="' + y + '"></line>';
-          gridSvg += '<text class="loss-axis-text right" x="' + (padLeft - 8) + '" y="' + (Number(y) + 4) +
-                     '">' + v.toFixed(0) + '%</text>';
-        }}
-        for (let i = 0; i < xTicks; i++) {{
-          const stepVal = xMin + (xRange * i) / Math.max(1, xTicks - 1);
-          const x = xToPx(stepVal).toFixed(1);
-          gridSvg += '<line class="loss-grid" x1="' + x + '" y1="' + padTop + '" x2="' + x +
-                     '" y2="' + (padTop + plotH) + '"></line>';
-          gridSvg += '<text class="loss-axis-text center" x="' + x + '" y="' + (padTop + plotH + 22) +
-                     '">' + Math.round(stepVal) + '</text>';
-        }}
-
-        const tcoords = relativePoints.map(function(p) {{
-          return [xToPx(Number(p.step) || 0), yToPx(Number(p.relative))];
+      const chartDom = document.getElementById("lossTrendChart");
+      if (!lossChart) {{
+        lossChart = echarts.init(chartDom, null, {{ renderer: "canvas" }});
+        lossChart.on("dataZoom", function(params) {{
+          var opt = lossChart.getOption();
+          var dz = opt.dataZoom && opt.dataZoom[0];
+          if (dz && (dz.start > 0.01 || dz.end < 99.99)) {{
+            lossChartFollowing = false;
+            resetBtn.classList.remove("hidden");
+          }} else {{
+            lossChartFollowing = true;
+            resetBtn.classList.add("hidden");
+          }}
         }});
-        const tline = tcoords.map(function(pt, i) {{
-          return (i === 0 ? "M" : "L") + pt[0].toFixed(1) + " " + pt[1].toFixed(1);
-        }}).join(" ");
-        const lastX = tcoords[tcoords.length - 1][0].toFixed(1);
-        const firstX = tcoords[0][0].toFixed(1);
-        const baseY = (padTop + plotH).toFixed(1);
-        const tarea = tline + " L " + lastX + " " + baseY + " L " + firstX + " " + baseY + " Z";
-
-        const cx = tcoords[tcoords.length - 1][0];
-        const cy = tcoords[tcoords.length - 1][1];
-        const labelText = currentRel.toFixed(1) + "%";
-        const labelW = labelText.length * 7 + 14;
-        let labelX = cx + 10;
-        if (labelX + labelW > padLeft + plotW) labelX = cx - labelW - 10;
-        const labelY = Math.min(Math.max(cy - 12, padTop + 4), padTop + plotH - 24);
-
-        const axisTitleSvg =
-          '<text class="loss-axis-text" x="' + padLeft + '" y="' + (padTop - 10) + '">相对初始 Loss</text>' +
-          '<text class="loss-axis-text right" x="' + (padLeft + plotW) + '" y="' + (th - 8) + '">step</text>';
-
-        trendChart.innerHTML =
-          gridSvg +
-          '<path class="loss-area" d="' + tarea + '"></path>' +
-          '<path class="loss-line" d="' + tline + '"></path>' +
-          '<circle class="loss-current-dot" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4.5"></circle>' +
-          '<rect class="loss-current-label-bg" x="' + labelX.toFixed(1) + '" y="' + labelY.toFixed(1) +
-          '" width="' + labelW + '" height="20" rx="4" ry="4"></rect>' +
-          '<text class="loss-current-label-text" x="' + (labelX + labelW / 2).toFixed(1) + '" y="' + (labelY + 14).toFixed(1) +
-          '" text-anchor="middle">' + labelText + '</text>' +
-          axisTitleSvg;
+        lossChart.getZr().on("dblclick", function() {{
+          lossChartFollowing = true;
+          resetBtn.classList.add("hidden");
+          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 0, start: 0, end: 100 }});
+          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 1, start: 0, end: 100 }});
+        }});
+        window.addEventListener("resize", function() {{ lossChart && lossChart.resize(); }});
       }}
 
+      var rawSteps = relativePoints.map(function(p) {{ return Number(p.step) || 0; }});
+      var rawLoss = points.map(function(p) {{ return Number(p.loss); }});
+
+      var minRel = Math.min.apply(null, relValues);
+      var maxRel = Math.max.apply(null, relValues);
+      var yAxisMax = Math.min(100, Math.ceil((maxRel + 2) / 5) * 5);
+      var yAxisMin = Math.max(0, Math.floor((minRel - 4) / 5) * 5);
+      if (yAxisMin >= yAxisMax) yAxisMin = yAxisMax - 5;
+
+      var option = {{
+        backgroundColor: "transparent",
+        animation: false,
+        tooltip: {{
+          trigger: "axis",
+          backgroundColor: "rgba(11,16,32,0.95)",
+          borderColor: "#26324d",
+          textStyle: {{ color: "#e5edf8", fontSize: 12 }},
+          formatter: function(params) {{
+            if (!params || !params.length) return "";
+            var html = '<div style="font-weight:700;margin-bottom:4px">Step ' + params[0].axisValue + '</div>';
+            for (var i = 0; i < params.length; i++) {{
+              var p = params[i];
+              html += '<div style="display:flex;align-items:center;gap:6px">' +
+                p.marker + '<span>' + p.seriesName + '：<strong>' + (typeof p.value === "number" ? p.value.toFixed(4) : p.value) + '</strong></span></div>';
+            }}
+            return html;
+          }}
+        }},
+        grid: {{
+          left: 60, right: 64, top: 36, bottom: 68,
+          containLabel: false
+        }},
+        xAxis: {{
+          type: "category",
+          data: stepValues,
+          name: "step",
+          nameLocation: "end",
+          nameTextStyle: {{ color: "#7286a3", fontSize: 11 }},
+          axisLine: {{ lineStyle: {{ color: "#26324d" }} }},
+          axisTick: {{ show: false }},
+          axisLabel: {{ color: "#7286a3", fontSize: 11, showMaxLabel: true }},
+          splitLine: {{ show: false }}
+        }},
+        yAxis: [
+          {{
+            type: "value",
+            name: "相对 Loss (%)",
+            nameTextStyle: {{ color: "#7286a3", fontSize: 11 }},
+            min: yAxisMin,
+            max: yAxisMax,
+            axisLine: {{ show: false }},
+            axisTick: {{ show: false }},
+            axisLabel: {{ color: "#7286a3", fontSize: 11, formatter: "{{value}}%" }},
+            splitLine: {{ lineStyle: {{ color: "#1e2a44", type: "dashed" }} }}
+          }},
+          {{
+            type: "value",
+            name: "原始 Loss",
+            nameTextStyle: {{ color: "#60a5fa", fontSize: 11 }},
+            axisLine: {{ show: false }},
+            axisTick: {{ show: false }},
+            axisLabel: {{ color: "#60a5fa", fontSize: 10, opacity: 0.85, formatter: function(v) {{ return v.toFixed(3); }} }},
+            splitLine: {{ show: false }}
+          }}
+        ],
+        dataZoom: [
+          {{
+            type: "inside",
+            xAxisIndex: 0,
+            filterMode: "none",
+            zoomOnMouseWheel: true,
+            moveOnMouseMove: true,
+            moveOnMouseWheel: false
+          }},
+          {{
+            type: "slider",
+            xAxisIndex: 0,
+            filterMode: "none",
+            height: 22,
+            bottom: 8,
+            borderColor: "#26324d",
+            backgroundColor: "#0b1224",
+            fillerColor: "rgba(56,189,248,0.15)",
+            dataBackground: {{
+              lineStyle: {{ color: "#34d399", opacity: 0.5 }},
+              areaStyle: {{ color: "rgba(52,211,153,0.08)" }}
+            }},
+            selectedDataBackground: {{
+              lineStyle: {{ color: "#34d399" }},
+              areaStyle: {{ color: "rgba(52,211,153,0.15)" }}
+            }},
+            handleStyle: {{ color: "#38bdf8", borderColor: "#38bdf8" }},
+            textStyle: {{ color: "#7286a3", fontSize: 10 }},
+            labelFormatter: function(value) {{ return "Step " + value; }}
+          }}
+        ],
+        series: [
+          {{
+            name: "相对 Loss",
+            type: "line",
+            data: relValues,
+            yAxisIndex: 0,
+            smooth: 0.15,
+            symbol: "none",
+            lineStyle: {{ color: "#34d399", width: 2 }},
+            areaStyle: {{ color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              {{ offset: 0, color: "rgba(52,211,153,0.25)" }},
+              {{ offset: 1, color: "rgba(52,211,153,0.02)" }}
+            ]) }},
+            markLine: {{
+              silent: true,
+              symbol: "none",
+              lineStyle: {{ color: "#3a486a", type: "dashed", width: 1 }},
+              label: {{ show: true, position: "insideEndTop", color: "#7286a3", fontSize: 10, formatter: "初始 100%" }},
+              data: [{{ yAxis: 100 }}]
+            }}
+          }},
+          {{
+            name: "原始 Loss",
+            type: "line",
+            data: rawLoss,
+            yAxisIndex: 1,
+            smooth: 0.15,
+            symbol: "none",
+            lineStyle: {{ color: "#60a5fa", width: 1.8, opacity: 0.85 }},
+            areaStyle: null
+          }}
+        ]
+      }};
+
+      if (lossChartFollowing) {{
+        option.dataZoom[0].start = 0;
+        option.dataZoom[0].end = 100;
+        option.dataZoom[1].start = 0;
+        option.dataZoom[1].end = 100;
+      }}
+
+      lossChart.setOption(option, {{ replaceMerge: ["xAxis", "series"] }});
     }}
 
     function renderFiles(files) {{

@@ -1,3 +1,10 @@
+# T-LoRA: Timestep-Dependent Low-Rank Adaptation for Diffusion Models
+# Adapted from https://github.com/ControlGenAI/T-LoRA
+# Original work: Copyright (c) 2025 AIRI (https://airi.net)
+# Licensed under the MIT License — see https://github.com/ControlGenAI/T-LoRA/blob/main/LICENSE
+#
+# Modifications for Anima/sd-scripts integration by lora-scripts-next contributors.
+
 import math
 import os
 import weakref

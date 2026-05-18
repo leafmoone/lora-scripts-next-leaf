@@ -123,6 +123,14 @@ UI_ONLY_FIELDS = {
     "prompt_file",
     "enable_debug_options",
     "json_caption_hint",
+    "lora_type",
+}
+
+# Top-level UI fields that should be injected into network_args for T-LoRA.
+TLORA_NETWORK_ARG_FIELDS = {
+    "tlora_min_rank",
+    "tlora_rank_schedule",
+    "tlora_orthogonal_init",
 }
 
 
@@ -199,8 +207,19 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
                 f"preset={preset_path.as_posix()}"
             ]
 
+    # T-LoRA: convert top-level UI fields into network_args so sd-scripts
+    # can forward them to create_network() as **kwargs.
+    if source.get("network_module") == "networks.tlora_anima":
+        network_args = list(source.get("network_args") or [])
+        for field in TLORA_NETWORK_ARG_FIELDS:
+            value = source.pop(field, None)
+            if value is not None:
+                network_args.append(f"{field}={value}")
+        if network_args:
+            source["network_args"] = network_args
+
     for key, value in source.items():
-        if key in UI_ONLY_FIELDS:
+        if key in UI_ONLY_FIELDS or key in TLORA_NETWORK_ARG_FIELDS:
             continue
         if key in SUPPORTED_FIELDS:
             # skip empty string for optional fields that expect None or a real value
