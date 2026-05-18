@@ -92,11 +92,7 @@ cd lora-scripts-next
 
 | 日期 | 内容 |
 |------|------|
-| 2026-05-18 | T-LoRA（时间步动态 LoRA）Anima 训练支持；ECharts 交互式 Loss 图表（缩放/拖拽/复位） |
-| 2026-05-18 | 修复 LoRA/LoHa/LoKr/TLoRA 等训练类型在 network_args 出现 undefined 时导致训练报错（自定义参数可正确覆盖） |
-| 2026-05-18 | Anima LoKr 训练支持标准化（lycoris.kohya 后端） |
-| 2026-05-18 | 训练监控页随 GUI 自动启动，新增 AutoDL 专用启动脚本 |
-| 2026-05-18 | 新增 Windows 便携包一键构建脚本 |
+| 2026-05-18 | T-LoRA 训练支持、交互式 Loss 图表、LoKr 标准化、Windows 便携包、AutoDL 脚本 |
 | 2026-05-17 | Anima 训练后端完全迁移至 kohya-ss/sd-scripts |
 | 2026-05-06 | 训练监控页重构：实时 Loss 卡片 + 粘性滚动 |
 

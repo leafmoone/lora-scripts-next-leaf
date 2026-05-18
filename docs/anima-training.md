@@ -21,6 +21,7 @@
 
 - **LoRA** — 默认训练类型，适合大多数场景
 - **LoKr** — 使用 LyCORIS 后端（`lycoris.kohya` + `algo=lokr`），支持 CP 分解、DoRA 等高级参数
+- **T-LoRA** — 时间步动态 LoRA，根据扩散时间步自动调整 rank，配合正交初始化防止过拟合（详见下方教程）
 
 ## 预览图生成
 
@@ -42,6 +43,75 @@
 本地入口 [`scripts/dev/anima_train_network.py`](../scripts/dev/anima_train_network.py) 是兼容 wrapper：它适配 GUI 生成的 TOML，并委托给 `vendor/sd-scripts` 中的 kohya-ss 后端执行训练。
 
 配置文件：[`config/anima_backend.toml`](../config/anima_backend.toml)
+
+## 进阶：T-LoRA 训练教程
+
+### 什么是 T-LoRA？
+
+T-LoRA（Timestep-Dependent LoRA）是一种改进的 LoRA 方法。普通 LoRA 对所有扩散时间步使用相同的 rank，而 T-LoRA 会**根据当前时间步动态调整有效 rank**——噪声大的时间步使用更高 rank（需要更多表达能力），噪声小的时间步使用更低 rank（避免过拟合细节）。
+
+**优点**：
+- 更高效地利用参数，相同 rank 下能学到更多信息
+- 正交初始化减少训练早期的不稳定性
+- 适合需要精细控制的训练场景
+
+**适合场景**：
+- 数据集较小、容易过拟合时
+- 希望在不增加模型体积的前提下提升训练效果
+
+### 快速开始
+
+1. 在 Anima LoRA 训练页面，找到「**网络类型**」下拉菜单
+2. 选择 **T-LoRA**（排在 LoRA、LoKr 之后）
+3. 其他参数照常填写，点击开始训练
+
+选择 T-LoRA 后，系统会自动切换到 T-LoRA 专用的网络模块，并使用优化过的默认参数。
+
+### 推荐参数
+
+| 参数 | 推荐值 | 说明 |
+|------|--------|------|
+| **网络维度 (network_dim)** | **32** | T-LoRA 因为动态 rank 会压缩有效容量，建议比普通 LoRA 更高（普通 LoRA 通常 8–16） |
+| **网络 Alpha (network_alpha)** | **32** | 建议与 network_dim 相同，保持学习率稳定 |
+| **最小 Rank (tlora_min_rank)** | **4**（默认） | 时间步接近 0 时使用的最低 rank。越小越节省参数但容量越低 |
+| **Rank 调度 (tlora_rank_schedule)** | **linear**（默认） | rank 随时间步变化的方式。`linear` 为线性插值，`cosine` 更平滑 |
+| **正交初始化 (tlora_orthogonal_init)** | **开启**（默认） | 用正交矩阵初始化权重，训练更稳定，强烈建议保持开启 |
+| **UNet 学习率 (unet_lr)** | **1e-4** | 比普通 LoRA 稍高，因为动态 rank 使得有效梯度更小 |
+
+### 与普通 LoRA 的区别
+
+| | LoRA | T-LoRA |
+|---|------|--------|
+| Rank | 固定（如 16） | 动态（min_rank ~ network_dim） |
+| 收敛速度 | 较快 | 较慢（需要更多步数） |
+| 过拟合风险 | 较高 | 较低（低噪声步用低 rank） |
+| 推荐 network_dim | 8–16 | 24–32 |
+| 模型体积 | 取决于 dim | 与同 dim 的 LoRA 相同 |
+
+### 常见问题
+
+**Q: T-LoRA 训练很慢，预览图变化不大？**
+
+这是正常的。T-LoRA 的动态 rank 机制会在低噪声时间步降低有效容量，导致收敛比普通 LoRA 慢。建议：
+- 增大 `network_dim`（32 或更高）
+- 增大 `tlora_min_rank`（4 或更高）
+- 适当提高 `unet_lr`（1e-4）
+- 确保 `tlora_orthogonal_init` 开启
+- 耐心多训几个 epoch，T-LoRA 的优势会在后期体现
+
+**Q: T-LoRA 的模型文件可以直接用普通 LoRA 加载吗？**
+
+可以。T-LoRA 的模型权重格式与普通 LoRA 兼容，推理时使用完整 rank（不做时间步动态调整），可以在任何支持 LoRA 的推理工具中正常加载。
+
+**Q: T-LoRA 和 LoKr 哪个好？**
+
+两者解决不同的问题：
+- **LoKr** 适合需要高秩、高稀疏度的场景（如 Dense Attention 模型），参数效率更高
+- **T-LoRA** 适合需要防止过拟合的场景，通过动态 rank 自适应不同扩散阶段的需求
+
+可以根据实际训练效果选择，也可以都试试对比。
+
+---
 
 ## 进阶：LoKr 训练参数推荐（来自 LyCORIS 作者）
 

@@ -92,11 +92,7 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 
 | Date | Update |
 |------|--------|
-| 2026-05-18 | T-LoRA (Timestep-Dependent LoRA) support for Anima; interactive ECharts Loss chart with zoom/pan/restore |
-| 2026-05-18 | Fix training failures caused by undefined network_args across LoRA-family types; custom args now override defaults correctly |
-| 2026-05-18 | Anima LoKr training standardized (lycoris.kohya backend) |
-| 2026-05-18 | Train monitor auto-starts with GUI; added AutoDL startup script |
-| 2026-05-18 | One-click Windows portable package build scripts |
+| 2026-05-18 | T-LoRA support, interactive Loss chart, LoKr standardization, Windows portable package, AutoDL script |
 | 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
 | 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |
 
