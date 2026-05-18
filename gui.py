@@ -76,7 +76,8 @@ def launch():
         else:
             log.error("port finding fallback error")
 
-    log.info(f"SD-Trainer Version: {git_tag(base_dir_path())}")
+    from mikazuki.update_check import local_version
+    log.info(f"SD-Trainer Version: {local_version()}")
 
     os.environ["MIKAZUKI_HOST"] = args.host
     os.environ["MIKAZUKI_PORT"] = str(args.port)

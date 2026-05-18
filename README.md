@@ -35,7 +35,7 @@ Download the portable package from [Releases](https://github.com/wochenlong/lora
 ### Install from Source
 
 ```sh
-git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
+git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
 ```
 

@@ -2,41 +2,79 @@
 
 ## 项目当前状态
 - **项目定义**：基于 WebUI 的 SD/Anima 模型训练工具（lora-scripts 的下一代）。
-- **当前核心焦点**：Anima 模型训练支持、Windows 小白用户体验优化、国内网络环境适配。
+- **当前核心焦点**：Windows 轻量整合包制作、国内网络环境适配。
+- **仓库**：https://github.com/wochenlong/lora-scripts-next
 
-## 最近完成的核心工作
-1. **Anima 后端支持**：
-   - 移除了旧版 `anima_train_network_legacy.py`，全面接入 `vendor/sd-scripts`。
-   - 修复了 LyCORIS `kohya` 模块在 Anima 模型上找不到模块（0 modules）导致 `IndexError` 的问题。解决方案：在 `mikazuki/anima_backend/adapter.py` 中动态注入了针对 Anima 的专属预设文件 `config/lycoris_anima_preset.toml`。
-   - 修复了 `network_args` 中出现 `undefined` 导致训练崩溃的问题。
-   - 修复了 LoKr 高级参数（`use_cp`、`decompose_both`、`full_matrix` 等）未通过 `network_args` 传递给 LyCORIS 的 bug——此前这些参数作为 TOML 顶层 key 输出，被 sd-scripts 静默忽略。
-   - 新增 `full_matrix` 参数支持（LyCORIS 全矩阵 Kronecker 模式）。
-2. **训练监控页 (Train Monitor)**：
-   - 独立服务 `train_status_server.py`，默认端口 `6008`。
-   - 随 GUI (端口 `28000`) 自动启动，并在启动后自动在浏览器中打开。
-   - 修复了与 TensorBoard 端口冲突的问题（TensorBoard 默认开启，不影响监控页）。
-   - Loss 图表使用 ECharts 渲染，支持滚轮缩放、拖拽平移、双击复位，底部有 dataZoom 滑动条，手动操作后显示「恢复最新」按钮一键回到实时跟随。
-   - 自动识别训练类型（Anima T-LoRA / LoKr / LoHa / LoRA-FA / VeRA 等），在监控页顶部展示。
-   ![训练监控页](assets/readme/shot-train-monitor.png)
-3. **文档与 UI 优化**：
-   - 重写了 `README.md` 和 `README-zh.md`，突出“快速开始”，将长篇技术文档移入 `docs/` 目录。
-   - 增加了 `docs/anima-training.md`，包含 T-LoRA 教程和 LoKr 参数参考。
-4. **Windows 便携环境适配**：
-   - 修复了便携包缺少 `joblib` 依赖的问题。
-   - 统一了所有脚本和文档中的端口号为 `28000`（之前有 `30000` 混用的情况）。
-   - 新增了 `run_gui.bat`，为 Windows 小白用户提供一键安装/启动体验。
+## 已完成的核心工作
 
-## 待办事项 (Pending Tasks)
-1. **整合包分发策略**：
-   - **需求**：GitHub Releases 有大小限制，且国内下载慢。
-   - **计划**：
-     - **轻量版整合包 (Lightweight Package)**：放置在 GitHub Releases，控制在 1.5G 以下。需要决定包含/剔除哪些组件（例如：不带大模型权重，精简环境）。
-     - **完整版整合包 (Full Package)**：放置在网盘（如夸克、百度网盘等），包含所有依赖和基础模型。
-2. **国内网络优化自动配置**：
-   - **需求**：国内用户下载依赖和模型经常失败。
-   - **计划**：在 `install-cn.ps1` 和 `run_gui.bat` 等安装脚本中，自动配置 pip 国内镜像源（清华/阿里）以及 HuggingFace 镜像源 (`HF_ENDPOINT=https://hf-mirror.com`)。
+### Anima 后端
+- 全面接入 `vendor/sd-scripts`，移除旧版 `anima_train_network_legacy.py`。
+- 支持 6 种适配器：**LoRA / LoKr / T-LoRA / LoRA-FA / VeRA / LoHa**。
+- `mikazuki/anima_backend/adapter.py` 负责前端配置→sd-scripts 参数的转换：
+  - `LYCORIS_NETWORK_ARG_MAP`：把 LoKr 高级参数（`use_cp`、`decompose_both`、`full_matrix`、`dora_wd` 等）正确注入 `network_args`。
+  - `TLORA_NETWORK_ARG_FIELDS`：把 T-LoRA 参数（`tlora_min_rank`、`tlora_rank_schedule`、`tlora_orthogonal_init`）注入 `network_args`。
+- LyCORIS 预设注入：`config/lycoris_anima_preset.toml` 解决 Anima 模型 0 modules 问题。
+
+### 训练监控页
+- 独立服务 `train_status_server.py`，端口 `6008`，随 GUI 自动启动。
+- ECharts Loss 图表：滚轮缩放、拖拽平移、双击复位、dataZoom 滑动条。
+- 自动识别训练类型（T-LoRA / LoKr / LoHa 等）。
+- 训练预览图画廊。
+
+### UI / 产品优化
+- `lora_type` 选择器提升到页面顶部（用户进入即选适配器类型）。
+- `model_train_type` 改为 hidden（后端路由不变，UI 不占位）。
+- Schema 定义：`mikazuki/schema/sd3-lora.ts`。
+
+### 文档
+- `README.md` / `README-zh.md`：快速开始导向。
+- `docs/anima-training.md`：T-LoRA 教程 + LoKr 参数参考 + `full_matrix` 说明。
+- 截图已更新为高清 PNG。
+
+### Windows 便携环境
+- 修复 `joblib` 依赖缺失。
+- 端口统一为 `28000`。
+- `run_gui.bat` 一键安装/启动。
+
+## Windows 轻量整合包（已实现）
+
+### 架构设计
+- **方案**：轻量底座 + 首次启动在线安装。
+- **底座**（7z 压缩约 16 MB）：Python 3.10 Embeddable + 项目代码 + get-pip.py。
+- **首次启动**：`setup_environment.py` 自动检测网络环境，安装 PyTorch 2.7+cu128 和全部依赖。
+- **CUDA 版本**：统一 `cu128`，兼容 RTX 20/30/40/50 全系列。
+
+### 核心文件
+- `build-scripts/build_portable.ps1`：一键构建便携包，输出 `build/SD-Trainer-Portable/`。
+- `setup_environment.py`：首次启动安装向导（网络检测→镜像配置→pip→torch→requirements）。
+- 生成的 `run_gui.bat`：检测 torch 是否已安装 → 触发 setup → 启动 GUI。
+- 生成的 `python310._pth`：路径隔离，`-s` 标志排除用户级 site-packages。
+
+### 镜像策略
+- 国内自动检测（探测 google.com）：
+  - PyTorch：阿里云 `mirrors.aliyun.com/pytorch-wheels/cu128/`
+  - PyPI：清华 `pypi.tuna.tsinghua.edu.cn/simple`
+  - HuggingFace：`hf-mirror.com`
+
+### 构建命令
+```powershell
+.\build-scripts\build_portable.ps1 -Version "2.0.0" -Clean
+```
+
+### 下一步
+- 完整版整合包（网盘分发）：包含所有依赖 + 基础模型。
+
+## 重要变更：sd-scripts 从子模块改为 vendored 目录
+
+- `vendor/sd-scripts` 不再是 git 子模块，代码直接提交到仓库中。
+- **原因**：子模块指向了上游不存在的自定义 commit，导致 `git clone --recurse-submodules` 失败。
+- **影响**：`git clone` 不再需要 `--recurse-submodules`，所有代码一次下载完成。
+- `verify_pinned_commit` 在非 git 目录时自动跳过检查，commit 不匹配时仅警告不崩溃。
+- 更新 sd-scripts 时手动下载覆盖 `vendor/sd-scripts/` 即可。
 
 ## 关键技术上下文
-- **端口约定**：GUI 主服务 `28000`，训练监控页 `6008`，AutoDL 默认使用 `6006` 和 `6008`。
-- **环境依赖**：推荐 Python 3.10。`bitsandbytes`、`xformers` 和 `triton` 在 Windows 下的兼容性较脆弱，当前已通过特定版本和回退机制（如 `xformers` 缺失时回退到 SDPA）处理。
-- **目标用户**：大量为“小白用户”，因此任何报错提示、安装流程、一键脚本都需要尽可能做到“防呆”和自动化。
+- **端口约定**：GUI `28000`，训练监控 `6008`，TensorBoard `6006`。
+- **环境**：Python 3.10。`bitsandbytes`、`xformers`、`triton` 在 Windows 下兼容性脆弱，已有回退机制。
+- **目标用户**：大量"小白用户"，安装流程和报错提示需要"防呆"。
+- **前端**：VuePress 预构建 dist，schema 驱动表单。Playwright 无法渲染 schema 表单（`Shared schema not found`），截图需手动或真实浏览器。
+- **测试**：`tests/test_anima_backend_adapter.py` 覆盖 adapter 参数转换逻辑，用 `python -m unittest` 运行（项目未装 pytest）。

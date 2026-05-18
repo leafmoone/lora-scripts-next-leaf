@@ -548,3 +548,19 @@ async def train_log_tail(task_id: str, limit: int = 240):
 async def list_train_tasks():
     """Running / known training tasks (for tying UI to task_id)."""
     return APIResponseSuccess(data={"tasks": tm.dump()})
+
+
+@router.get("/check_update")
+async def check_update():
+    """Non-blocking update check against GitHub Releases."""
+    from mikazuki.update_check import get_cached_result, check_update as do_check
+    result = get_cached_result()
+    if result is None:
+        result = await asyncio.to_thread(do_check)
+    return APIResponseSuccess(data=result)
+
+
+@router.get("/version")
+async def get_version():
+    from mikazuki.update_check import local_version
+    return APIResponseSuccess(data={"version": local_version()})

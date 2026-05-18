@@ -38,6 +38,9 @@ huggingface/hub/version_diffusers_cache.txt
 build/
 .sd-trainer-portable/
 
+# Update check cache
+config/.update_cache.json
+
 # IDE/Tool directories
 .sisyphus/
 .playwright-mcp/

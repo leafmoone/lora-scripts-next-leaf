@@ -44,12 +44,23 @@ class SPAStaticFiles(StaticFiles):
                 raise ex
 
 
+async def _async_update_check():
+    from mikazuki.update_check import check_update, log_update_notice
+    try:
+        await asyncio.to_thread(check_update)
+        log_update_notice()
+    except Exception:
+        pass
+
+
 async def app_startup():
     app_config.load_config()
 
     await load_schemas()
     await load_presets()
     await asyncio.to_thread(check_torch_gpu)
+
+    asyncio.create_task(_async_update_check())
 
     if sys.platform == "win32" and os.environ.get("MIKAZUKI_DEV", "0") != "1":
         import time

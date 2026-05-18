@@ -11,7 +11,10 @@ from typing import List
 from pathlib import Path
 from typing import Optional
 
-import pkg_resources
+try:
+    import pkg_resources
+except ImportError:
+    pkg_resources = None
 
 from mikazuki.log import log
 
@@ -119,6 +122,9 @@ def is_installed(package, friendly: str = None):
     #
     # This function was adapted from code written by vladimandic: https://github.com/vladmandic/automatic/commits/master
     #
+
+    if pkg_resources is None:
+        return False
 
     # Remove brackets and their contents from the line using regular expressions
     # e.g., diffusers[torch]==0.10.2 becomes diffusers==0.10.2

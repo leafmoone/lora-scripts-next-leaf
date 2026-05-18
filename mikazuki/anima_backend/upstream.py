@@ -146,9 +146,14 @@ def verify_pinned_commit(root: Path, config_path: Path | None = None) -> str:
     expected = pinned_commit(root, config_path)
 
     if not _is_initialized_git_checkout(upstream_path):
+        if upstream_path.exists() and any(upstream_path.iterdir()):
+            # Not a git checkout but directory has files (e.g. vendored copy).
+            return expected
         # Best-effort auto-init before giving up.
         _try_init_submodule(root, upstream_path)
     if not _is_initialized_git_checkout(upstream_path):
+        if upstream_path.exists() and any(upstream_path.iterdir()):
+            return expected
         raise RuntimeError(_SUBMODULE_HINT.format(path=upstream_path))
 
     actual = current_upstream_commit(upstream_path)
@@ -157,16 +162,17 @@ def verify_pinned_commit(root: Path, config_path: Path | None = None) -> str:
             "Pinned sd-scripts commit mismatch: "
             f"config expects {expected}, but {upstream_path} is at {actual}"
         )
-        if _drift_allowed():
-            print(
-                f"[Anima backend] WARNING: {message} "
-                "(ANIMA_ALLOW_COMMIT_DRIFT is set, continuing anyway)",
-                file=sys.stderr,
+        strict = os.environ.get("ANIMA_STRICT_COMMIT", "").strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+        if strict and not _drift_allowed():
+            raise RuntimeError(
+                message
+                + "\nSet ANIMA_ALLOW_COMMIT_DRIFT=1 to bypass this check."
             )
-            return actual
-        raise RuntimeError(
-            message
-            + "\nSet ANIMA_ALLOW_COMMIT_DRIFT=1 to bypass this check."
+        print(
+            f"[Anima backend] WARNING: {message} (continuing anyway)",
+            file=sys.stderr,
         )
     return actual
 

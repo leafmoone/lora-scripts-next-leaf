@@ -35,7 +35,7 @@
 ### 从源码安装
 
 ```sh
-git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.git
+git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
 ```
 

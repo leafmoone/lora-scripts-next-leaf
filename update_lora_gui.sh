@@ -11,7 +11,7 @@ if [[ -f /etc/network_turbo ]]; then
 fi
 
 cd "$SCRIPT_DIR"
-git pull --recurse-submodules
+git pull
 python "$SCRIPT_DIR/apply_lora_next_anima_defaults.py"
 
 "$SCRIPT_DIR/restart_lora_gui.sh"
