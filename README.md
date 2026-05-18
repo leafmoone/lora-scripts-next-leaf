@@ -53,8 +53,9 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 ## Features
 
 - **Multi-model** — SD 1.5 / SDXL / Flux / **Anima** all work out of the box
-- **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS)
-- **Train Monitor** — Auto-opens with GUI, real-time Loss, progress, and preview samples
+- **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS) / **T-LoRA**
+- **T-LoRA** — Timestep-Dependent LoRA with dynamic rank and orthogonal init ([paper](https://github.com/ControlGenAI/T-LoRA))
+- **Train Monitor** — Auto-opens with GUI, interactive ECharts Loss chart (zoom / pan / restore), real-time progress and preview samples
 - **Built-in TensorBoard** — Accessible from the sidebar, no extra setup
 - **AutoDL ready** — Dedicated startup script `start_autodl.sh`
 
@@ -67,7 +68,7 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 </p>
 
 <p align="center">
-  <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor" width="920" />
+  <img src="assets/readme/shot-train-monitor.png" alt="Train Monitor" width="920" />
 </p>
 
 <p align="center"><sub>Top: Training GUI &nbsp;|&nbsp; Bottom: Train Monitor (port 6008, auto-opens)</sub></p>
@@ -91,6 +92,7 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 
 | Date | Update |
 |------|--------|
+| 2026-05-18 | T-LoRA (Timestep-Dependent LoRA) support for Anima; interactive ECharts Loss chart with zoom/pan/restore |
 | 2026-05-18 | Fix training failures caused by undefined network_args across LoRA-family types; custom args now override defaults correctly |
 | 2026-05-18 | Anima LoKr training standardized (lycoris.kohya backend) |
 | 2026-05-18 | Train monitor auto-starts with GUI; added AutoDL startup script |
@@ -107,6 +109,8 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 |---------|------|
 | [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | GUI framework & one-click training UX |
 | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | Core training backend |
+| [KohakuBlueleaf/LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) | LoKr / LoHa network modules (Apache-2.0) |
+| [ControlGenAI/T-LoRA](https://github.com/ControlGenAI/T-LoRA) | Timestep-Dependent LoRA (MIT, AIRI) |
 | [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF) | SDXL Rectified Flow reference |
 
 Full attribution in [`NOTICE.md`](NOTICE.md).
