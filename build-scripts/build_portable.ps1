@@ -84,10 +84,6 @@ Write-Host ""
 Write-Host "[2/5] Copying project files..." -ForegroundColor Cyan
 
 Push-Location $ProjectRoot
-if (Test-Path ".git") {
-    Write-Host "  Initializing git submodules..."
-    git submodule update --init --recursive 2>&1 | Out-Null
-}
 Pop-Location
 
 $copyDirs = @(
