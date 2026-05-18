@@ -69,7 +69,8 @@ def launch():
         prepare_environment(disable_auto_mirror=args.disable_auto_mirror)
 
     if not check_port_avaliable(args.port):
-        avaliable = find_avaliable_ports(30000, 30000+20)
+        # Keep fallback ports in the same 28000 range for consistency.
+        avaliable = find_avaliable_ports(28000, 28000 + 20)
         if avaliable:
             args.port = avaliable
         else:

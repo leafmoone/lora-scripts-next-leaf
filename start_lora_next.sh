@@ -24,7 +24,7 @@ import glob
 import os
 import signal
 
-ports = {"60006", "6006", "6007", "6008", "28000", "28001", "30000"}
+ports = {"60006", "6006", "6007", "6008", "28000", "28001"}
 listen_inodes = set()
 
 for table in ("/proc/net/tcp", "/proc/net/tcp6"):
