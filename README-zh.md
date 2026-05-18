@@ -53,8 +53,9 @@ cd lora-scripts-next
 ## 功能亮点
 
 - **多模型支持** — SD 1.5 / SDXL / Flux / **Anima** 全部开箱即用
-- **Anima LoRA 训练** — 侧边栏一键进入，支持 LoRA / LoKr（LyCORIS）
-- **训练监控页** — 随 GUI 自动启动，实时显示 Loss、进度、预览图
+- **Anima LoRA 训练** — 侧边栏一键进入，支持 LoRA / LoKr（LyCORIS）/ **T-LoRA**
+- **T-LoRA** — 基于扩散时间步的动态 Rank LoRA，正交初始化，防止过拟合（[论文](https://github.com/ControlGenAI/T-LoRA)）
+- **训练监控页** — 随 GUI 自动启动，ECharts 交互式 Loss 图表（滚轮缩放 / 拖拽平移 / 一键复位），实时进度和预览图
 - **TensorBoard 内置** — 侧边栏直接查看，无需额外操作
 - **AutoDL 适配** — 提供专用启动脚本 `start_autodl.sh`
 
@@ -67,7 +68,7 @@ cd lora-scripts-next
 </p>
 
 <p align="center">
-  <img src="assets/readme/screenshot-train-monitor.png" alt="训练监控页" width="920" />
+  <img src="assets/readme/shot-train-monitor.png" alt="训练监控页" width="920" />
 </p>
 
 <p align="center"><sub>上：训练 GUI 主界面 &nbsp;|&nbsp; 下：训练监控页（端口 6008，自动打开）</sub></p>
@@ -91,6 +92,7 @@ cd lora-scripts-next
 
 | 日期 | 内容 |
 |------|------|
+| 2026-05-18 | T-LoRA（时间步动态 LoRA）Anima 训练支持；ECharts 交互式 Loss 图表（缩放/拖拽/复位） |
 | 2026-05-18 | 修复 LoRA/LoHa/LoKr/TLoRA 等训练类型在 network_args 出现 undefined 时导致训练报错（自定义参数可正确覆盖） |
 | 2026-05-18 | Anima LoKr 训练支持标准化（lycoris.kohya 后端） |
 | 2026-05-18 | 训练监控页随 GUI 自动启动，新增 AutoDL 专用启动脚本 |
@@ -107,6 +109,8 @@ cd lora-scripts-next
 |------|------|
 | [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | GUI 框架与一键训练体验（"秋叶式"） |
 | [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | 核心训练后端 |
+| [KohakuBlueleaf/LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) | LoKr / LoHa 网络模块（Apache-2.0） |
+| [ControlGenAI/T-LoRA](https://github.com/ControlGenAI/T-LoRA) | 时间步动态 LoRA（MIT, AIRI） |
 | [bluvoll/Akegarasu-lora-scripts-RF](https://github.com/bluvoll/Akegarasu-lora-scripts-RF) | SDXL Rectified Flow 参考 |
 
 完整归属见 [`NOTICE.md`](NOTICE.md)。
