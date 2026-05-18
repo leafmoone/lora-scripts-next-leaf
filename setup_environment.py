@@ -188,14 +188,26 @@ def install_requirements(region):
     return _run_pip(args)
 
 
+_FLASH_ATTN_WHEEL = (
+    "flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE"
+    "-cp310-cp310-win_amd64.whl"
+)
+_FLASH_ATTN_WHEEL_URLS = {
+    "global": (
+        "https://huggingface.co/lldacing/flash-attention-windows-wheel"
+        f"/resolve/main/{_FLASH_ATTN_WHEEL}"
+    ),
+    "china": (
+        "https://hf-mirror.com/lldacing/flash-attention-windows-wheel"
+        f"/resolve/main/{_FLASH_ATTN_WHEEL}"
+    ),
+}
+
+
 def install_flash_attn(region):
-    """Try to install flash-attn for training acceleration. Non-fatal on failure."""
-    cfg = MIRROR_PROFILES[region]
-    args = ["install", "flash-attn", "--no-build-isolation", "--no-warn-script-location"]
-    if region == "china" and cfg.get("pip_index_url"):
-        args += ["-i", cfg["pip_index_url"]]
-        if cfg.get("pip_trusted_host"):
-            args += ["--trusted-host", cfg["pip_trusted_host"]]
+    """Install flash-attn from prebuilt wheel. Non-fatal on failure."""
+    url = _FLASH_ATTN_WHEEL_URLS.get(region, _FLASH_ATTN_WHEEL_URLS["global"])
+    args = ["install", url, "--no-warn-script-location"]
     return _run_pip(args)
 
 

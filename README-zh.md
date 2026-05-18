@@ -69,9 +69,15 @@ python gui.py --browser edge
 
 #### Flash Attention 2（已有环境的用户）
 
-新安装会自动包含 Flash Attention 2。如果你已有环境，手动安装一次即可加速 Anima 训练：
+新安装会通过预编译 wheel 自动安装 Flash Attention 2。如果你已有环境且 `run_gui.bat` 未自动安装，可手动安装对应的 wheel：
 
 ```sh
+# Python 3.10 + PyTorch 2.7 + CUDA 12.8（整合包默认环境）
+pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+# 国内镜像
+pip install https://hf-mirror.com/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+
+# Linux / 有 C++ 编译器 — 也可以从源码编译
 pip install flash-attn --no-build-isolation
 ```
 
@@ -81,7 +87,7 @@ pip install flash-attn --no-build-isolation
 
 - **多模型支持** — SD 1.5 / SDXL / Flux / **Anima** 全部开箱即用
 - **Anima LoRA 训练** — 侧边栏一键进入，支持 LoRA / LoKr（LyCORIS）/ **T-LoRA**
-- **Flash Attention 2 训练加速** — 自动检测并启用最优 Attention 后端（优先 Flash Attention 2，其次 xformers，最后 PyTorch SDPA）。整合包首次安装时自动安装 `flash-attn`
+- **Flash Attention 2 训练加速** — 自动检测并启用最优 Attention 后端（优先 Flash Attention 2，其次 xformers，最后 PyTorch SDPA）。Windows 使用预编译 wheel（无需 C++ 编译器）；整合包首次安装时自动安装
 - **T-LoRA** — 基于扩散时间步的动态 Rank LoRA，正交初始化，防止过拟合（[论文](https://github.com/ControlGenAI/T-LoRA)）
 - **训练监控页** — 随 GUI 自动启动，ECharts 交互式 Loss 图表（滚轮缩放 / 拖拽平移 / 一键复位），实时进度和预览图
 - **TensorBoard 内置** — 侧边栏直接查看，无需额外操作
@@ -121,7 +127,7 @@ pip install flash-attn --no-build-isolation
 
 | 日期 | 内容 |
 |------|------|
-| 2026-05-19 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速、AMD 显卡检测、自动修复 bf16/fp16 精度问题、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug、`--browser chrome/edge` 指定浏览器、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
+| 2026-05-19 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速（Windows 预编译 wheel 免编译安装）、AMD 显卡检测、自动修复 bf16/fp16 精度问题、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug、按步数保存模型、`--browser chrome/edge` 指定浏览器、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
 | 2026-05-18 | T-LoRA 训练支持、交互式 Loss 图表、LoKr 标准化、Windows 便携包、AutoDL 脚本 |
 | 2026-05-17 | Anima 训练后端完全迁移至 kohya-ss/sd-scripts |
 | 2026-05-06 | 训练监控页重构：实时 Loss 卡片 + 粘性滚动 |

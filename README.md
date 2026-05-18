@@ -69,9 +69,13 @@ python gui.py --browser edge
 
 #### Flash Attention 2 (existing installs)
 
-New installs get Flash Attention 2 automatically. If you already have an environment, install manually for faster Anima training:
+New installs get Flash Attention 2 automatically via prebuilt wheels. If you already have an environment and `run_gui.bat` didn't install it, grab the matching wheel manually:
 
 ```sh
+# Python 3.10 + PyTorch 2.7 + CUDA 12.8 (portable package default)
+pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+
+# Linux / has C++ compiler — build from source also works
 pip install flash-attn --no-build-isolation
 ```
 
@@ -81,7 +85,7 @@ pip install flash-attn --no-build-isolation
 
 - **Multi-model** — SD 1.5 / SDXL / Flux / **Anima** all work out of the box
 - **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS) / **T-LoRA**
-- **Flash Attention 2 acceleration** — Auto-detected and enabled when available; falls back to xformers or PyTorch SDPA. Portable package installs `flash-attn` automatically on first run
+- **Flash Attention 2 acceleration** — Auto-detected and enabled when available; falls back to xformers or PyTorch SDPA. Windows uses prebuilt wheels (no C++ compiler needed); portable package installs automatically on first run
 - **T-LoRA** — Timestep-Dependent LoRA with dynamic rank and orthogonal init ([paper](https://github.com/ControlGenAI/T-LoRA))
 - **Train Monitor** — Auto-opens with GUI, interactive ECharts Loss chart (zoom / pan / restore), real-time progress and preview samples
 - **Built-in TensorBoard** — Accessible from the sidebar, no extra setup
@@ -121,7 +125,7 @@ pip install flash-attn --no-build-isolation
 
 | Date | Update |
 |------|--------|
-| 2026-05-19 | **v2.0.0** — Portable package, Flash Attention 2 auto-acceleration, AMD GPU detection, auto bf16/fp16 fix, fix LoKr conv_dim/conv_alpha undefined bug, `--browser chrome/edge`, vendor sd-scripts, update check |
+| 2026-05-19 | **v2.0.0** — Portable package, Flash Attention 2 auto-acceleration (prebuilt wheels for Windows), AMD GPU detection, auto bf16/fp16 fix, fix LoKr conv_dim/conv_alpha undefined bug, save-by-steps option, `--browser chrome/edge`, vendor sd-scripts, update check |
 | 2026-05-18 | T-LoRA support, interactive Loss chart, LoKr standardization, Windows portable package, AutoDL script |
 | 2026-05-17 | Anima training backend fully migrated to kohya-ss/sd-scripts |
 | 2026-05-06 | Train monitor rebuild: real-time Loss cards + sticky scroll |

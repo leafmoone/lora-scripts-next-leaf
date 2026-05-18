@@ -39,6 +39,7 @@ SUPPORTED_FIELDS = {
     "save_model_as",
     "save_precision",
     "save_every_n_epochs",
+    "save_every_n_steps",
     "max_train_epochs",
     "max_train_steps",
     "train_batch_size",

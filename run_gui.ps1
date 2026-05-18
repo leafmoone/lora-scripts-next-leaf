@@ -16,11 +16,13 @@ else {
     Write-Host -ForegroundColor Blue "No virtual environment found, using system python..."
 }
 
-# Auto-install flash-attn if missing (one-time, non-blocking)
+# Auto-install flash-attn from prebuilt wheel if missing (one-time, non-blocking)
 python -c "import flash_attn" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host -ForegroundColor Cyan "Installing Flash Attention 2 for training acceleration..."
-    pip install flash-attn --no-build-isolation 2>$null
+    Write-Host -ForegroundColor Cyan "Installing Flash Attention 2 (prebuilt wheel)..."
+    $whl = "flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl"
+    $url = "https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/$whl"
+    pip install $url 2>$null
     if ($LASTEXITCODE -eq 0) {
         Write-Host -ForegroundColor Green "Flash Attention 2 installed successfully"
     } else {

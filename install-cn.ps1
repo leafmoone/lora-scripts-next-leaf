@@ -59,8 +59,15 @@ python -m pip install --upgrade -r requirements.txt
 Check "璁粌渚濊禆搴撳畨瑁呭け璐ャ€?
 
 
-Write-Output "Installing Flash Attention 2 (optional)..."
-python -m pip install flash-attn --no-build-isolation 2>$null
+Write-Output "Installing Flash Attention 2 (prebuilt wheel)..."
+$pyver = python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')" 2>$null
+if ($pyver -match "^cp3(10|11|12)$") {
+    $whl = "flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE-$pyver-$pyver-win_amd64.whl"
+    $url = "https://hf-mirror.com/lldacing/flash-attention-windows-wheel/resolve/main/$whl"
+    python -m pip install $url 2>$null
+} else {
+    python -m pip install flash-attn --no-build-isolation 2>$null
+}
 if ($LASTEXITCODE -eq 0) {
     Write-Output "Flash Attention 2 installed"
 } else {
