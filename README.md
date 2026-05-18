@@ -41,7 +41,7 @@ cd lora-scripts-next
 
 | OS | Install | Launch |
 |----|---------|--------|
-| Windows | Run `install-cn.ps1` | Run `run_gui.ps1` |
+| Windows | Double-click `install-cn.ps1` | Double-click **`run_gui.bat`** |
 | Linux | `bash install.bash` | `bash run_gui.sh` |
 
 The browser auto-opens **http://127.0.0.1:28000** on launch.
