@@ -111,6 +111,89 @@ class AnimaBackendAdapterTests(unittest.TestCase):
 
         self.assertNotIn("lora_type", adapted)
 
+    def test_lycoris_fields_injected_into_network_args(self):
+        config = {
+            "network_module": "lycoris.kohya",
+            "network_dim": 16,
+            "network_alpha": 16,
+            "lycoris_algo": "lokr",
+            "lokr_factor": -1,
+            "use_cp": True,
+            "decompose_both": True,
+            "use_scalar": False,
+            "dora_wd": True,
+            "full_matrix": True,
+            "bypass_mode": False,
+            "dropout": 0.1,
+            "rank_dropout": 0.05,
+            "module_dropout": 0.0,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        na = adapted["network_args"]
+        self.assertIn("algo=lokr", na)
+        self.assertIn("factor=-1", na)
+        self.assertIn("use_cp=True", na)
+        self.assertIn("decompose_both=True", na)
+        self.assertIn("dora_wd=True", na)
+        self.assertIn("full_matrix=True", na)
+        self.assertIn("dropout=0.1", na)
+        self.assertIn("rank_dropout=0.05", na)
+        # False values should be omitted (use LyCORIS defaults)
+        self.assertNotIn("use_scalar=False", na)
+        self.assertNotIn("bypass_mode=False", na)
+        # These should NOT appear as top-level keys
+        self.assertNotIn("lycoris_algo", adapted)
+        self.assertNotIn("lokr_factor", adapted)
+        self.assertNotIn("use_cp", adapted)
+        self.assertNotIn("full_matrix", adapted)
+        self.assertEqual(warnings, [])
+
+    def test_lycoris_preset_and_fields_coexist(self):
+        config = {
+            "network_module": "lycoris.kohya",
+            "lycoris_algo": "lokr",
+            "lokr_factor": 16,
+            "full_matrix": True,
+            "network_args": ["verbose=True"],
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        na = adapted["network_args"]
+        self.assertIn("verbose=True", na)
+        self.assertTrue(any(item.startswith("preset=") for item in na))
+        self.assertIn("algo=lokr", na)
+        self.assertIn("factor=16", na)
+        self.assertIn("full_matrix=True", na)
+
+    def test_non_lycoris_module_ignores_lycoris_fields(self):
+        config = {
+            "network_module": "networks.lora_anima",
+            "use_cp": True,
+            "lokr_factor": 8,
+            "full_matrix": True,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        self.assertNotIn("use_cp", adapted)
+        self.assertNotIn("lokr_factor", adapted)
+        self.assertNotIn("full_matrix", adapted)
+        self.assertEqual(warnings, [])
+
+    def test_lycoris_zero_numeric_values_passed_through(self):
+        """Numeric 0 is a valid value (e.g. dropout=0) and should be included."""
+        config = {
+            "network_module": "lycoris.kohya",
+            "lycoris_algo": "lokr",
+            "dropout": 0,
+            "module_dropout": 0.0,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        na = adapted["network_args"]
+        self.assertIn("dropout=0", na)
+        self.assertIn("module_dropout=0.0", na)
+
 
 if __name__ == "__main__":
     unittest.main()

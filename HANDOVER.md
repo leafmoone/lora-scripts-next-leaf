@@ -9,6 +9,8 @@
    - 移除了旧版 `anima_train_network_legacy.py`，全面接入 `vendor/sd-scripts`。
    - 修复了 LyCORIS `kohya` 模块在 Anima 模型上找不到模块（0 modules）导致 `IndexError` 的问题。解决方案：在 `mikazuki/anima_backend/adapter.py` 中动态注入了针对 Anima 的专属预设文件 `config/lycoris_anima_preset.toml`。
    - 修复了 `network_args` 中出现 `undefined` 导致训练崩溃的问题。
+   - 修复了 LoKr 高级参数（`use_cp`、`decompose_both`、`full_matrix` 等）未通过 `network_args` 传递给 LyCORIS 的 bug——此前这些参数作为 TOML 顶层 key 输出，被 sd-scripts 静默忽略。
+   - 新增 `full_matrix` 参数支持（LyCORIS 全矩阵 Kronecker 模式）。
 2. **训练监控页 (Train Monitor)**：
    - 独立服务 `train_status_server.py`，默认端口 `6008`。
    - 随 GUI (端口 `28000`) 自动启动，并在启动后自动在浏览器中打开。
@@ -18,7 +20,7 @@
    ![训练监控页](assets/readme/shot-train-monitor.png)
 3. **文档与 UI 优化**：
    - 重写了 `README.md` 和 `README-zh.md`，突出“快速开始”，将长篇技术文档移入 `docs/` 目录。
-   - 增加了 `docs/anima-training.md`，并补充了 LyCORIS 作者关于 LoKr 的权威调参建议。
+   - 增加了 `docs/anima-training.md`，包含 T-LoRA 教程和 LoKr 参数参考。
 4. **Windows 便携环境适配**：
    - 修复了便携包缺少 `joblib` 依赖的问题。
    - 统一了所有脚本和文档中的端口号为 `28000`（之前有 `30000` 混用的情况）。
