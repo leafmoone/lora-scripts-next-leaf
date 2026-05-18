@@ -237,6 +237,12 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     if is_preview_enabled(config) or config.get("sample_prompts"):
         config["sample_at_first"] = True
 
+    mixed = config.get("mixed_precision", "")
+    if mixed == "bf16" and not config.get("full_bf16"):
+        config["full_bf16"] = True
+    elif mixed == "fp16" and not config.get("full_fp16"):
+        config["full_fp16"] = True
+
 
 @router.post("/run")
 async def create_toml_file(request: Request):

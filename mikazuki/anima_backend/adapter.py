@@ -92,6 +92,8 @@ SUPPORTED_FIELDS = {
     "blocks_to_swap",
     "cpu_offload_checkpointing",
     "mixed_precision",
+    "full_fp16",
+    "full_bf16",
     "seed",
     "logging_dir",
     "log_with",
