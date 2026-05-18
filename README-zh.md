@@ -39,10 +39,10 @@ git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.g
 cd lora-scripts-next
 ```
 
-| 系统 | 安装 | 启动 |
-|------|------|------|
-| Windows | 双击 `install-cn.ps1` | 双击 **`run_gui.bat`** |
-| Linux | `bash install.bash` | `bash run_gui.sh` |
+| 系统 | 操作 |
+|------|------|
+| Windows | 双击 **`run_gui.bat`**（首次自动安装依赖，之后直接启动） |
+| Linux | `bash install.bash && bash run_gui.sh` |
 
 启动后浏览器自动打开 **http://127.0.0.1:28000**。
 

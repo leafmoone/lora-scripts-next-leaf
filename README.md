@@ -39,10 +39,10 @@ git clone --recurse-submodules https://github.com/wochenlong/lora-scripts-next.g
 cd lora-scripts-next
 ```
 
-| OS | Install | Launch |
-|----|---------|--------|
-| Windows | Double-click `install-cn.ps1` | Double-click **`run_gui.bat`** |
-| Linux | `bash install.bash` | `bash run_gui.sh` |
+| OS | Action |
+|----|--------|
+| Windows | Double-click **`run_gui.bat`** (auto-installs on first run, then launches) |
+| Linux | `bash install.bash && bash run_gui.sh` |
 
 The browser auto-opens **http://127.0.0.1:28000** on launch.
 
