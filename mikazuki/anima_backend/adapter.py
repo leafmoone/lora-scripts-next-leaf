@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 
@@ -180,6 +181,23 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
         source["network_args"] = normalized_network_args
     elif "network_args" in source:
         source.pop("network_args", None)
+
+    # LyCORIS default preset does not include Anima module class names, which may
+    # produce zero trainable modules for LoKr. Inject Anima-specific preset unless
+    # user already provided one via network_args.
+    if source.get("network_module") == "lycoris.kohya":
+        network_args = source.get("network_args")
+        has_preset = isinstance(network_args, list) and any(
+            isinstance(item, str) and item.strip().startswith("preset=")
+            for item in network_args
+        )
+        if not has_preset:
+            preset_path = (
+                Path(__file__).resolve().parents[2] / "config" / "lycoris_anima_preset.toml"
+            )
+            source["network_args"] = list(network_args or []) + [
+                f"preset={preset_path.as_posix()}"
+            ]
 
     for key, value in source.items():
         if key in UI_ONLY_FIELDS:
