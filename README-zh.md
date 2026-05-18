@@ -58,6 +58,23 @@ cd lora-scripts-next
 
 > **Python 版本：** 推荐 **3.10**（所有依赖完美兼容）。3.11–3.12 基本可用，3.13+ 不支持。
 
+#### 指定浏览器
+
+默认使用系统浏览器。可通过 `--browser` 参数指定：
+
+```sh
+python gui.py --browser chrome
+python gui.py --browser edge
+```
+
+#### Flash Attention 2（已有环境的用户）
+
+新安装会自动包含 Flash Attention 2。如果你已有环境，手动安装一次即可加速 Anima 训练：
+
+```sh
+pip install flash-attn --no-build-isolation
+```
+
 ---
 
 ## 功能亮点

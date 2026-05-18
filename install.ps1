@@ -22,5 +22,13 @@ pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --extra-index-url https
 pip install -U -I --no-deps xformers==0.0.30 --extra-index-url https://download.pytorch.org/whl/cu128
 pip install --upgrade -r requirements.txt
 
+Write-Output "Installing Flash Attention 2 (optional, for training acceleration)..."
+pip install flash-attn --no-build-isolation 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Output "Flash Attention 2 installed successfully"
+} else {
+    Write-Output "Flash Attention 2 install failed (non-fatal, will use PyTorch SDPA instead)"
+}
+
 Write-Output "Install completed"
 Read-Host | Out-Null ;

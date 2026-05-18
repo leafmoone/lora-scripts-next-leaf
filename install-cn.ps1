@@ -58,5 +58,14 @@ if ($install_torch -eq "y" -or $install_torch -eq "Y" -or $install_torch -eq "")
 python -m pip install --upgrade -r requirements.txt
 Check "璁粌渚濊禆搴撳畨瑁呭け璐ャ€?
 
+
+Write-Output "Installing Flash Attention 2 (optional)..."
+python -m pip install flash-attn --no-build-isolation 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Output "Flash Attention 2 installed"
+} else {
+    Write-Output "Flash Attention 2 install failed (non-fatal)"
+}
+
 Write-Output "瀹夎瀹屾垚"
 Read-Host | Out-Null

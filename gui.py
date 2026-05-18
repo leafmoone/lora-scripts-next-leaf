@@ -23,6 +23,9 @@ parser.add_argument("--tensorboard-host", type=str, default="127.0.0.1", help="P
 parser.add_argument("--tensorboard-port", type=int, default=6006, help="Port to run the tensorboard")
 parser.add_argument("--train-monitor-port", type=int, default=6008, help="Port to run the train status monitor")
 parser.add_argument("--localization", type=str)
+parser.add_argument("--browser", type=str, default=None,
+                    choices=["chrome", "edge", "default"],
+                    help="Browser to open GUI: chrome, edge, or default (system default)")
 parser.add_argument("--dev", action="store_true")
 
 
@@ -85,6 +88,8 @@ def launch():
     os.environ["MIKAZUKI_TENSORBOARD_PORT"] = str(args.tensorboard_port)
     os.environ["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
     os.environ["MIKAZUKI_DEV"] = "1" if args.dev else "0"
+    if args.browser:
+        os.environ["MIKAZUKI_BROWSER"] = args.browser
 
     if args.listen:
         args.host = "0.0.0.0"

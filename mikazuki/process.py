@@ -51,7 +51,8 @@ def _announce_train_log(task_id: str, urls: dict) -> None:
 
     if _truthy_env("MIKAZUKI_AUTO_OPEN_TRAIN_LOG"):
         try:
-            webbrowser.open(viewer)
+            from mikazuki.app.application import _resolve_browser
+            _resolve_browser().open(viewer)
         except Exception as exc:  # noqa: BLE001 — best-effort UX nicety
             log.warning(f"Failed to auto-open train log in browser: {exc}")
 

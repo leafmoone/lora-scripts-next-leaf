@@ -58,6 +58,23 @@ The browser auto-opens **http://127.0.0.1:28000** on launch.
 
 > **Python version:** 3.10 recommended (full compatibility). 3.11–3.12 mostly works. 3.13+ is not supported.
 
+#### Choose Browser
+
+By default the system default browser opens. Use `--browser` to pick one:
+
+```sh
+python gui.py --browser chrome
+python gui.py --browser edge
+```
+
+#### Flash Attention 2 (existing installs)
+
+New installs get Flash Attention 2 automatically. If you already have an environment, install manually for faster Anima training:
+
+```sh
+pip install flash-attn --no-build-isolation
+```
+
 ---
 
 ## Features

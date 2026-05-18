@@ -44,6 +44,31 @@ class SPAStaticFiles(StaticFiles):
                 raise ex
 
 
+_BROWSER_CANDIDATES = {
+    "chrome": [
+        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+    ],
+    "edge": [
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+    ],
+}
+
+
+def _resolve_browser():
+    """Resolve --browser shortcut (chrome/edge) to a webbrowser controller."""
+    name = os.environ.get("MIKAZUKI_BROWSER", "").lower()
+    if not name or name == "default":
+        return webbrowser
+    candidates = _BROWSER_CANDIDATES.get(name, [])
+    for path in candidates:
+        if os.path.isfile(path):
+            return webbrowser.get(f'"{path}" %s')
+    return webbrowser
+
+
 async def _async_update_check():
     from mikazuki.update_check import check_update, log_update_notice
     try:
@@ -65,11 +90,16 @@ async def app_startup():
     if sys.platform == "win32" and os.environ.get("MIKAZUKI_DEV", "0") != "1":
         import time
         from mikazuki.log import log as app_log
-        webbrowser.open(f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}')
+
+        browser = _resolve_browser()
+        if browser is not webbrowser:
+            app_log.info(f"Using browser: {os.environ.get('MIKAZUKI_BROWSER', 'default')}")
+
+        browser.open(f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}')
         monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
         time.sleep(1)
         app_log.info(f"Opening train monitor in browser: http://127.0.0.1:{monitor_port}")
-        webbrowser.open(f'http://127.0.0.1:{monitor_port}')
+        browser.open(f'http://127.0.0.1:{monitor_port}')
 
 
 @asynccontextmanager
