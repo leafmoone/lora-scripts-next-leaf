@@ -1,6 +1,7 @@
 Schema.intersect([
     Schema.object({
-        model_train_type: Schema.string().default("anima-lora").disabled().description("训练种类"),
+        model_train_type: Schema.string().default("anima-lora").hidden().description("训练种类"),
+        lora_type: Schema.union(["lora", "lokr", "tlora", "lora_fa", "vera", "loha"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
         pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/anima-base-v1.0.safetensors").description("Anima 主 DiT / transformer 权重路径，例如 anima-base-v1.0.safetensors"),
         vae: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_image_vae.safetensors").description("Qwen Image VAE 模型路径（Anima 训练必填）"),
         qwen3: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_3_06b_base.safetensors").description("Qwen3 文本模型路径。可填写 safetensors / pt 文件，或完整本地模型目录"),
@@ -51,7 +52,6 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            lora_type: Schema.union(["lora", "lokr", "tlora", "lora_fa", "vera", "loha"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
             network_weights: Schema.string().role('filepicker').description("从已有 LoRA / LoKr 模型继续训练，填写路径"),
             network_dim: Schema.number().min(1).default(16).description("网络维度，常用 4~128，不是越大越好。T-LoRA 建议 32（动态 rank 需要更大基础维度）"),
             network_alpha: Schema.number().min(1).default(16).description("常用值：等于 network_dim 或 network_dim/2 或 1。T-LoRA 建议等于 network_dim"),
