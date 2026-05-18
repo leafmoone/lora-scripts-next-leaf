@@ -67,16 +67,16 @@ T-LoRA（Timestep-Dependent LoRA）是一种改进的 LoRA 方法。普通 LoRA 
 
 选择 T-LoRA 后，系统会自动切换到 T-LoRA 专用的网络模块，并使用优化过的默认参数。
 
-### 推荐参数
+### 参数说明
 
-| 参数 | 推荐值 | 说明 |
+| 参数 | 默认值 | 说明 |
 |------|--------|------|
-| **网络维度 (network_dim)** | **32** | T-LoRA 因为动态 rank 会压缩有效容量，建议比普通 LoRA 更高（普通 LoRA 通常 8–16） |
-| **网络 Alpha (network_alpha)** | **32** | 建议与 network_dim 相同，保持学习率稳定 |
-| **最小 Rank (tlora_min_rank)** | **4**（默认） | 时间步接近 0 时使用的最低 rank。越小越节省参数但容量越低 |
-| **Rank 调度 (tlora_rank_schedule)** | **linear**（默认） | rank 随时间步变化的方式。`linear` 为线性插值，`cosine` 更平滑 |
-| **正交初始化 (tlora_orthogonal_init)** | **开启**（默认） | 用正交矩阵初始化权重，训练更稳定，强烈建议保持开启 |
-| **UNet 学习率 (unet_lr)** | **1e-4** | 比普通 LoRA 稍高，因为动态 rank 使得有效梯度更小 |
+| **网络维度 (network_dim)** | 32 | T-LoRA 的动态 rank 会压缩有效容量，因此通常需要比普通 LoRA 更高的 dim |
+| **网络 Alpha (network_alpha)** | 32 | 建议与 network_dim 保持一致，避免学习率被意外缩放 |
+| **最小 Rank (tlora_min_rank)** | 4 | 时间步接近 0 时使用的最低 rank。越小越节省参数但容量越低 |
+| **Rank 调度 (tlora_rank_schedule)** | linear | rank 随时间步变化的方式。`linear` 为线性插值，`cosine` 更平滑 |
+| **正交初始化 (tlora_orthogonal_init)** | 开启 | 用正交矩阵初始化权重，训练更稳定，建议保持开启 |
+| **UNet 学习率 (unet_lr)** | — | 由于动态 rank 使得有效梯度更小，可能需要比普通 LoRA 适当提高 |
 
 ### 与普通 LoRA 的区别
 
@@ -85,17 +85,17 @@ T-LoRA（Timestep-Dependent LoRA）是一种改进的 LoRA 方法。普通 LoRA 
 | Rank | 固定（如 16） | 动态（min_rank ~ network_dim） |
 | 收敛速度 | 较快 | 较慢（需要更多步数） |
 | 过拟合风险 | 较高 | 较低（低噪声步用低 rank） |
-| 推荐 network_dim | 8–16 | 24–32 |
+| network_dim | 通常较小即可 | 通常需要更大 |
 | 模型体积 | 取决于 dim | 与同 dim 的 LoRA 相同 |
 
 ### 常见问题
 
 **Q: T-LoRA 训练很慢，预览图变化不大？**
 
-这是正常的。T-LoRA 的动态 rank 机制会在低噪声时间步降低有效容量，导致收敛比普通 LoRA 慢。建议：
-- 增大 `network_dim`（32 或更高）
-- 增大 `tlora_min_rank`（4 或更高）
-- 适当提高 `unet_lr`（1e-4）
+这是正常的。T-LoRA 的动态 rank 机制会在低噪声时间步降低有效容量，导致收敛比普通 LoRA 慢。可以尝试：
+- 增大 `network_dim`
+- 增大 `tlora_min_rank`
+- 适当提高学习率
 - 确保 `tlora_orthogonal_init` 开启
 - 耐心多训几个 epoch，T-LoRA 的优势会在后期体现
 
@@ -120,13 +120,13 @@ T-LoRA（Timestep-Dependent LoRA）是一种改进的 LoRA 方法。普通 LoRA 
 > 以下参数仅供参考，实际效果因数据集、训练目标和硬件环境而异，建议根据自己的情况调整。
 
 1. **起步参数**：
-   - `factor = 16`，`full_matrix = True`
-   - LoKr 通常比 LoRA 更耐受较高的学习率，可以在默认值基础上适当提高，观察收敛情况。
+   - `factor` 从较大值（如 `16`）开始尝试
+   - LoKr 通常比 LoRA 更耐受较高的学习率，可以在默认值基础上适当提高，观察收敛情况
 
 2. **效果不佳时的调整方向**：
-   - 将 `factor` 逐步降低（如 `12` → `8` → `6` → `4`），降低 factor 意味着增加参数量、提升表达能力。
-   - 降低 `factor` 的同时建议相应降低学习率，避免过拟合。
-   - `factor=4` 时参数量已经很大（约本体模型的 1/16），接近全量微调的效果。
+   - 逐步降低 `factor`，降低 factor 意味着增加参数量、提升表达能力
+   - 降低 `factor` 的同时建议相应降低学习率，避免过拟合
+   - `factor` 越小参数量越大，过小时接近全量微调
 
 3. **混合训练**：
-   - LoKr 与 LoRA 的性质互补，如果单独使用 LoKr 效果不理想，可以尝试两者结合训练。
+   - LoKr 与 LoRA 的性质互补，如果单独使用效果不理想，可以尝试两者结合训练
