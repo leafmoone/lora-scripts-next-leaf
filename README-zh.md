@@ -30,7 +30,7 @@
 
 ### Windows 整合包（推荐小白用户）
 
-从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.0.0.7z`**（~15 MB），解压后双击 `run_gui.bat` 即可启动。
+从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.1.0.7z`**（~15 MB），解压后双击 `run_gui.bat` 即可启动。
 
 首次启动会自动安装 PyTorch + CUDA + 所有依赖（~3 GB 下载），国内用户自动走阿里云/清华镜像加速。
 
@@ -127,7 +127,8 @@ pip install flash-attn --no-build-isolation
 
 | 日期 | 内容 |
 |------|------|
-| 2026-05-19 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速（Windows 预编译 wheel 免编译安装）、AMD 显卡检测、自动修复 bf16/fp16 精度问题、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug、按步数保存模型、`--browser chrome/edge` 指定浏览器、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
+| 2026-05-19 | **v2.1.0** — Flash Attention 2 Windows 预编译 wheel（无需 C++ 编译器）、按步数保存模型、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug |
+| 2026-05-18 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速、AMD 显卡检测、自动修复 bf16/fp16 精度问题、`--browser chrome/edge` 指定浏览器、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
 | 2026-05-18 | T-LoRA 训练支持、交互式 Loss 图表、LoKr 标准化、Windows 便携包、AutoDL 脚本 |
 | 2026-05-17 | Anima 训练后端完全迁移至 kohya-ss/sd-scripts |
 | 2026-05-06 | 训练监控页重构：实时 Loss 卡片 + 粘性滚动 |
