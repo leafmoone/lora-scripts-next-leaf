@@ -189,7 +189,10 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
     out = []
     for index, p in enumerate(unique_files):
         st = p.stat()
-        rel = p.relative_to(REPO)
+        try:
+            url_path = str(p.relative_to(REPO))
+        except ValueError:
+            url_path = str(p.resolve())
         epoch_match = re.search(r"_e(?P<epoch>\d{6})_", p.name)
         epoch = int(epoch_match.group("epoch")) if epoch_match else None
         role = ""
@@ -202,7 +205,7 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
             "path": str(p),
             "size": human_size(st.st_size),
             "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-            "url": f"/preview-image?path={quote(str(rel))}",
+            "url": f"/preview-image?path={quote(url_path)}",
             "role": role,
             "epoch": epoch,
             "max_epoch": max_epochs,
@@ -472,6 +475,14 @@ def parse_log(lines: list[str]) -> dict:
 
 def collect_status() -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        previews = newest_preview_images()
+    except Exception:
+        previews = []
+
+    train_out = _training_output_dir()
+    output_scan_dir = train_out if train_out is not None and train_out.exists() else OUTPUT_DIR
+
     status = {
         "time": now,
         "gui_online": False,
@@ -481,8 +492,8 @@ def collect_status() -> dict:
         "model_type": "未知类型",
         "log_lines": [],
         "metrics": {},
-        "previews": newest_preview_images(),
-        "outputs": newest_files(OUTPUT_DIR),
+        "previews": previews,
+        "outputs": newest_files(output_scan_dir),
         "log_files": newest_files(LOG_DIR),
     }
 
@@ -1288,17 +1299,30 @@ def file_list(files: list[dict]) -> str:
     return "<ul>" + "\n".join(items) + "</ul>"
 
 
+def _training_output_dir() -> Path | None:
+    """Return the resolved output_dir from the latest training config, or None."""
+    config = latest_training_config()
+    return resolve_repo_path(str(config.get("output_dir", "")))
+
+
 def preview_image_path(raw_path: str) -> Path | None:
     try:
-        rel = Path(unquote(raw_path))
-        candidate = (REPO / rel).resolve()
-        allowed_roots = (OUTPUT_DIR.resolve(), LOG_DIR.resolve())
+        decoded = unquote(raw_path)
+        candidate = Path(decoded)
+        if not candidate.is_absolute():
+            candidate = (REPO / candidate).resolve()
+        else:
+            candidate = candidate.resolve()
+        allowed_roots = [OUTPUT_DIR.resolve(), LOG_DIR.resolve()]
+        train_out = _training_output_dir()
+        if train_out is not None:
+            allowed_roots.append(train_out.resolve())
         if not any(candidate == root or root in candidate.parents for root in allowed_roots):
             return None
         if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_EXTENSIONS:
             return None
         return candidate
-    except OSError:
+    except (OSError, ValueError):
         return None
 
 
