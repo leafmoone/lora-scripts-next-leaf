@@ -125,7 +125,7 @@ pip install flash-attn --no-build-isolation
 
 | Date | Update |
 |------|--------|
-| 2026-05-19 | **v2.2.0** — Portable package startup fixes (triton-windows), run_gui.bat crash logging, cross-drive train monitor, branding/logo update, CONTRIBUTORS.md |
+| 2026-05-19 | **v2.2.0** — Portable flash-attn/triton fix, run_gui.bat execution policy + crash logging, cross-drive monitor, branding/logo, CONTRIBUTORS.md |
 | 2026-05-19 | **v2.1.0** — Flash Attention 2 prebuilt wheels for Windows (no C++ compiler needed), save-by-steps option, fix LoKr conv_dim/conv_alpha undefined bug |
 | 2026-05-18 | **v2.0.0** — Portable package, Flash Attention 2 auto-acceleration, AMD GPU detection, auto bf16/fp16 fix, `--browser chrome/edge`, vendor sd-scripts, update check |
 | 2026-05-18 | T-LoRA support, interactive Loss chart, LoKr standardization, Windows portable package, AutoDL script |

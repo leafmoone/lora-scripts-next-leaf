@@ -58,6 +58,18 @@ cd lora-scripts-next
 
 > **Python 版本：** 推荐 **3.10**（所有依赖完美兼容）。3.11–3.12 基本可用，3.13+ 不支持。
 
+#### 常见问题：无法运行 `run_gui.ps1` / 未数字签名
+
+这是 **Windows PowerShell 执行策略** 限制，不是程序坏了。默认策略会拒绝运行未签名的 `.ps1` 脚本。
+
+| 做法 | 说明 |
+|------|------|
+| **推荐** | 双击 **`run_gui.bat`**（整合包与源码均适用），不要直接运行 `run_gui.ps1` |
+| 临时绕过 | 在 PowerShell 中：`powershell -ExecutionPolicy Bypass -File .\run_gui.ps1` |
+| 长期放宽（可选） | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`（仅影响当前用户） |
+
+解压后若路径出现 `...\lora-scripts-next-2.2.0\lora-scripts-next-2.2.0\`，说明多解压了一层，请进入**内层**含 `run_gui.bat` 的目录再启动。
+
 #### 指定浏览器
 
 默认使用系统浏览器。可通过 `--browser` 参数指定：
@@ -127,7 +139,7 @@ pip install flash-attn --no-build-isolation
 
 | 日期 | 内容 |
 |------|------|
-| 2026-05-19 | **v2.2.0** — 整合包启动修复（triton-windows）、run_gui.bat 闪退日志、跨盘训练监控、品牌/logo 更新、CONTRIBUTORS.md |
+| 2026-05-19 | **v2.2.0** — 整合包 flash-attn/triton 治本、run_gui.bat 执行策略与闪退日志、跨盘训练监控、品牌/logo、CONTRIBUTORS.md |
 | 2026-05-19 | **v2.1.0** — Flash Attention 2 Windows 预编译 wheel（无需 C++ 编译器）、按步数保存模型、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug |
 | 2026-05-18 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速、AMD 显卡检测、自动修复 bf16/fp16 精度问题、`--browser chrome/edge` 指定浏览器、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
 | 2026-05-18 | T-LoRA 训练支持、交互式 Loss 图表、LoKr 标准化、Windows 便携包、AutoDL 脚本 |

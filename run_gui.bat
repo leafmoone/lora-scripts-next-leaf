@@ -2,19 +2,29 @@
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
-:: 检查是否已安装（venv 存在或 python 目录存在）
-if exist "venv\Scripts\activate.bat" goto :launch
+set "HF_HOME=huggingface"
+set "PYTHONUTF8=1"
+set "MIKAZUKI_PORT=28000"
+
+:: Do NOT run run_gui.ps1 directly — Windows may block it (execution policy).
+:: Always use this run_gui.bat file.
+
+if exist "venv\Scripts\python.exe" goto :launch
 if exist "python\python.exe" goto :launch
 
-:: 未安装，先执行安装
-echo [首次使用] 正在安装依赖，请耐心等待...
-powershell -ExecutionPolicy Bypass -File "%~dp0install-cn.ps1"
+echo [First run] Installing dependencies, please wait...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-cn.ps1"
 if errorlevel 1 (
-    echo 安装失败，请检查网络连接后重试。
+    echo Install failed. Check network and retry.
     pause
     exit /b 1
 )
 
 :launch
-powershell -ExecutionPolicy Bypass -File "%~dp0run_gui.ps1"
-pause
+if exist "venv\Scripts\activate.bat" call "venv\Scripts\activate.bat"
+if exist "python\python.exe" set "PATH=%~dp0python;%PATH%"
+
+python gui.py
+set "EXIT_CODE=%errorlevel%"
+if %EXIT_CODE% neq 0 pause
+exit /b %EXIT_CODE%

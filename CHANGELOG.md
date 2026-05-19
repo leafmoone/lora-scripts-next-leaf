@@ -4,22 +4,13 @@
 
 ---
 
-## v2.2.1 — 2026-05-19
-
-### 整合包（治本）
-
-- **便携包不再安装 flash-attn**：嵌入式 Python 无法可靠运行 `triton`，预编译 `flash-attn` 仍会在 import 时依赖 `triton`，导致 `transformers` 加载 CLIP 失败。
-- **启动时自动卸载**已装但不可用的 `flash-attn` / `triton`；训练使用 **xformers** 或 **PyTorch SDPA**。
-- 训练子进程设置 `TRANSFORMERS_ATTN_IMPLEMENTATION=sdpa`，避免 `transformers` 探测 flash 路径。
-
----
-
 ## v2.2.0 — 2026-05-19
 
 ### 整合包与启动
 
-- **triton-windows**：便携包嵌入式 Python 不再安装/保留 `triton-windows`，修复整合包启动或训练时因 triton 编译失败导致的崩溃（[#14](https://github.com/wochenlong/lora-scripts-next/issues/14)）。
-- **run_gui.bat**：增加 `sd-trainer-log.txt` 启动日志；失败时明确提示日志路径，避免闪退后无法排查。
+- **flash-attn / triton（治本）**：便携包不再安装 `flash-attn`；启动时自动卸载已装但不可用的 `flash-attn` / `triton`；训练使用 **xformers** 或 **PyTorch SDPA**；子进程设置 `TRANSFORMERS_ATTN_IMPLEMENTATION=sdpa`，避免 `No module named 'triton'`（[#14](https://github.com/wochenlong/lora-scripts-next/issues/14) 相关）。
+- **triton-windows**：便携包嵌入式 Python 不再安装/保留 `triton-windows`，修复因 triton 编译失败导致的崩溃。
+- **run_gui.bat**：纯 cmd 启动（不依赖 `run_gui.ps1`，避免 PowerShell 执行策略报错）；增加 `sd-trainer-log.txt` 启动日志；失败时明确提示日志路径。
 - **requirements.txt**：修复 PEP 508 环境标记在 `launch_utils` 中的解析（[#13](https://github.com/wochenlong/lora-scripts-next/issues/13)）。
 
 ### 训练监控与 UI

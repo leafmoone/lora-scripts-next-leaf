@@ -1,3 +1,6 @@
+# Prefer run_gui.bat on Windows (avoids "script is not digitally signed" / execution policy errors).
+# If you must run this file: powershell -ExecutionPolicy Bypass -File .\run_gui.ps1
+
 $Env:HF_HOME = "huggingface"
 $Env:PYTHONUTF8 = "1"
 $Env:MIKAZUKI_PORT = "28000"
