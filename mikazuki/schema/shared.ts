@@ -170,7 +170,7 @@
             ]),
 
             Schema.object({
-                optimizer_args_custom: Schema.array(String).role('table').description('自定义 optimizer_args，一行一个'),
+                optimizer_args_custom: Schema.array(String).role('table').description('自定义 optimizer_args，一行一个。同名参数会覆盖默认值（预览中可能显示重复，实际训练以此处为准）'),
             })
         ]),
 
