@@ -63,7 +63,24 @@ def run_tag_editor():
     subprocess.Popen(cmd)
 
 
+def _fix_embedded_triton():
+    """Remove triton-windows from embedded Python — it crashes on import."""
+    if "python_embeded" not in sys.executable and "python_embedded" not in sys.executable:
+        return
+    try:
+        import importlib.util
+        if importlib.util.find_spec("triton") is not None:
+            log.warning("Removing incompatible triton-windows from embedded Python...")
+            subprocess.run(
+                [sys.executable, "-s", "-m", "pip", "uninstall", "triton-windows", "triton", "-y"],
+                capture_output=True, timeout=30,
+            )
+    except Exception:
+        pass
+
+
 def launch():
+    _fix_embedded_triton()
     log.info("Starting SD-Trainer Mikazuki GUI...")
     log.info(f"Base directory: {base_dir_path()}, Working directory: {os.getcwd()}")
     log.info(f"{platform.system()} Python {platform.python_version()} {sys.executable}")

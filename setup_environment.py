@@ -177,15 +177,39 @@ def install_torch(region):
     return _run_pip(args)
 
 
+def _filter_requirements(req_file):
+    """Read requirements.txt, filtering out packages incompatible with embedded Python."""
+    skip_packages = {"triton-windows", "triton"}
+    filtered_path = req_file + ".filtered"
+    with open(req_file, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    with open(filtered_path, "w", encoding="utf-8") as f:
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                pkg_name = stripped.split("<")[0].split(">")[0].split("=")[0].split(";")[0].strip()
+                if pkg_name.lower() in skip_packages:
+                    f.write(f"# [portable skip] {line}")
+                    continue
+            f.write(line)
+    return filtered_path
+
+
 def install_requirements(region):
     cfg = MIRROR_PROFILES[region]
     req_file = os.path.join(_sd_trainer_dir(), "requirements.txt")
-    args = ["install", "-r", req_file, "--no-warn-script-location"]
+    filtered_req = _filter_requirements(req_file)
+    args = ["install", "-r", filtered_req, "--no-warn-script-location"]
     if region == "china" and cfg.get("pip_index_url"):
         args += ["-i", cfg["pip_index_url"]]
         if cfg.get("pip_trusted_host"):
             args += ["--trusted-host", cfg["pip_trusted_host"]]
-    return _run_pip(args)
+    ok = _run_pip(args)
+    try:
+        os.remove(filtered_req)
+    except OSError:
+        pass
+    return ok
 
 
 _FLASH_ATTN_WHEEL = (
