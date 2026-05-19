@@ -180,6 +180,32 @@ def is_installed(package, friendly: str = None):
         return False
 
 
+def _parse_env_marker(line: str):
+    """Split a PEP 508 requirement into (spec, marker_matches).
+
+    Returns (package_spec, True/False) where marker_matches indicates
+    whether the environment marker (if any) matches the current platform.
+    """
+    if ";" not in line:
+        return line, True
+    spec, marker = line.split(";", 1)
+    spec = spec.strip()
+    marker = marker.strip()
+    try:
+        from packaging.markers import Marker
+        return spec, Marker(marker).evaluate()
+    except ImportError:
+        pass
+    if "sys_platform" in marker:
+        if 'win32' in marker:
+            return spec, sys.platform == "win32"
+        if 'linux' in marker:
+            return spec, sys.platform == "linux"
+        if 'darwin' in marker:
+            return spec, sys.platform == "darwin"
+    return spec, True
+
+
 def validate_requirements(requirements_file: str):
     with open(requirements_file, 'r', encoding='utf8') as f:
         lines = [
@@ -198,11 +224,15 @@ def validate_requirements(requirements_file: str):
                 index_url = line.replace("--index-url ", "")
                 continue
 
-            if not is_installed(line):
+            spec, marker_matches = _parse_env_marker(line)
+            if not marker_matches:
+                continue
+
+            if not is_installed(spec):
                 if index_url != "":
-                    run_pip(f"install {line} --index-url {index_url}", line, live=True)
+                    run_pip(f"install \"{spec}\" --index-url {index_url}", spec, live=True)
                 else:
-                    run_pip(f"install {line}", line, live=True)
+                    run_pip(f"install \"{spec}\"", spec, live=True)
 
 
 def setup_windows_bitsandbytes():
