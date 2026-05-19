@@ -19,15 +19,4 @@
 | [@ageless-h](https://github.com/ageless-h) | Anima 训练后端迁移至 kohya-ss/sd-scripts、submodule 自动初始化、LoHa/LoKr schema 扩展、训练日志 URL 输出 | [#2](https://github.com/wochenlong/lora-scripts-next/pull/2) |
 | [@SupermarKleet](https://github.com/SupermarKleet) | 项目封面图设计 | [#1](https://github.com/wochenlong/lora-scripts-next/pull/1) |
 
-## Upstream
-
-本项目基于以下开源项目，感谢原作者的工作：
-
-| 项目 | 作者 | 贡献 |
-|------|------|------|
-| [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) | [@Akegarasu](https://github.com/Akegarasu) | GUI 框架与一键训练体验 |
-| [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) | [@kohya-ss](https://github.com/kohya-ss) | 核心训练后端 |
-| [KohakuBlueleaf/LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) | [@KohakuBlueleaf](https://github.com/KohakuBlueleaf) | LoKr / LoHa 网络模块 |
-| [ControlGenAI/T-LoRA](https://github.com/ControlGenAI/T-LoRA) | AIRI | Timestep-Dependent LoRA |
-
-完整归属信息见 [`NOTICE.md`](NOTICE.md)。
+上游项目与完整归属信息见 [`NOTICE.md`](NOTICE.md)。
