@@ -302,7 +302,10 @@ $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`
 $readme += "Requirements:`r`n"
 $readme += "  - Windows 10/11 64-bit`r`n"
 $readme += "  - NVIDIA GPU (RTX 20-series or newer)`r`n"
-$readme += "  - ~7 GB disk + ~3 GB download on first run`r`n"
+$readme += "  - ~7 GB disk + ~3 GB download on first run`r`n`r`n"
+$readme += "Flash Attention 2:`r`n"
+$readme += "  This portable package does NOT use flash-attn (uses xformers / PyTorch SDPA).`r`n"
+$readme += "  Do not pip install flash-attn into python_embeded. See README in SD-Trainer/.`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $portableDir "README.txt"),
     $readme,

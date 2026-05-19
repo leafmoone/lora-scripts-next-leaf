@@ -42,6 +42,19 @@ First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). C
 
 > **Requirements:** Windows 10/11 64-bit, NVIDIA GPU (RTX 20+), ~7 GB disk space.
 
+#### Portable package: Flash Attention 2 not supported (for now)
+
+The **Windows portable package** (`SD-Trainer-v*.7z`) **does not install Flash Attention 2**; training uses **xformers** or **PyTorch SDPA**. This is intentional, not a failed install.
+
+| Point | Why |
+|-------|-----|
+| **flash-attn needs triton** | Prebuilt `flash-attn` wheels install, but many kernels still run via **Triton** (`flash_attn.ops.triton`). |
+| **Embedded Python + triton** | The portable bundle uses Python Embeddable (`python_embeded\`) without a full toolchain; `triton` / `triton-windows` often fail at JIT compile time. |
+| **Cannot keep flash-attn without triton** | Flash-attn-only installs hit `No module named 'triton'`; `transformers` may still probe `flash_attn` if the package is present. |
+| **What we do** | Skip flash-attn on first setup; on launch, remove broken flash-attn/triton pairs and set `TRANSFORMERS_ATTN_IMPLEMENTATION=sdpa`. |
+
+For Flash Attention 2, use **[install from source](#install-from-source)** and follow **[Flash Attention 2 (source / venv)](#flash-attention-2-source--venv-installs)**. Portable flash-attn support may come later when embed Python + triton is reliable.
+
 ### Install from Source
 
 ```sh
@@ -67,17 +80,90 @@ python gui.py --browser chrome
 python gui.py --browser edge
 ```
 
-#### Flash Attention 2 (existing installs)
+#### Flash Attention 2 (source / venv installs)
 
-New installs get Flash Attention 2 automatically via prebuilt wheels. If you already have an environment and `run_gui.bat` didn't install it, grab the matching wheel manually:
+**Portable users:** see the section above — do not `pip install flash-attn` into `python_embeded`.
 
-```sh
-# Python 3.10 + PyTorch 2.7 + CUDA 12.8 (portable package default)
-pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+This section is for **`git clone` + `venv`** (or a full Python under `python\`), with **PyTorch 2.7.0 + CUDA 12.8** installed.
 
-# Linux / has C++ compiler — build from source also works
-pip install flash-attn --no-build-isolation
+##### What it accelerates
+
+| Training | Flash Attention 2 |
+|----------|---------------------|
+| **Anima / SD3 LoRA** | When the stack self-checks OK, the GUI sets `attn_mode` to `flash` (log: `Anima attn_mode auto-detected: flash`) |
+| **SD 1.5 / SDXL / Flux, etc.** | Uses **xformers** from `requirements.txt`; does not require the flash-attn wheel |
+
+Priority for Anima: `flash` → `xformers` → `torch` (PyTorch SDPA).
+
+##### Requirements
+
+- **Python 3.10** recommended (3.11–3.12 if a matching prebuilt wheel exists)
+- **64-bit venv** — not the portable `python_embeded`
+- **Matching PyTorch:** `torch==2.7.0+cu128`, `torchvision==0.22.0+cu128`
+- **Windows:** install both **`triton-windows`** and **`flash-attn`** (flash-attn imports Triton kernels at runtime)
+
+##### Option 1: Automatic (recommended)
+
+1. Clone the repo and run **`run_gui.bat`** on first launch (`install-cn.ps1` or `install.ps1` creates venv, deps, and tries the flash-attn wheel).
+2. On every launch, `run_gui.ps1` checks `triton` + `flash_attn`; if missing, it installs `triton-windows` then the prebuilt wheel (failure is non-fatal — falls back to xformers / SDPA).
+
+China mirror first-time install:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 ```
+
+International:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+##### Option 2: Manual install (Windows)
+
+Inside an **activated venv**:
+
+```powershell
+.\venv\Scripts\activate
+
+# 1. PyTorch (if not already installed)
+pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+
+# 2. Triton (required on Windows, before flash-attn)
+pip install "triton-windows<3.4"
+
+# 3. Flash Attention 2 prebuilt wheel (Python 3.10 example)
+pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+```
+
+Use `cp311` / `cp312` in the wheel filename if that is your Python version.
+
+##### Option 3: Linux / WSL / AutoDL
+
+```bash
+bash install.bash    # venv + torch/xformers/requirements + optional flash-attn build
+bash run_gui.sh
+```
+
+Building flash-attn from source needs a CUDA toolkit and C++ compiler; on failure, xformers / SDPA is used.
+
+##### Verify installation
+
+```bash
+python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary; print('Flash Attention 2 OK')"
+```
+
+Then run `python gui.py` and start **Anima LoRA** training — logs should show `attn_mode` `flash`.
+
+##### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `No module named 'triton'` | Install `triton-windows<3.4` on Windows, then the flash-attn wheel |
+| Wheel installs but training uses xformers | Run the verify command above; flash-attn without working triton is ignored |
+| Long compile or build errors | On Windows use the **prebuilt wheel** URLs, not `pip install flash-attn` from source |
+| PyTorch not 2.7+cu128 | Align torch with `install.ps1` before installing flash-attn |
+| Installed into portable `python_embeded` | **Unsupported** — use source + venv instead |
 
 ---
 
@@ -85,7 +171,7 @@ pip install flash-attn --no-build-isolation
 
 - **Multi-model** — SD 1.5 / SDXL / Flux / **Anima** all work out of the box
 - **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS) / **T-LoRA**
-- **Flash Attention 2 acceleration** — Auto-detected and enabled when available; falls back to xformers or PyTorch SDPA. Windows uses prebuilt wheels (no C++ compiler needed); portable package installs automatically on first run
+- **Attention backends** — Source/venv: Flash Attention 2 when available (Windows prebuilt wheels). **Portable package:** xformers / PyTorch SDPA only ([flash-attn not supported yet](#portable-package-flash-attention-2-not-supported-for-now))
 - **T-LoRA** — Timestep-Dependent LoRA with dynamic rank and orthogonal init ([paper](https://github.com/ControlGenAI/T-LoRA))
 - **Train Monitor** — Auto-opens with GUI, interactive ECharts Loss chart (zoom / pan / restore), real-time progress and preview samples
 - **Built-in TensorBoard** — Accessible from the sidebar, no extra setup

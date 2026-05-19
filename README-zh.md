@@ -42,6 +42,19 @@
 
 > **系统要求：** Windows 10/11 64 位，NVIDIA 显卡（RTX 20 系列以上），~7 GB 硬盘空间。
 
+#### 整合包暂不支持 Flash Attention 2（说明）
+
+**当前 Windows 整合包（`SD-Trainer-v*.7z`）不会安装 Flash Attention 2，训练使用 xformers 或 PyTorch SDPA。** 这与「装不上」无关，而是便携包运行方式下的**刻意取舍**。
+
+| 点 | 说明 |
+|----|------|
+| **flash-attn 依赖 triton** | 预编译的 `flash-attn` wheel 能装进环境，但运行时大量算子仍通过 `flash_attn.ops.triton` 调用 **Triton** 生成的 CUDA kernel。 |
+| **嵌入式 Python 跑不好 triton** | 整合包使用 Python Embeddable（`python_embeded\`），缺少完整编译链；`triton` / `triton-windows` 常在首次 JIT 时失败，导致启动或训练崩溃。 |
+| **不能只卸 triton、保留 flash-attn** | 若只安装 `flash-attn` 而不装 `triton`，import 时会报 `No module named 'triton'`；`transformers` 等库探测到已安装的 `flash_attn` 也可能仍尝试走 flash 路径。 |
+| **整合包实际策略** | 首次安装跳过 flash-attn；若用户手动 `pip install` 了不完整的组合，启动时会自动卸载 flash-attn / triton，并设置 `TRANSFORMERS_ATTN_IMPLEMENTATION=sdpa`。 |
+
+**需要 Flash Attention 2 时：** 请使用下方「[从源码安装](#从源码安装)」并按 **[Flash Attention 2（源码 / venv 用户）](#flash-attention-2源码--venv-用户)** 配置；整合包在 embed Python 支持成熟前**暂不承诺** flash-attn 加速。
+
 ### 从源码安装
 
 ```sh
@@ -79,19 +92,92 @@ python gui.py --browser chrome
 python gui.py --browser edge
 ```
 
-#### Flash Attention 2（已有环境的用户）
+#### Flash Attention 2（源码 / venv 用户）
 
-新安装会通过预编译 wheel 自动安装 Flash Attention 2。如果你已有环境且 `run_gui.bat` 未自动安装，可手动安装对应的 wheel：
+**整合包用户请看上节，不要对 `python_embeded` 手动安装 flash-attn。**
 
-```sh
-# Python 3.10 + PyTorch 2.7 + CUDA 12.8（整合包默认环境）
-pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
-# 国内镜像
-pip install https://hf-mirror.com/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+本节适用于：`git clone` 后使用 **`venv`**（或 `python\` 目录下的完整 Python），且已安装 **PyTorch 2.7.0 + CUDA 12.8** 的源码用户。
 
-# Linux / 有 C++ 编译器 — 也可以从源码编译
-pip install flash-attn --no-build-isolation
+##### 作用范围
+
+| 训练类型 | Flash Attention 2 |
+|----------|---------------------|
+| **Anima / SD3 LoRA** | 安装成功且自检通过后，GUI 会自动将 `attn_mode` 设为 `flash`（日志：`Anima attn_mode auto-detected: flash`） |
+| **SD 1.5 / SDXL / Flux 等** | 主要使用 **xformers**（`requirements.txt` 已包含）；不依赖 flash-attn wheel |
+
+后端优先级（Anima）：`flash` → `xformers` → `torch`（PyTorch SDPA）。
+
+##### 环境要求
+
+- **Python 3.10**（推荐；3.11–3.12 若存在对应预编译 wheel 也可尝试）
+- **64 位** 自建 `venv`，**不要**使用整合包内的 `python_embeded`
+- **PyTorch / CUDA** 须与 wheel 匹配：`torch==2.7.0+cu128`、`torchvision==0.22.0+cu128`
+- **Windows** 须同时安装 **`triton-windows`** 与 **`flash-attn`**（flash-attn 运行时依赖 Triton kernel）
+
+##### 方式一：自动安装（推荐）
+
+1. 克隆仓库并进入目录，首次运行 **`run_gui.bat`**（会执行 `install-cn.ps1` 或 `install.ps1` 创建 venv、安装依赖，并尝试安装 flash-attn wheel）。
+2. 之后每次启动时，`run_gui.ps1` 会检测 `triton` + `flash_attn` 是否可用；若缺失，会先装 `triton-windows`，再装预编译 wheel（失败则回退到 xformers / SDPA，不影响训练）。
+
+国内用户首次安装依赖可用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 ```
+
+国际用户：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+##### 方式二：手动安装（Windows）
+
+在**已激活的 venv** 中执行（版本须与项目一致）：
+
+```powershell
+.\venv\Scripts\activate
+
+# 1. PyTorch（若尚未安装）
+pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+
+# 2. Triton（Windows 必装，且须先于 flash-attn）
+pip install "triton-windows<3.4"
+
+# 3. Flash Attention 2 预编译 wheel（Python 3.10 示例）
+pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+# 国内镜像（将 cp310 改为 cp311 / cp312 若你使用对应 Python 版本）
+pip install https://hf-mirror.com/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%2Bcu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl
+```
+
+##### 方式三：Linux / WSL / AutoDL
+
+```bash
+bash install.bash    # 创建 venv、安装 torch/xformers/requirements，并尝试 pip install flash-attn --no-build-isolation
+bash run_gui.sh
+```
+
+从源码编译 flash-attn 需要 CUDA 工具链与 C++ 编译器；失败时仍会使用 xformers / SDPA。
+
+##### 验证是否安装成功
+
+在**同一 venv** 中运行：
+
+```bash
+python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary; print('Flash Attention 2 OK')"
+```
+
+无报错即表示栈完整。然后启动 `python gui.py`，训练 **Anima LoRA** 时在控制台或日志中应看到 `attn_mode` 为 `flash`。
+
+##### 常见问题
+
+| 现象 | 处理 |
+|------|------|
+| `No module named 'triton'` | 先 `pip install "triton-windows<3.4"`（Windows），再装 flash-attn wheel |
+| wheel 安装成功但训练仍用 xformers | 运行上方验证命令；若失败说明 triton 与 flash-attn 未配对，勿只保留 flash-attn |
+| `pip install flash-attn` 编译很久或失败 | Windows 请改用 **预编译 wheel**（上表 URL），不要在本机编译 |
+| PyTorch 版本不是 2.7+cu128 | wheel 与 CUDA 标签不匹配，请对齐 `install.ps1` 中的 torch 版本后再装 flash-attn |
+| 在整合包 `python_embeded` 里安装 | **不支持**，请改用源码 + venv |
 
 ---
 
@@ -99,7 +185,7 @@ pip install flash-attn --no-build-isolation
 
 - **多模型支持** — SD 1.5 / SDXL / Flux / **Anima** 全部开箱即用
 - **Anima LoRA 训练** — 侧边栏一键进入，支持 LoRA / LoKr（LyCORIS）/ **T-LoRA**
-- **Flash Attention 2 训练加速** — 自动检测并启用最优 Attention 后端（优先 Flash Attention 2，其次 xformers，最后 PyTorch SDPA）。Windows 使用预编译 wheel（无需 C++ 编译器）；整合包首次安装时自动安装
+- **Attention 加速** — 自动选择后端：源码/venv 环境优先 Flash Attention 2（Windows 预编译 wheel）；**整合包**使用 xformers / PyTorch SDPA（[暂不支持 flash-attn](#整合包暂不支持-flash-attention-2说明)）
 - **T-LoRA** — 基于扩散时间步的动态 Rank LoRA，正交初始化，防止过拟合（[论文](https://github.com/ControlGenAI/T-LoRA)）
 - **训练监控页** — 随 GUI 自动启动，ECharts 交互式 Loss 图表（滚轮缩放 / 拖拽平移 / 一键复位），实时进度和预览图
 - **TensorBoard 内置** — 侧边栏直接查看，无需额外操作
