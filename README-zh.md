@@ -152,4 +152,16 @@ pip install flash-attn --no-build-isolation
 
 ---
 
+## 贡献者
+
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/wochenlong"><img src="https://github.com/wochenlong.png" width="80" /><br /><sub><b>wochenlong</b></sub></a><br /><sub>项目负责人</sub></td>
+    <td align="center"><a href="https://github.com/ageless-h"><img src="https://github.com/ageless-h.png" width="80" /><br /><sub><b>ageless-h</b></sub></a><br /><sub>后端开发</sub></td>
+    <td align="center"><a href="https://github.com/SupermarKleet"><img src="https://github.com/SupermarKleet.png" width="80" /><br /><sub><b>SupermarKleet</b></sub></a><br /><sub>UI 设计</sub></td>
+  </tr>
+</table>
+
+---
+
 <p align="center"><sub>维护者：<b>@wochenlong</b></sub></p>
