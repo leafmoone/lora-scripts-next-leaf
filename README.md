@@ -152,13 +152,7 @@ Full attribution in [`NOTICE.md`](NOTICE.md).
 
 ## Contributors
 
-<table>
-  <tr>
-    <td align="center"><a href="https://github.com/wochenlong"><img src="https://github.com/wochenlong.png" width="80" /><br /><sub><b>wochenlong</b></sub></a><br /><sub>Project Lead</sub></td>
-    <td align="center"><a href="https://github.com/ageless-h"><img src="https://github.com/ageless-h.png" width="80" /><br /><sub><b>ageless-h</b></sub></a><br /><sub>Backend</sub></td>
-    <td align="center"><a href="https://github.com/SupermarKleet"><img src="https://github.com/SupermarKleet.png" width="80" /><br /><sub><b>SupermarKleet</b></sub></a><br /><sub>UI Design</sub></td>
-  </tr>
-</table>
+See [**CONTRIBUTORS.md**](CONTRIBUTORS.md) for the full list of contributors and upstream credits.
 
 ---
 
