@@ -1,7 +1,7 @@
 [metadata]
 name = "Chroma LoRA 训练"
 version = "1.0"
-author = "秋叶"
+author = "wochenlong"
 train_type = "flux-lora"
 description = "这是一个样例模板，用于使用 Chroma LoRA 训练。"
 

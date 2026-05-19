@@ -1,5 +1,5 @@
 #!/bin/bash
-# LoRA train script by @Akegarasu
+# LoRA train script by @wochenlong (forked from @Akegarasu)
 
 # Train data path | 设置训练用模型、图片
 pretrained_model="./sd-models/model.ckpt" # base model path | 底模路径

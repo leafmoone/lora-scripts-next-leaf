@@ -1,5 +1,5 @@
 #!/bin/bash
-# LoRA train script by @Akegarasu
+# LoRA train script by @wochenlong (forked from @Akegarasu)
 
 config_file="./config/default.toml"          # config file | 使用 toml 文件指定训练参数
 sample_prompts="./config/sample_prompts.txt" # prompt file for sample | 采样 prompts 文件, 留空则不启用采样功能
