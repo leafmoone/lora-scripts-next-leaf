@@ -1,9 +1,11 @@
 import asyncio
 import hashlib
 import json
+import math
 import os
 import re
 import random
+import sys
 
 from glob import glob
 from datetime import datetime
@@ -122,6 +124,27 @@ def normalize_custom_args(config: dict) -> None:
         config.pop(custom_key, None)
 
 
+def _is_invalid_value(value) -> bool:
+    """Check if a value is invalid and should be stripped before writing TOML."""
+    if value is None:
+        return True
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return True
+    if isinstance(value, str) and value.strip().lower() in {"", "undefined", "null", "nan"}:
+        return True
+    return False
+
+
+def sanitize_config(config: dict) -> None:
+    """Remove all invalid/empty values from config before writing TOML."""
+    keys_to_remove = [k for k, v in config.items() if _is_invalid_value(v)]
+    for k in keys_to_remove:
+        del config[k]
+    for key in ("network_args", "optimizer_args"):
+        if isinstance(config.get(key), list):
+            config[key] = _normalize_kv_arg_list(config[key])
+
+
 async def load_schemas():
     avaliable_schemas.clear()
 
@@ -229,6 +252,8 @@ def _detect_best_attn_mode() -> str:
     """Auto-detect the best available attention backend for Anima training."""
     try:
         import flash_attn  # noqa: F401
+        if sys.platform == "win32":
+            import triton  # noqa: F401
         return "flash"
     except ImportError:
         pass
@@ -311,6 +336,7 @@ async def create_toml_file(request: Request):
             return APIResponseFail(message=str(e))
 
     apply_anima_training_defaults(config, model_train_type)
+    sanitize_config(config)
 
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
