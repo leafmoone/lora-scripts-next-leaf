@@ -141,7 +141,7 @@ Write-Host "  Done" -ForegroundColor Green
 Write-Host ""
 Write-Host "[3/5] Creating launcher scripts..." -ForegroundColor Cyan
 
-# run_gui.bat — with logging so users can report crashes
+# run_gui.bat — flat goto structure, no BOM
 $batContent = "@echo off`r`n"
 $batContent += "chcp 65001 >nul 2>&1`r`n"
 $batContent += "title SD-Trainer`r`n"
@@ -162,39 +162,29 @@ $batContent += "echo ============================================ >> `"%LOG_FILE
 $batContent += "echo. >> `"%LOG_FILE%`"`r`n"
 $batContent += "`r`n"
 $batContent += ":: Check python exists`r`n"
-$batContent += "if not exist `"%PYTHON_EXE%`" (`r`n"
-$batContent += "    echo.`r`n"
-$batContent += "    echo  [ERROR] python_embeded\python.exe not found`r`n"
-$batContent += "    echo  Please make sure the package is fully extracted.`r`n"
-$batContent += "    echo.`r`n"
-$batContent += "    echo  [ERROR] python_embeded\python.exe not found >> `"%LOG_FILE%`"`r`n"
-$batContent += "    echo  BASE_DIR: %BASE_DIR% >> `"%LOG_FILE%`"`r`n"
-$batContent += "    goto :fail`r`n"
-$batContent += ")`r`n"
+$batContent += "if not exist `"%PYTHON_EXE%`" goto :no_python`r`n"
 $batContent += "`r`n"
 $batContent += ":: First run: install dependencies`r`n"
-$batContent += "if not exist `"%BASE_DIR%python_embeded\Lib\site-packages\torch`" (`r`n"
-$batContent += "    echo.`r`n"
-$batContent += "    echo  [First Run] Installing dependencies, please keep network connected...`r`n"
-$batContent += "    echo.`r`n"
-$batContent += "    echo [setup] Starting setup_environment.py >> `"%LOG_FILE%`"`r`n"
-$batContent += "    `"%PYTHON_EXE%`" -s `"%BASE_DIR%SD-Trainer\setup_environment.py`" 2>&1 | findstr /v /r `"^^$`" >> `"%LOG_FILE%`"`r`n"
-$batContent += "    if errorlevel 1 (`r`n"
-$batContent += "        echo.`r`n"
-$batContent += "        echo  Setup failed. Check log: %LOG_FILE%`r`n"
-$batContent += "        echo [setup] FAILED with errorlevel %errorlevel% >> `"%LOG_FILE%`"`r`n"
-$batContent += "        goto :fail`r`n"
-$batContent += "    )`r`n"
-$batContent += "    echo [setup] OK >> `"%LOG_FILE%`"`r`n"
-$batContent += ")`r`n"
+$batContent += "if not exist `"%BASE_DIR%python_embeded\Lib\site-packages\torch`" goto :first_run`r`n"
+$batContent += "goto :launch`r`n"
 $batContent += "`r`n"
-$batContent += ":: Set working directory to project root`r`n"
-$batContent += "cd /d `"%BASE_DIR%SD-Trainer`"`r`n"
+$batContent += ":first_run`r`n"
+$batContent += "echo.`r`n"
+$batContent += "echo  [First Run] Installing dependencies, please keep network connected...`r`n"
+$batContent += "echo.`r`n"
+$batContent += "echo [setup] Starting setup_environment.py >> `"%LOG_FILE%`"`r`n"
+$batContent += "`"%PYTHON_EXE%`" -s `"%BASE_DIR%SD-Trainer\setup_environment.py`" 2>> `"%LOG_FILE%`"`r`n"
 $batContent += "if errorlevel 1 (`r`n"
-$batContent += "    echo  [ERROR] Cannot cd to %BASE_DIR%SD-Trainer`r`n"
-$batContent += "    echo  [ERROR] Cannot cd to %BASE_DIR%SD-Trainer >> `"%LOG_FILE%`"`r`n"
+$batContent += "    echo [setup] FAILED >> `"%LOG_FILE%`"`r`n"
+$batContent += "    echo.`r`n"
+$batContent += "    echo  Setup failed. Check log: %LOG_FILE%`r`n"
 $batContent += "    goto :fail`r`n"
 $batContent += ")`r`n"
+$batContent += "echo [setup] OK >> `"%LOG_FILE%`"`r`n"
+$batContent += "`r`n"
+$batContent += ":launch`r`n"
+$batContent += "cd /d `"%BASE_DIR%SD-Trainer`"`r`n"
+$batContent += "if errorlevel 1 goto :no_project`r`n"
 $batContent += "`r`n"
 $batContent += "echo [launch] Starting gui.py >> `"%LOG_FILE%`"`r`n"
 $batContent += "echo.`r`n"
@@ -208,21 +198,36 @@ $batContent += "`r`n"
 $batContent += "if %EXIT_CODE% neq 0 (`r`n"
 $batContent += "    echo.`r`n"
 $batContent += "    echo  ============================================`r`n"
-$batContent += "    echo   SD-Trainer exited abnormally (code: %EXIT_CODE%)`r`n"
-$batContent += "    echo   Log file: %LOG_FILE%`r`n"
-$batContent += "    echo   Please send this log file when reporting bugs.`r`n"
+$batContent += "    echo   SD-Trainer exited abnormally [code: %EXIT_CODE%]`r`n"
+$batContent += "    echo   Log: %LOG_FILE%`r`n"
+$batContent += "    echo   Please send this log when reporting bugs.`r`n"
 $batContent += "    echo  ============================================`r`n"
 $batContent += "    echo.`r`n"
 $batContent += ")`r`n"
 $batContent += "pause`r`n"
 $batContent += "exit /b %EXIT_CODE%`r`n"
 $batContent += "`r`n"
+$batContent += ":no_python`r`n"
+$batContent += "echo.`r`n"
+$batContent += "echo  [ERROR] python_embeded\python.exe not found!`r`n"
+$batContent += "echo  Please make sure the package is fully extracted.`r`n"
+$batContent += "echo.`r`n"
+$batContent += "echo [ERROR] python_embeded\python.exe not found >> `"%LOG_FILE%`"`r`n"
+$batContent += "goto :fail`r`n"
+$batContent += "`r`n"
+$batContent += ":no_project`r`n"
+$batContent += "echo.`r`n"
+$batContent += "echo  [ERROR] SD-Trainer folder not found!`r`n"
+$batContent += "echo.`r`n"
+$batContent += "echo [ERROR] Cannot cd to %BASE_DIR%SD-Trainer >> `"%LOG_FILE%`"`r`n"
+$batContent += "goto :fail`r`n"
+$batContent += "`r`n"
 $batContent += ":fail`r`n"
 $batContent += "echo.`r`n"
 $batContent += "echo  ============================================`r`n"
 $batContent += "echo   SD-Trainer failed to start.`r`n"
-$batContent += "echo   Log file: %LOG_FILE%`r`n"
-$batContent += "echo   Please send this log file when reporting bugs.`r`n"
+$batContent += "echo   Log: %LOG_FILE%`r`n"
+$batContent += "echo   Please send this log when reporting bugs.`r`n"
 $batContent += "echo  ============================================`r`n"
 $batContent += "echo.`r`n"
 $batContent += "pause`r`n"
@@ -230,7 +235,7 @@ $batContent += "exit /b 1`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $portableDir "run_gui.bat"),
     $batContent,
-    [System.Text.Encoding]::UTF8
+    (New-Object System.Text.UTF8Encoding $false)
 )
 Write-Host "  Created run_gui.bat"
 
@@ -243,7 +248,7 @@ $updateBat += "echo Updating SD-Trainer...`r`ngit pull`r`necho Done.`r`npause`r`
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_sd_trainer.bat"),
     $updateBat,
-    [System.Text.Encoding]::UTF8
+    (New-Object System.Text.UTF8Encoding $false)
 )
 
 $updateDepsBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ncd /d `"%~dp0..`"`r`n"
@@ -254,7 +259,7 @@ $updateDepsBat += "echo Done.`r`npause`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_dependencies.bat"),
     $updateDepsBat,
-    [System.Text.Encoding]::UTF8
+    (New-Object System.Text.UTF8Encoding $false)
 )
 Write-Host "  Created update/ scripts"
 
