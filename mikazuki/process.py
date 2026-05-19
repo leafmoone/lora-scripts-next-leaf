@@ -9,6 +9,7 @@ from mikazuki.app.models import APIResponse
 from mikazuki.log import log
 from mikazuki.tasks import tm
 from mikazuki.launch_utils import base_dir_path
+from mikazuki.portable_utils import train_env_overrides
 
 
 def _truthy_env(name: str) -> bool:
@@ -71,6 +72,7 @@ def run_train(toml_path: str,
     ]
 
     customize_env = os.environ.copy()
+    customize_env.update(train_env_overrides())
     customize_env["ACCELERATE_DISABLE_RICH"] = "1"
     customize_env["PYTHONUNBUFFERED"] = "1"
     customize_env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::UserWarning"

@@ -4,6 +4,16 @@
 
 ---
 
+## v2.2.1 — 2026-05-19
+
+### 整合包（治本）
+
+- **便携包不再安装 flash-attn**：嵌入式 Python 无法可靠运行 `triton`，预编译 `flash-attn` 仍会在 import 时依赖 `triton`，导致 `transformers` 加载 CLIP 失败。
+- **启动时自动卸载**已装但不可用的 `flash-attn` / `triton`；训练使用 **xformers** 或 **PyTorch SDPA**。
+- 训练子进程设置 `TRANSFORMERS_ATTN_IMPLEMENTATION=sdpa`，避免 `transformers` 探测 flash 路径。
+
+---
+
 ## v2.2.0 — 2026-05-19
 
 ### 整合包与启动

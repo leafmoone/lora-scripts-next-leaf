@@ -28,6 +28,7 @@ from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
 from mikazuki.utils import train_utils
 from mikazuki.utils.devices import printable_devices
+from mikazuki.portable_utils import flash_attn_stack_usable, is_embedded_python
 from mikazuki.utils.tk_window import (open_directory_selector,
                                       open_file_selector)
 
@@ -250,13 +251,8 @@ def is_preview_enabled(config: dict) -> bool:
 
 def _detect_best_attn_mode() -> str:
     """Auto-detect the best available attention backend for Anima training."""
-    try:
-        import flash_attn  # noqa: F401
-        if sys.platform == "win32":
-            import triton  # noqa: F401
+    if not is_embedded_python() and flash_attn_stack_usable():
         return "flash"
-    except ImportError:
-        pass
     try:
         import xformers  # noqa: F401
         return "xformers"

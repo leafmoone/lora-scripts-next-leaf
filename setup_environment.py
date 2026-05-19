@@ -228,8 +228,19 @@ _FLASH_ATTN_WHEEL_URLS = {
 }
 
 
+def _is_embedded_portable():
+    exe = _python_exe().replace("\\", "/").lower()
+    return "python_embeded" in exe or "python_embedded" in exe
+
+
 def install_flash_attn(region):
-    """Install flash-attn from prebuilt wheel. Non-fatal on failure."""
+    """Install flash-attn from prebuilt wheel. Non-fatal on failure.
+
+    Skipped on embedded portable Python: prebuilt flash-attn still imports triton
+    kernels at runtime, but triton cannot compile on embedded Python (no dev headers).
+    """
+    if _is_embedded_portable():
+        return False
     url = _FLASH_ATTN_WHEEL_URLS.get(region, _FLASH_ATTN_WHEEL_URLS["global"])
     args = ["install", url, "--no-warn-script-location"]
     return _run_pip(args)
@@ -327,11 +338,13 @@ def main():
         return 1
     _ok("训练组件安装完成")
 
-    # 5 — flash-attn (optional acceleration)
+    # 5 — flash-attn (optional acceleration; skipped on embedded portable)
     _separator()
     _step(5, "安装 Flash Attention 2 训练加速 (可选)...")
     print()
-    if install_flash_attn(region):
+    if _is_embedded_portable():
+        print("  >>> 便携包跳过 Flash Attention 2（使用 xformers / PyTorch SDPA，避免 triton 依赖）")
+    elif install_flash_attn(region):
         _ok("Flash Attention 2 安装成功，训练将自动启用加速")
     else:
         print("  >>> Flash Attention 2 安装失败（不影响训练，将使用 PyTorch SDPA）")

@@ -8,6 +8,7 @@ import sys
 from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
                                    prepare_environment, check_port_avaliable, find_avaliable_ports)
 from mikazuki.log import log
+from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
 
 parser = argparse.ArgumentParser(description="GUI for stable diffusion training")
 parser.add_argument("--host", type=str, default="127.0.0.1")
@@ -63,24 +64,10 @@ def run_tag_editor():
     subprocess.Popen(cmd)
 
 
-def _fix_embedded_triton():
-    """Remove triton-windows from embedded Python — it crashes on import."""
-    if "python_embeded" not in sys.executable and "python_embedded" not in sys.executable:
-        return
-    try:
-        import importlib.util
-        if importlib.util.find_spec("triton") is not None:
-            log.warning("Removing incompatible triton-windows from embedded Python...")
-            subprocess.run(
-                [sys.executable, "-s", "-m", "pip", "uninstall", "triton-windows", "triton", "-y"],
-                capture_output=True, timeout=30,
-            )
-    except Exception:
-        pass
-
-
 def launch():
-    _fix_embedded_triton()
+    sanitize_embedded_deps(log.warning)
+    for key, value in train_env_overrides().items():
+        os.environ.setdefault(key, value)
     log.info("Starting SD-Trainer Mikazuki GUI...")
     log.info(f"Base directory: {base_dir_path()}, Working directory: {os.getcwd()}")
     log.info(f"{platform.system()} Python {platform.python_version()} {sys.executable}")
