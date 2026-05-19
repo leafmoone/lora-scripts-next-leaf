@@ -590,6 +590,8 @@ def render_page(status: dict) -> bytes:
     * {{ box-sizing:border-box; }}
     body {{ margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
     header {{ padding:16px 20px; border-bottom:1px solid var(--line); background:#0f172a; display:flex; justify-content:space-between; gap:12px; align-items:center; }}
+    .header-brand {{ display:flex; align-items:center; gap:12px; }}
+    .header-brand img {{ width:40px; height:40px; border-radius:10px; object-fit:cover; }}
     h1 {{ margin:0; font-size:18px; }}
     .muted {{ color:var(--muted); font-size:12px; }}
     main {{ padding:18px; display:grid; gap:18px; }}
@@ -661,7 +663,10 @@ def render_page(status: dict) -> bytes:
 </head>
 <body>
   <header>
-    <div><h1>训练监控</h1><div class="muted">端口 6008，每 2 秒自动更新</div></div>
+    <div class="header-brand">
+      <img src="/assets/logo.png" alt="SD-Trainer" width="40" height="40">
+      <div><h1>训练监控</h1><div class="muted">端口 6008，每 2 秒自动更新</div></div>
+    </div>
     <div class="muted" id="updatedAt">{html.escape(status.get("time", ""))}</div>
   </header>
   <main>
@@ -1335,6 +1340,20 @@ class Handler(BaseHTTPRequestHandler):
                 payload = ico_path.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "image/x-icon")
+                self.send_header("Cache-Control", "max-age=86400")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            else:
+                self.send_error(404)
+            return
+
+        if parsed.path == "/assets/logo.png":
+            logo_path = REPO / "assets" / "logo.png"
+            if logo_path.is_file():
+                payload = logo_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
                 self.send_header("Cache-Control", "max-age=86400")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()

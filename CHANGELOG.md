@@ -4,6 +4,22 @@
 
 ---
 
+## v2.2.0 — 2026-05-19
+
+### 整合包与启动
+
+- **triton-windows**：便携包嵌入式 Python 不再安装/保留 `triton-windows`，修复整合包启动或训练时因 triton 编译失败导致的崩溃（[#14](https://github.com/wochenlong/lora-scripts-next/issues/14)）。
+- **run_gui.bat**：增加 `sd-trainer-log.txt` 启动日志；失败时明确提示日志路径，避免闪退后无法排查。
+- **requirements.txt**：修复 PEP 508 环境标记在 `launch_utils` 中的解析（[#13](https://github.com/wochenlong/lora-scripts-next/issues/13)）。
+
+### 训练监控与 UI
+
+- **跨盘 output_dir**：监控页（6008）在输出目录位于其他盘符时不再断联（[#12](https://github.com/wochenlong/lora-scripts-next/issues/12)）。
+- **品牌**：前端作者/链接改为本项目；临时 logo 与 favicon；监控页页头显示 logo。
+- **CONTRIBUTORS.md**：贡献者单独文档；README 精简致谢链接。
+
+---
+
 ## v2.1 — 2026-05-09
 
 ### 训练监控页（端口 6008）
