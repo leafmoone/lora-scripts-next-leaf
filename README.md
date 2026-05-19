@@ -30,7 +30,7 @@
 
 ### Windows Portable Package (recommended for beginners)
 
-Download **`SD-Trainer-v2.2.0.7z`** (~15 MB) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
+Download **`SD-Trainer-v2.2.0.7z`** (~55 MB, includes embedded Python) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
 
 First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). Chinese users get mirror acceleration automatically.
 

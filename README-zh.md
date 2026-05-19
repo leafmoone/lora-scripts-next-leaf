@@ -30,7 +30,7 @@
 
 ### Windows 整合包（推荐小白用户）
 
-从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.2.0.7z`**（~15 MB），解压后双击 `run_gui.bat` 即可启动。
+从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.2.0.7z`**（~55 MB，含嵌入式 Python），解压后双击 `run_gui.bat` 即可启动。
 
 首次启动会自动安装 PyTorch + CUDA + 所有依赖（~3 GB 下载），国内用户自动走阿里云/清华镜像加速。
 
