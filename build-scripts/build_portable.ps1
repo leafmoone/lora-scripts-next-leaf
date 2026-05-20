@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
-    [string]$Version     = "2.2.0",
+    [string]$Version     = "2.3.0",
     [string]$PythonVer   = "3.10.11",
     [switch]$Clean,
     [switch]$Skip7z
@@ -110,7 +110,8 @@ $copyFiles = @(
 
 $excludeDirs = @(
     ".git", "__pycache__", ".vscode", ".idea",
-    "node_modules", ".sisyphus", ".playwright-mcp", ".tmp"
+    "node_modules", ".sisyphus", ".playwright-mcp", ".tmp",
+    "anima_lora"
 )
 
 foreach ($dir in $copyDirs) {

@@ -30,7 +30,7 @@
 
 ### Windows Portable Package (recommended for beginners)
 
-Download **`SD-Trainer-v2.2.0.7z`** (~55 MB, includes embedded Python) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
+Download **`SD-Trainer-v2.3.0.7z`** (~55 MB, includes embedded Python) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
 
 First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). Chinese users get mirror acceleration automatically.
 
@@ -173,7 +173,7 @@ Then run `python gui.py` and start **Anima LoRA** training — logs should show 
 - **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS) / **T-LoRA**
 - **Attention backends** — Source/venv: Flash Attention 2 when available (Windows prebuilt wheels). **Portable package:** xformers / PyTorch SDPA only ([flash-attn not supported yet](#portable-package-flash-attention-2-not-supported-for-now))
 - **T-LoRA** — Timestep-Dependent LoRA with dynamic rank and orthogonal init ([paper](https://github.com/ControlGenAI/T-LoRA))
-- **Train Monitor** — Auto-opens with GUI, interactive ECharts Loss chart (zoom / pan / restore), real-time progress and preview samples
+- **Train Monitor** — Auto-opens with GUI, TensorBoard-backed Loss / LR scalar cards, key training parameter checks, real-time progress, terminal log echo, and preview samples
 - **Built-in TensorBoard** — Accessible from the sidebar, no extra setup
 - **GPU detection** — Detects NVIDIA / AMD GPUs on first run; AMD users get a friendly notice with ROCm guidance
 - **AutoDL ready** — Dedicated startup script `start_autodl.sh`
@@ -211,6 +211,7 @@ Then run `python gui.py` and start **Anima LoRA** training — logs should show 
 
 | Date | Update |
 |------|--------|
+| 2026-05-20 | **v2.3.0** — Train Monitor upgrade: TensorBoard-backed Loss/LR cards, key parameter quick check, safer port fallback, terminal log echo, quieter monitor backend |
 | 2026-05-19 | **v2.2.0** — Portable flash-attn/triton fix, run_gui.bat execution policy + crash logging, cross-drive monitor, branding/logo, CONTRIBUTORS.md |
 | 2026-05-19 | **v2.1.0** — Flash Attention 2 prebuilt wheels for Windows (no C++ compiler needed), save-by-steps option, fix LoKr conv_dim/conv_alpha undefined bug |
 | 2026-05-18 | **v2.0.0** — Portable package, Flash Attention 2 auto-acceleration, AMD GPU detection, auto bf16/fp16 fix, `--browser chrome/edge`, vendor sd-scripts, update check |

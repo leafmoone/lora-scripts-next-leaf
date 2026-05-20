@@ -30,7 +30,7 @@
 
 ### Windows 整合包（推荐小白用户）
 
-从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.2.0.7z`**（~55 MB，含嵌入式 Python），解压后双击 `run_gui.bat` 即可启动。
+从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.3.0.7z`**（~55 MB，含嵌入式 Python），解压后双击 `run_gui.bat` 即可启动。
 
 首次启动会自动安装 PyTorch + CUDA + 所有依赖（~3 GB 下载），国内用户自动走阿里云/清华镜像加速。
 
@@ -81,7 +81,7 @@ cd lora-scripts-next
 | 临时绕过 | 在 PowerShell 中：`powershell -ExecutionPolicy Bypass -File .\run_gui.ps1` |
 | 长期放宽（可选） | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`（仅影响当前用户） |
 
-解压后若路径出现 `...\lora-scripts-next-2.2.0\lora-scripts-next-2.2.0\`，说明多解压了一层，请进入**内层**含 `run_gui.bat` 的目录再启动。
+解压后若路径出现 `...\lora-scripts-next-2.3.0\lora-scripts-next-2.3.0\`，说明多解压了一层，请进入**内层**含 `run_gui.bat` 的目录再启动。
 
 #### 指定浏览器
 
@@ -187,7 +187,7 @@ python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary i
 - **Anima LoRA 训练** — 侧边栏一键进入，支持 LoRA / LoKr（LyCORIS）/ **T-LoRA**
 - **Attention 加速** — 自动选择后端：源码/venv 环境优先 Flash Attention 2（Windows 预编译 wheel）；**整合包**使用 xformers / PyTorch SDPA（[暂不支持 flash-attn](#整合包暂不支持-flash-attention-2说明)）
 - **T-LoRA** — 基于扩散时间步的动态 Rank LoRA，正交初始化，防止过拟合（[论文](https://github.com/ControlGenAI/T-LoRA)）
-- **训练监控页** — 随 GUI 自动启动，ECharts 交互式 Loss 图表（滚轮缩放 / 拖拽平移 / 一键复位），实时进度和预览图
+- **训练监控页** — 随 GUI 自动启动，展示 TensorBoard 同源 Loss / LR 曲线、关键训练参数速查、实时进度、终端日志同步和预览图
 - **TensorBoard 内置** — 侧边栏直接查看，无需额外操作
 - **显卡检测** — 首次安装自动检测 NVIDIA / AMD 显卡，AMD 用户会收到友好提示及 ROCm 方案指引
 - **AutoDL 适配** — 提供专用启动脚本 `start_autodl.sh`
@@ -225,6 +225,7 @@ python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary i
 
 | 日期 | 内容 |
 |------|------|
+| 2026-05-20 | **v2.3.0** — 训练监控体验升级：TensorBoard 同源 Loss/LR 四宫格、关键参数速查、端口冲突自动回退、终端日志同步、后台轮询日志静默 |
 | 2026-05-19 | **v2.2.0** — 整合包 flash-attn/triton 治本、run_gui.bat 执行策略与闪退日志、跨盘训练监控、品牌/logo、CONTRIBUTORS.md |
 | 2026-05-19 | **v2.1.0** — Flash Attention 2 Windows 预编译 wheel（无需 C++ 编译器）、按步数保存模型、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug |
 | 2026-05-18 | **v2.0.0** — 整合包发布、Flash Attention 2 自动加速、AMD 显卡检测、自动修复 bf16/fp16 精度问题、`--browser chrome/edge` 指定浏览器、移除子模块改为直接包含 sd-scripts、启动时自动检查更新 |
