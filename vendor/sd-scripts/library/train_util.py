@@ -5226,6 +5226,16 @@ def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
         optimizer_class = transformers.optimization.Adafactor
         optimizer = optimizer_class(trainable_params, lr=lr, **optimizer_kwargs)
 
+    elif optimizer_type == "Automagic".lower():
+        try:
+            from library.optimizers.automagic import Automagic
+        except ImportError:
+            raise ImportError("Automagic optimizer requires 'optimum-quanto'. Run: pip install optimum-quanto")
+        logger.info(f"use Automagic optimizer (ostris/ai-toolkit, MIT) | {optimizer_kwargs}")
+        optimizer_class = Automagic
+        # Automagic manages its own lr; pass lr as the starting point
+        optimizer = optimizer_class(trainable_params, lr=lr if lr is not None else 1e-6, **optimizer_kwargs)
+
     elif optimizer_type == "AdamW".lower():
         logger.info(f"use AdamW optimizer | {optimizer_kwargs}")
         optimizer_class = torch.optim.AdamW
