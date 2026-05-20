@@ -128,6 +128,18 @@ foreach ($dir in $copyDirs) {
     }
 }
 
+# robocopy /XD can miss nested git metadata or local test directories when
+# names are matched relative to the copied subtree, so run a deterministic
+# cleanup pass before archiving.
+foreach ($exclude in $excludeDirs) {
+    Get-ChildItem -Path $sdtDir -Force -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq $exclude } |
+        Sort-Object FullName -Descending |
+        ForEach-Object {
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+}
+
 New-Item -ItemType Directory -Path $sdtDir -Force | Out-Null
 foreach ($file in $copyFiles) {
     $src = Join-Path $ProjectRoot $file
