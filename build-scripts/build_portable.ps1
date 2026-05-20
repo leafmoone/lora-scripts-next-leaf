@@ -87,6 +87,7 @@ Push-Location $ProjectRoot
 Pop-Location
 
 $copyDirs = @(
+    @{ Src = "assets";  Dst = "assets" },
     @{ Src = "mikazuki"; Dst = "mikazuki" },
     @{ Src = "frontend"; Dst = "frontend" },
     @{ Src = "config";   Dst = "config" },

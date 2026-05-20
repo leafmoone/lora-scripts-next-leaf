@@ -31,6 +31,7 @@ class Config:
 
     def save_config(self):
         try:
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump(self._stored, f, indent=4, ensure_ascii=False)
         except Exception as e:
