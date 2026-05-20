@@ -183,14 +183,22 @@ Then run `python gui.py` and start **Anima LoRA** training — logs should show 
 ## Interface Preview
 
 <p align="center">
-  <img src="assets/readme/screenshot-webui.png" alt="Training WebUI" width="920" />
+  <img src="assets/readme/train-monitor-loss.png" alt="Train Monitor Loss Curves" width="920" />
 </p>
+
+<p align="center"><sub>TensorBoard-backed Loss / LR scalar cards in the 6008 Train Monitor</sub></p>
 
 <p align="center">
-  <img src="assets/readme/shot-train-monitor.png" alt="Train Monitor" width="920" />
+  <img src="assets/readme/train-monitor-samples.png" alt="Train Monitor Preview Samples" width="920" />
 </p>
 
-<p align="center"><sub>Top: Training GUI &nbsp;|&nbsp; Bottom: Train Monitor (port 6008, auto-opens)</sub></p>
+<p align="center"><sub>Preview samples update directly in the monitor page</sub></p>
+
+<p align="center">
+  <img src="assets/readme/train-monitor-logs.png" alt="Train Monitor Log Viewer" width="920" />
+</p>
+
+<p align="center"><sub>Training logs are shown in both CMD and the monitor page</sub></p>
 
 ---
 

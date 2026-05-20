@@ -197,14 +197,22 @@ python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary i
 ## 界面预览
 
 <p align="center">
-  <img src="assets/readme/screenshot-webui.png" alt="训练 WebUI" width="920" />
+  <img src="assets/readme/train-monitor-loss.png" alt="训练监控 Loss 曲线" width="920" />
 </p>
+
+<p align="center"><sub>6008 训练监控页中的 TensorBoard 同源 Loss / LR 四宫格曲线</sub></p>
 
 <p align="center">
-  <img src="assets/readme/shot-train-monitor.png" alt="训练监控页" width="920" />
+  <img src="assets/readme/train-monitor-samples.png" alt="训练监控预览图" width="920" />
 </p>
 
-<p align="center"><sub>上：训练 GUI 主界面 &nbsp;|&nbsp; 下：训练监控页（端口 6008，自动打开）</sub></p>
+<p align="center"><sub>训练预览图会直接同步到监控页</sub></p>
+
+<p align="center">
+  <img src="assets/readme/train-monitor-logs.png" alt="训练日志查看" width="920" />
+</p>
+
+<p align="center"><sub>训练日志同时显示在 CMD 终端与监控页</sub></p>
 
 ---
 
