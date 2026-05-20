@@ -4,7 +4,7 @@ $Env:PIP_NO_CACHE_DIR = 1
 $Env:PIP_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
 function InstallFail {
-    Write-Output "瀹夎澶辫触銆?
+    Write-Output "安装失败。"
     Read-Host | Out-Null
     Exit
 }
@@ -20,43 +20,43 @@ function Check {
 }
 
 if (Test-Path -Path "python\python.exe") {
-    Write-Output "浣跨敤 python 鏂囦欢澶逛腑鐨?python..."
+    Write-Output "使用 python 文件夹中的 python..."
     $py_path = (Get-Item "python").FullName
     $env:PATH = "$py_path;$env:PATH"
 }
 else {
     # Sync vendor/sd-scripts submodule (Anima training engine)
     if ((Test-Path -Path ".git") -or (Test-Path -Path ".git" -PathType Leaf)) {
-        Write-Output "鍚屾 git 瀛愭ā鍧?(vendor/sd-scripts)..."
+        Write-Output "同步 git 子模块 (vendor/sd-scripts)..."
         git submodule update --init --recursive
         if ($LASTEXITCODE -ne 0) {
-            Write-Output "璀﹀憡: 瀛愭ā鍧楀垵濮嬪寲澶辫触锛孉nima 璁粌鍙兘鏃犳硶鍚姩銆傝鎵嬪姩杩愯: git submodule update --init --recursive"
+            Write-Output "警告: 子模块初始化失败，Anima 训练可能无法启动。请手动运行: git submodule update --init --recursive"
         }
     }
 
     if (!(Test-Path -Path "venv")) {
-        Write-Output "姝ｅ湪鍒涘缓铏氭嫙鐜..."
+        Write-Output "正在创建虚拟环境..."
         python -m venv venv
-        Check "鍒涘缓铏氭嫙鐜澶辫触锛岃妫€鏌?python 鏄惁瀹夎姝ｇ‘浠ュ強 python 鐗堟湰鏄惁涓?64 浣嶇増鏈?(python 3.10)锛宲ython 鐨勭洰褰曟槸鍚﹀湪鐜鍙橀噺 PATH 涓€?
+        Check "创建虚拟环境失败，请检查 python 是否安装正确以及 python 版本是否为 64 位版本 (python 3.10)，python 的目录是否在环境变量 PATH 中。"
     }
 
-    Write-Output "妫€娴嬪埌铏氭嫙鐜锛屾鍦ㄦ縺娲?.."
+    Write-Output "检测到虚拟环境，正在激活..."
     .\venv\Scripts\activate
-    Check "婵€娲昏櫄鎷熺幆澧冨け璐ャ€?
+    Check "激活虚拟环境失败。"
 }
 
-Write-Output "瀹夎璁粌渚濊禆 (宸茶繘琛屽浗鍐呭姞閫燂紝濡傚湪鍥藉鏃犳硶浣跨敤鍔犻€熸簮璇锋崲鐢?install.ps1 鑴氭湰)"
-Write-Output "娉ㄦ剰锛氬湪鍥藉唴鍔犻€熼暅鍍忎腑 torch 瀹夎鏃犳硶浣跨敤闀滃儚婧愶紝瀹夎杈冧负缂撴參銆?
-$install_torch = Read-Host "鏄惁闇€瑕佸畨瑁?Torch+xformers? [y/n] (榛樿涓?y)"
+Write-Output "安装训练依赖 (已进行国内加速，如在国外无法使用加速源请换用 install.ps1 脚本)"
+Write-Output "注意：在国内加速镜像中 torch 安装无法使用镜像源，安装较为缓慢。"
+$install_torch = Read-Host "是否需要安装 Torch+xformers? [y/n] (默认为 y)"
 if ($install_torch -eq "y" -or $install_torch -eq "Y" -or $install_torch -eq "") {
     python -m pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
-    Check "torch 瀹夎澶辫触锛岃鍒犻櫎 venv 鏂囦欢澶瑰悗閲嶆柊杩愯銆?
+    Check "torch 安装失败，请删除 venv 文件夹后重新运行。"
     python -m pip install -U -I --no-deps xformers===0.0.30 --extra-index-url https://download.pytorch.org/whl/cu128
-    Check "xformers 瀹夎澶辫触銆?
+    Check "xformers 安装失败。"
 }
 
 python -m pip install --upgrade -r requirements.txt
-Check "璁粌渚濊禆搴撳畨瑁呭け璐ャ€?
+Check "训练依赖库安装失败。"
 
 
 Write-Output "Installing Flash Attention 2 (prebuilt wheel)..."
@@ -74,5 +74,5 @@ if ($LASTEXITCODE -eq 0) {
     Write-Output "Flash Attention 2 install failed (non-fatal)"
 }
 
-Write-Output "瀹夎瀹屾垚"
+Write-Output "安装完成"
 Read-Host | Out-Null
