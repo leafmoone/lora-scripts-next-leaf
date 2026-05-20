@@ -73,6 +73,7 @@ class Task:
                 return
             for line in iter(self.process.stdout.readline, ""):
                 hub.append_line(self.task_id, line)
+                print(line, end="", flush=True)
         except Exception as e:
             hub.append_line(self.task_id, f"[stdout pump] {e}")
         finally:
