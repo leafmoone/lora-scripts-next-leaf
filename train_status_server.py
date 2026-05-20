@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 import mimetypes
 import os
 import re
@@ -108,6 +109,16 @@ def model_result_html(outputs: list[dict]) -> str:
     return "\n".join(html_parts)
 
 
+_TOML_STR_KEYS = ("output_dir", "output_name", "optimizer_type", "lr_scheduler",
+                   "network_module", "network_args", "train_data_dir", "reg_data_dir",
+                   "resolution", "mixed_precision")
+_TOML_NUM_KEYS = ("max_train_epochs", "max_train_steps", "learning_rate", "unet_lr",
+                   "text_encoder_lr", "network_dim", "network_alpha", "train_batch_size",
+                   "gradient_accumulation_steps", "save_every_n_epochs", "save_every_n_steps",
+                   "noise_offset", "clip_skip", "seed", "lr_warmup_steps")
+_TOML_BOOL_KEYS = ("gradient_checkpointing", "full_bf16", "full_fp16")
+
+
 def latest_training_config() -> dict:
     autosave_dir = REPO / "config/autosave"
     if not autosave_dir.exists():
@@ -119,19 +130,176 @@ def latest_training_config() -> dict:
         except OSError:
             continue
         config = {}
-        for key in ("output_dir", "output_name", "max_train_epochs"):
+        for key in _TOML_STR_KEYS:
             match = re.search(rf'^{key}\s*=\s*["\'](?P<value>.*?)["\']\s*$', text, flags=re.MULTILINE)
             if match:
                 config[key] = match.group("value")
-                continue
-            match = re.search(rf'^{key}\s*=\s*(?P<value>[0-9.]+)\s*$', text, flags=re.MULTILINE)
+        for key in _TOML_NUM_KEYS:
+            match = re.search(rf'^{key}\s*=\s*(?P<value>[0-9.eE+-]+)\s*$', text, flags=re.MULTILINE)
             if match:
                 config[key] = match.group("value")
+        for key in _TOML_BOOL_KEYS:
+            match = re.search(rf'^{key}\s*=\s*(?P<value>true|false)\s*$', text, flags=re.MULTILINE | re.IGNORECASE)
+            if match:
+                config[key] = match.group("value").lower()
         output_dir = config.get("output_dir")
         if output_dir:
             config["_config_path"] = str(config_path)
             return config
     return {}
+
+
+def _count_dataset_images(train_data_dir: str, reg_data_dir: str | None) -> dict:
+    """Scan kohya-style dataset dir to count images and repeats.
+
+    Directory convention: {repeat}_{name}/ or just files directly in train_data_dir.
+    Returns {train_images, train_repeats, reg_images, reg_repeats, samples_per_epoch}.
+    """
+    IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif", ".avif"}
+    result: dict = {}
+
+    def _scan(base_dir: str) -> tuple[int, int]:
+        """Return (total images with repeats, raw image count)."""
+        base = Path(base_dir)
+        if not base.exists():
+            return 0, 0
+        total_with_repeats = 0
+        raw_count = 0
+        subdirs = [d for d in base.iterdir() if d.is_dir()]
+        if subdirs:
+            for d in subdirs:
+                match = re.match(r"^(\d+)_", d.name)
+                repeats = int(match.group(1)) if match else 1
+                imgs = [f for f in d.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS]
+                raw_count += len(imgs)
+                total_with_repeats += repeats * len(imgs)
+        else:
+            imgs = [f for f in base.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS]
+            raw_count = len(imgs)
+            total_with_repeats = raw_count
+        return total_with_repeats, raw_count
+
+    train_total, train_raw = _scan(train_data_dir)
+    result["train_images"] = train_raw
+    result["train_images_repeated"] = train_total
+
+    reg_total = 0
+    if reg_data_dir:
+        reg_total_raw, reg_raw = _scan(reg_data_dir)
+        if reg_raw > 0:
+            reg_matched = max(reg_total_raw, train_total)
+            result["reg_images"] = reg_raw
+            result["reg_images_matched"] = reg_matched
+            reg_total = reg_matched
+
+    result["samples_per_epoch"] = train_total + reg_total
+    return result
+
+
+def _extract_train_params(config: dict) -> list[dict]:
+    """Build ordered list of key training hyperparameters for the monitor UI."""
+    if not config:
+        return []
+    params = []
+
+    def _add(label: str, key: str, fmt: str = ""):
+        val = config.get(key)
+        if val is None or val == "":
+            return
+        if fmt == "lr":
+            try:
+                n = float(val)
+                val = f"{n:.2e}" if n < 0.001 else str(n)
+            except ValueError:
+                pass
+        params.append({"label": label, "value": str(val)})
+
+    # --- Step calculation (most important) ---
+    train_data_dir = config.get("train_data_dir", "")
+    if train_data_dir:
+        resolved = resolve_repo_path(train_data_dir)
+        reg_dir = config.get("reg_data_dir", "")
+        resolved_reg = resolve_repo_path(reg_dir) if reg_dir else None
+        ds = _count_dataset_images(str(resolved) if resolved else train_data_dir,
+                                   str(resolved_reg) if resolved_reg else None)
+        train_img = ds.get("train_images", 0)
+        train_repeated = ds.get("train_images_repeated", 0)
+        samples = ds.get("samples_per_epoch", 0)
+
+        bs = max(1, int(float(config.get("train_batch_size", "1"))))
+        ga = max(1, int(float(config.get("gradient_accumulation_steps", "1"))))
+        effective_bs = bs * ga
+
+        if samples > 0:
+            batches_per_epoch = math.ceil(samples / bs)
+            steps_per_epoch = math.ceil(batches_per_epoch / ga)
+
+            epochs_str = config.get("max_train_epochs", "")
+            steps_str = config.get("max_train_steps", "")
+
+            detail_parts = [f"{train_img}图 × {train_repeated // train_img if train_img else 1}r"]
+            if ds.get("reg_images"):
+                detail_parts.append(f"+{ds['reg_images']}正则")
+            detail_parts.append(f"÷ BS{effective_bs}")
+            detail = " ".join(detail_parts)
+
+            if epochs_str:
+                epochs = int(float(epochs_str))
+                total_steps = epochs * steps_per_epoch
+                params.append({"label": "总步数", "value": f"{total_steps}（{detail} × {epochs}ep）"})
+            elif steps_str:
+                total_steps = int(float(steps_str))
+                params.append({"label": "总步数", "value": f"{total_steps}（手动设定）"})
+            else:
+                params.append({"label": "每 Epoch", "value": f"{steps_per_epoch} 步（{detail}）"})
+
+    # --- Learning rates ---
+    _add("学习率", "learning_rate", "lr")
+    _add("UNet LR", "unet_lr", "lr")
+    _add("TE LR", "text_encoder_lr", "lr")
+
+    # --- Optimizer & scheduler ---
+    _add("优化器", "optimizer_type")
+    _add("调度器", "lr_scheduler")
+
+    # --- LoRA params ---
+    _add("Rank (dim)", "network_dim")
+    _add("Alpha", "network_alpha")
+
+    # --- Training settings ---
+    _add("总 Epochs", "max_train_epochs")
+    _add("分辨率", "resolution")
+
+    warmup = config.get("lr_warmup_steps", "")
+    if warmup and warmup not in ("0", "0.0"):
+        params.append({"label": "Warmup", "value": f"{warmup} 步"})
+
+    # --- Save frequency ---
+    save_ep = config.get("save_every_n_epochs")
+    save_st = config.get("save_every_n_steps")
+    if save_ep and save_ep != "0":
+        params.append({"label": "保存频率", "value": f"每 {save_ep} epoch"})
+    elif save_st and save_st != "0":
+        params.append({"label": "保存频率", "value": f"每 {save_st} 步"})
+
+    # --- Precision ---
+    if config.get("full_bf16") == "true":
+        params.append({"label": "精度", "value": "BF16"})
+    elif config.get("full_fp16") == "true":
+        params.append({"label": "精度", "value": "FP16"})
+    else:
+        mp = config.get("mixed_precision", "")
+        if mp:
+            params.append({"label": "精度", "value": mp.upper()})
+
+    # --- Others ---
+    noise = config.get("noise_offset", "")
+    if noise and noise not in ("0", "0.0", "0.00"):
+        params.append({"label": "Noise Offset", "value": noise})
+    _add("Clip Skip", "clip_skip")
+    _add("Seed", "seed")
+
+    return params
 
 
 def resolve_repo_path(value: str | None) -> Path | None:
@@ -482,6 +650,7 @@ def collect_status() -> dict:
 
     train_out = _training_output_dir()
     output_scan_dir = train_out if train_out is not None and train_out.exists() else OUTPUT_DIR
+    train_config = latest_training_config()
 
     status = {
         "time": now,
@@ -495,6 +664,7 @@ def collect_status() -> dict:
         "previews": previews,
         "outputs": newest_files(output_scan_dir),
         "log_files": newest_files(LOG_DIR),
+        "train_params": _extract_train_params(train_config),
     }
 
     try:
@@ -621,6 +791,19 @@ def render_page(status: dict) -> bytes:
     .trend-stat.delta-up .value {{ color:#fbbf24; }}
     .trend-stat .pill {{ font-size:12px; padding:2px 8px; }}
     @media (max-width: 820px) {{ .trend-stats {{ grid-template-columns:repeat(2,1fr); }} }}
+    .param-row {{ display:grid; grid-template-columns:1fr 3fr; gap:14px; align-items:stretch; }}
+    @media (max-width: 720px) {{ .param-row {{ grid-template-columns:1fr; }} }}
+    .param-card {{ border-radius:14px; background:var(--card); border:1px solid var(--line); }}
+    .param-card-hero {{ display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px 16px; gap:6px; }}
+    .param-card-hero .ph-label {{ color:var(--muted); font-size:12px; letter-spacing:.5px; }}
+    .param-card-hero .ph-value {{ color:#a5b4fc; font-size:32px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1; }}
+    .param-card-hero .ph-detail {{ color:var(--muted); font-size:11px; margin-top:4px; line-height:1.4; }}
+    .param-card-rest {{ display:grid; grid-template-columns:repeat(4,1fr); }}
+    .param-cell {{ padding:9px 12px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); }}
+    .param-cell:nth-child(4n) {{ border-right:none; }}
+    .param-card-rest .param-cell:nth-last-child(-n+4) {{ border-bottom:none; }}
+    .param-cell .pc-label {{ color:var(--muted); font-size:11px; margin-bottom:3px; }}
+    .param-cell .pc-value {{ color:var(--text); font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
     .card {{ padding:14px; }}
     .label {{ color:var(--muted); font-size:12px; margin-bottom:6px; }}
     .value {{ font-size:18px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
@@ -687,6 +870,9 @@ def render_page(status: dict) -> bytes:
       </div>
     </section>
     <section class="grid" id="cards">{card_html}</section>
+    <div id="trainParamsSection" class="panel" style="padding:14px 18px;">
+      <div id="trainParams"><span class="muted" style="font-size:12px;">等待训练启动后显示关键超参。</span></div>
+    </div>
     <section class="panel">
       <div class="panel-head">
         <div>
@@ -752,6 +938,38 @@ def render_page(status: dict) -> bytes:
     let lastLogText = "";
     let lastPreviewKey = "";
     let previewEnabled = localStorage.getItem("loraMonitorPreviewEnabled") === "1";
+
+    function renderTrainParams(status) {{
+      const params = status.train_params || [];
+      const el = document.getElementById("trainParams");
+      if (!params.length) {{
+        el.innerHTML = '<span class="muted" style="font-size:12px;">等待训练启动后显示关键超参。</span>';
+        return;
+      }}
+      var heroKeys = {{"总步数":1,"设定总步数":1,"每 Epoch":1}};
+      var hero = null;
+      var rest = [];
+      params.forEach(function(p) {{
+        if (heroKeys[p.label]) {{ hero = p; }} else {{ rest.push(p); }}
+      }});
+      var h = '';
+      if (hero) {{
+        var parts = escapeHtml(hero.value).match(/^(\\d+)(.*)$/);
+        var mainVal = parts ? parts[1] : escapeHtml(hero.value);
+        var detail = parts ? parts[2].replace(/^[（(]/, '').replace(/[)）]$/, '') : '';
+        h = '<div class="param-card param-card-hero">'
+          + '<div class="ph-label">' + escapeHtml(hero.label) + '</div>'
+          + '<div class="ph-value">' + mainVal + '</div>'
+          + (detail ? '<div class="ph-detail">' + detail + '</div>' : '')
+          + '</div>';
+      }}
+      var r = '<div class="param-card"><div class="param-card-rest">'
+        + rest.map(function(p) {{
+          return '<div class="param-cell"><div class="pc-label">' + escapeHtml(p.label) + '</div><div class="pc-value" title="' + escapeHtml(p.value) + '">' + escapeHtml(p.value) + '</div></div>';
+        }}).join('')
+        + '</div></div>';
+      el.innerHTML = '<div class="param-row">' + h + r + '</div>';
+    }}
 
     function escapeHtml(value) {{
       return String(value ?? "").replace(/[&<>"']/g, function(ch) {{
@@ -1237,6 +1455,7 @@ def render_page(status: dict) -> bytes:
       errorBox.style.display = error ? "block" : "none";
       renderHero(status);
       renderCards(status);
+      renderTrainParams(status);
       renderLossChart(metrics);
       renderPreviews(status.previews, metrics);
       document.getElementById("resultFiles").innerHTML = renderResult(status.outputs);
