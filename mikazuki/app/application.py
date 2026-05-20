@@ -31,6 +31,7 @@ def frontend_dist_path() -> Path:
 
 
 _FRONTEND_DIST = frontend_dist_path()
+_DEFAULT_START_PAGE = "/lora/sd3.html"
 
 
 class SPAStaticFiles(StaticFiles):
@@ -69,6 +70,13 @@ def _resolve_browser():
     return webbrowser
 
 
+def _start_url() -> str:
+    page = os.environ.get("MIKAZUKI_START_PAGE", _DEFAULT_START_PAGE).strip() or _DEFAULT_START_PAGE
+    if not page.startswith("/"):
+        page = f"/{page}"
+    return f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}{page}'
+
+
 async def _async_update_check():
     from mikazuki.update_check import check_update, log_update_notice
     try:
@@ -95,7 +103,7 @@ async def app_startup():
         if browser is not webbrowser:
             app_log.info(f"Using browser: {os.environ.get('MIKAZUKI_BROWSER', 'default')}")
 
-        browser.open(f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}')
+        browser.open(_start_url())
         monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
         time.sleep(1)
         app_log.info(f"Opening train monitor in browser: http://127.0.0.1:{monitor_port}")
