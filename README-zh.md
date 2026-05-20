@@ -42,6 +42,20 @@
 
 > **系统要求：** Windows 10/11 64 位，NVIDIA 显卡（RTX 20 系列以上），~7 GB 硬盘空间。
 
+#### Anima LoRA 训练显存参考（1024 分辨率，实测）
+
+以下数据来自 RTX 4090 真实基准测试，batch=1，bf16，标准 LoRA（dim=16）：
+
+| 显存 | 可用配置 | 备注 |
+|------|----------|------|
+| **≥ 24 GB** | 默认参数，1024 分辨率，无需任何节省选项 | 最省心 |
+| **≥ 16 GB** | 开启梯度检查点（`gradient_checkpointing`） | 推荐日常使用 |
+| **≥ 12 GB** | 梯度检查点，峰值约 12.3 GB | 稳定 |
+| **≥ 10 GB** | 梯度检查点 + `blocks_to_swap = 16` | 稳定，速度略降 |
+| **≥ 8 GB** | 梯度检查点 + `blocks_to_swap = 24` + `cache_text_encoder_outputs` + LoKr 网络 | 可运行，极限，偶发 OOM 风险 |
+
+> 512 分辨率约节省 2～3 GB；降低 `network_dim`（如 8）也能少量减少显存。
+
 #### 整合包暂不支持 Flash Attention 2（说明）
 
 **当前 Windows 整合包（`SD-Trainer-v*.7z`）不会安装 Flash Attention 2，训练使用 xformers 或 PyTorch SDPA。** 这与「装不上」无关，而是便携包运行方式下的**刻意取舍**。

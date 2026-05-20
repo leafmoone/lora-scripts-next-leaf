@@ -42,6 +42,20 @@ First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). C
 
 > **Requirements:** Windows 10/11 64-bit, NVIDIA GPU (RTX 20+), ~7 GB disk space.
 
+#### Anima LoRA VRAM Reference (1024 resolution, benchmarked)
+
+Measured on RTX 4090, batch=1, bf16, standard LoRA (dim=16):
+
+| VRAM | Configuration | Notes |
+|------|---------------|-------|
+| **≥ 24 GB** | Default settings, 1024 resolution, no extra options needed | Easiest |
+| **≥ 16 GB** | Enable `gradient_checkpointing` | Recommended for daily use |
+| **≥ 12 GB** | Gradient checkpointing, peaks ~12.3 GB | Stable |
+| **≥ 10 GB** | Gradient checkpointing + `blocks_to_swap = 16` | Stable, slightly slower |
+| **≥ 8 GB** | Gradient checkpointing + `blocks_to_swap = 24` + `cache_text_encoder_outputs` + LoKr network | Runs, but tight — occasional OOM possible |
+
+> 512 resolution saves roughly 2–3 GB; lowering `network_dim` (e.g. to 8) also helps marginally.
+
 #### Portable package: Flash Attention 2 not supported (for now)
 
 The **Windows portable package** (`SD-Trainer-v*.7z`) **does not install Flash Attention 2**; training uses **xformers** or **PyTorch SDPA**. This is intentional, not a failed install.
