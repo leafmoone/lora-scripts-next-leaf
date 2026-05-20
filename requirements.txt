@@ -47,4 +47,4 @@ dadaptation==3.1
 # Needed by flash-attn on Windows; portable package has prebuilt flash-attn wheel that bundles triton.
 triton-windows<3.4; sys_platform == "win32" # skip_verify
 
-optimum-quanto  # required for Automagic optimizer
+optimum-quanto
