@@ -67,13 +67,17 @@ class Task:
         self.status = TaskStatus.FINISHED
 
     def _stdout_pump(self):
-        """Drain child stdout into TrainLogHub (same thread started after Popen)."""
+        """Drain child stdout into TrainLogHub AND echo to parent console."""
         try:
             if not self.process or self.process.stdout is None:
                 return
             for line in iter(self.process.stdout.readline, ""):
                 hub.append_line(self.task_id, line)
-                print(line, end="", flush=True)
+                try:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                except Exception:
+                    pass
         except Exception as e:
             hub.append_line(self.task_id, f"[stdout pump] {e}")
         finally:

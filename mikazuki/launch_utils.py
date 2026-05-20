@@ -370,9 +370,11 @@ def catch_exception(f):
 
 
 def check_port_avaliable(port: int):
+    # Do not use SO_REUSEADDR here. On Windows it can report a port as
+    # available even when another process has a more specific local bind
+    # (for example 127.0.0.1:6008), which makes the browser hit the wrong app.
     try:
         s = socket.socket()
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", port))
         s.close()
         return True

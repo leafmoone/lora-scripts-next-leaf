@@ -28,6 +28,8 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 PROGRESS_STALL_SECONDS = 120
 GPU_IDLE_MEMORY_MB = 512
 TASK_PROGRESS_STATE: dict[str, dict[str, float | int]] = {}
+TENSORBOARD_SCALAR_TAGS = ("loss/average", "loss/current", "loss/epoch_average", "lr/unet")
+TENSORBOARD_LOSS_LIMIT = 10000
 
 STRONG_ERROR_PATTERNS = [
     r"\btraceback\b",
@@ -75,6 +77,74 @@ def newest_files(root: Path, limit: int = 8) -> list[dict]:
             "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
         })
     return out
+
+
+def tensorboard_loss_scalars(limit: int = TENSORBOARD_LOSS_LIMIT) -> list[dict]:
+    """Read real TensorBoard scalar curves from the latest event run."""
+    try:
+        from tensorboard.backend.event_processing import event_accumulator
+    except Exception:
+        return []
+
+    if not LOG_DIR.exists():
+        return []
+
+    event_files = [p for p in LOG_DIR.rglob("events.out.tfevents.*") if p.is_file()]
+    if not event_files:
+        return []
+
+    run_dirs: dict[Path, float] = {}
+    for event_file in event_files:
+        try:
+            run_dirs[event_file.parent] = max(
+                run_dirs.get(event_file.parent, 0.0),
+                event_file.stat().st_mtime,
+            )
+        except OSError:
+            continue
+
+    for run_dir, _ in sorted(run_dirs.items(), key=lambda item: item[1], reverse=True):
+        try:
+            accumulator = event_accumulator.EventAccumulator(
+                str(run_dir),
+                size_guidance={event_accumulator.SCALARS: 0},
+            )
+            accumulator.Reload()
+            scalar_tags = set(accumulator.Tags().get("scalars", []))
+        except Exception:
+            continue
+
+        series = []
+        for tag in TENSORBOARD_SCALAR_TAGS:
+            if tag not in scalar_tags:
+                continue
+            try:
+                events = accumulator.Scalars(tag)[-limit:]
+            except Exception:
+                continue
+            points = [
+                {
+                    "step": int(event.step),
+                    "value": float(event.value),
+                }
+                for event in events
+            ]
+            if not points:
+                continue
+            values = [point["value"] for point in points]
+            series.append({
+                "tag": tag,
+                "name": tag.split("/", 1)[-1].replace("_", " "),
+                "points": points,
+                "latest": values[-1],
+                "min": min(values),
+                "max": max(values),
+                "run": str(run_dir.relative_to(REPO)) if run_dir.is_relative_to(REPO) else str(run_dir),
+            })
+        if series:
+            return series
+
+    return []
 
 
 def model_result_html(outputs: list[dict]) -> str:
@@ -665,6 +735,7 @@ def collect_status() -> dict:
         "outputs": newest_files(output_scan_dir),
         "log_files": newest_files(LOG_DIR),
         "train_params": _extract_train_params(train_config),
+        "tensorboard_loss": tensorboard_loss_scalars(),
     }
 
     try:
@@ -693,7 +764,7 @@ def collect_status() -> dict:
     task_id = active.get("id")
     if task_id:
         try:
-            tail_payload = fetch_json(f"{GUI_API}/train/log/tail/{task_id}?limit=5000")
+            tail_payload = fetch_json(f"{GUI_API}/train/log/tail/{task_id}?limit=2000")
             data = api_data(tail_payload)
             lines = data.get("lines", [])
             status["log_lines"] = lines
@@ -780,17 +851,19 @@ def render_page(status: dict) -> bytes:
     .loss-summary {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:13px; }}
     .pill {{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:999px; padding:3px 8px; background:#0b1224; color:var(--text); }}
     .pill.good {{ color:#86efac; border-color:#166534; background:#052e1a; }}
-    .loss-chart {{ display:block; width:100%; height:96px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
-    .trend-layout {{ display:grid; grid-template-columns:minmax(0,1fr) 240px; gap:14px; align-items:end; max-width:1080px; }}
-    @media (max-width: 820px) {{ .trend-layout {{ grid-template-columns:1fr; max-width:none; }} }}
-    .trend-stats {{ display:grid; grid-template-columns:1fr; gap:8px; align-content:start; }}
-    .trend-stat {{ background:#0b1224; border:1px solid var(--line); border-radius:10px; padding:9px 12px; display:flex; align-items:baseline; justify-content:space-between; gap:10px; }}
-    .trend-stat .label {{ color:var(--muted); font-size:11px; letter-spacing:.4px; text-transform:uppercase; flex:0 0 auto; }}
-    .trend-stat .value {{ font-size:16px; font-weight:700; color:var(--text); line-height:1.2; font-variant-numeric:tabular-nums; text-align:right; }}
-    .trend-stat.delta-down .value {{ color:#86efac; }}
-    .trend-stat.delta-up .value {{ color:#fbbf24; }}
-    .trend-stat .pill {{ font-size:12px; padding:2px 8px; }}
-    @media (max-width: 820px) {{ .trend-stats {{ grid-template-columns:repeat(2,1fr); }} }}
+    .tb-loss-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
+    @media (max-width: 900px) {{ .tb-loss-grid {{ grid-template-columns:1fr; }} }}
+    .tb-loss-card {{ min-height:258px; border:1px solid var(--line); border-radius:12px; background:#050816; overflow:hidden; }}
+    .tb-loss-head {{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:12px 12px 4px; }}
+    .tb-loss-title {{ color:var(--text); font-size:13px; font-weight:750; }}
+    .tb-loss-meta {{ color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; text-align:right; }}
+    .tb-loss-missing {{ display:flex; height:190px; align-items:center; justify-content:center; color:var(--muted); font-size:12px; border-top:1px solid rgba(38,50,77,.55); }}
+    .tb-loss-controls {{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }}
+    .tb-loss-controls button {{ padding:4px 9px; font-size:12px; background:#0b1224; }}
+    .tb-loss-controls button.active {{ border-color:#38bdf8; color:#bfdbfe; background:#10213a; }}
+    .tb-loss-control-help {{ color:var(--muted); font-size:12px; margin-left:4px; }}
+    .tb-loss-chart {{ width:100%; height:190px; }}
+    .tb-loss-empty {{ padding:16px; border:1px dashed var(--line); border-radius:10px; background:#0b1224; color:var(--muted); }}
     .param-row {{ display:grid; grid-template-columns:1fr 3fr; gap:14px; align-items:stretch; }}
     @media (max-width: 720px) {{ .param-row {{ grid-template-columns:1fr; }} }}
     .param-card {{ border-radius:14px; background:var(--card); border:1px solid var(--line); }}
@@ -887,23 +960,19 @@ def render_page(status: dict) -> bytes:
       <div class="panel-head">
         <div>
           <h2>Loss 趋势</h2>
-          <div class="privacy-note">相对初始 Loss 展示，更适合判断训练是否稳定收敛。滚轮缩放、拖拽平移，双击或点按钮恢复。</div>
-        </div>
-        <button id="lossChartReset" class="hidden" type="button">恢复最新</button>
-      </div>
-      <div class="trend-headline" id="lossTrendHeadline">等待 Loss 数据</div>
-      <div class="trend-copy" id="lossTrendCopy">开始训练后会显示相对初始值的下降趋势。</div>
-      <div class="trend-layout">
-        <div id="lossTrendChart" style="width:100%;aspect-ratio:16/10;min-height:280px;border:1px solid var(--line);border-radius:12px;background:#050816;"></div>
-        <div class="trend-stats" id="lossTrendStats">
-          <div class="trend-stat"><span class="label">当前</span><span class="value" id="statLossCurrent">-</span></div>
-          <div class="trend-stat"><span class="label">最低</span><span class="value" id="statLossMin">-</span></div>
-          <div class="trend-stat"><span class="label">初始</span><span class="value" id="statLossBaseline">-</span></div>
-          <div class="trend-stat"><span class="label">下降</span><span class="value" id="statLossDrop">-</span></div>
-          <div class="trend-stat" id="statDeltaCard"><span class="label">最近 Δ</span><span class="value" id="statLossDelta">-</span></div>
-          <div class="trend-stat"><span class="label">趋势</span><span class="pill" id="statLossTrendPill">等待数据</span></div>
+          <div class="privacy-note">读取 TensorBoard event scalar，展示真实 Loss 曲线。滚轮缩放、拖拽平移。</div>
         </div>
       </div>
+      <div class="tb-loss-controls" id="tbLossControls">
+        <span class="muted">范围</span>
+        <button type="button" data-range="all">全部</button>
+        <button type="button" data-range="50p">最近 50%</button>
+        <button type="button" data-range="20p" class="active">最近 20%</button>
+        <button type="button" data-range="10p">最近 10%</button>
+        <button type="button" data-range="latest">恢复最新</button>
+        <span class="tb-loss-control-help">控制横轴显示范围；数据不变，滚轮可继续缩放。</span>
+      </div>
+      <div id="tensorboardLossArea" class="tb-loss-empty">等待 TensorBoard Loss 数据。</div>
     </section>
     <details class="panel" id="logDetails">
       <summary id="logSummary">训练日志</summary>
@@ -1096,6 +1165,7 @@ def render_page(status: dict) -> bytes:
     }}
 
     function fmtLoss(v) {{
+      if (v === null || v === undefined || v === "") return "-";
       const n = Number(v);
       if (!Number.isFinite(n)) return "-";
       const abs = Math.abs(n);
@@ -1104,250 +1174,167 @@ def render_page(status: dict) -> bytes:
       return n.toExponential(2);
     }}
 
-    var lossChart = null;
-    var lossChartFollowing = true;
-
-    (function initLossChartControls() {{
-      var resetBtn = document.getElementById("lossChartReset");
-      resetBtn.addEventListener("click", function() {{
-        lossChartFollowing = true;
-        resetBtn.classList.add("hidden");
-        if (lossChart) {{
-          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 0, start: 0, end: 100 }});
-          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 1, start: 0, end: 100 }});
-        }}
+    var tbLossCharts = {{}};
+    var tbLossLayoutKey = "";
+    var tbLossRange = "20p";
+    var tbLossManualZoom = false;
+    var latestStatus = null;
+    window.addEventListener("resize", function() {{
+      Object.keys(tbLossCharts).forEach(function(key) {{
+        tbLossCharts[key].resize();
       }});
-    }})();
+    }});
 
-    function renderLossChart(metrics) {{
-      const trendHeadline = document.getElementById("lossTrendHeadline");
-      const trendCopy = document.getElementById("lossTrendCopy");
+    document.getElementById("tbLossControls").addEventListener("click", function(event) {{
+      const button = event.target.closest("button[data-range]");
+      if (!button) return;
+      tbLossRange = button.dataset.range === "latest" ? "20p" : button.dataset.range;
+      tbLossManualZoom = false;
+      Array.from(this.querySelectorAll("button")).forEach(function(btn) {{
+        btn.classList.toggle("active", btn.dataset.range === tbLossRange || (button.dataset.range === "latest" && btn.dataset.range === "20p"));
+      }});
+      if (latestStatus) renderLossChart(latestStatus.metrics || {{}}, latestStatus);
+    }});
+
+    function renderLossChart(metrics, status) {{
+      latestStatus = status;
       const summary = document.getElementById("lossSummary");
-      const resetBtn = document.getElementById("lossChartReset");
-      const points = (metrics && metrics.loss_points) || [];
-      const relativePoints = (metrics && metrics.relative_loss_points) || [];
-      const trend = metrics && metrics.loss_trend ? metrics.loss_trend : "等待趋势";
-      const loss = metrics && metrics.loss ? metrics.loss : "-";
-      const drop = Number(metrics && metrics.loss_drop_percent);
-      const trendClass = trend === "稳定下降" ? "pill good" : "pill";
-      const dropText = Number.isFinite(drop) ? " · 较初始下降 " + Math.max(0, drop).toFixed(1) + "%" : "";
-      summary.innerHTML = '<span>当前 Loss：<strong>' + escapeHtml(loss) + '</strong>' + escapeHtml(dropText) + '</span>' +
-        '<span class="' + trendClass + '">' + escapeHtml(trend) + '</span>' +
-        '<span class="muted">用于截图说明训练是否稳定</span>';
+      const area = document.getElementById("tensorboardLossArea");
+      const series = (status && status.tensorboard_loss) || [];
+      const fallbackLoss = metrics && metrics.loss ? metrics.loss : "-";
 
-      const statBaseline = document.getElementById("statLossBaseline");
-      const statCurrent = document.getElementById("statLossCurrent");
-      const statMin = document.getElementById("statLossMin");
-      const statDelta = document.getElementById("statLossDelta");
-      const statDeltaCard = document.getElementById("statDeltaCard");
-      const statDrop = document.getElementById("statLossDrop");
-      const statTrendPill = document.getElementById("statLossTrendPill");
-
-      const baseline = Number(metrics && metrics.loss_baseline);
-      const current = Number(metrics && metrics.loss_current);
-      const lossDelta = Number(metrics && metrics.loss_delta);
-      let minLoss = NaN, minStep = null;
-      for (const p of points) {{
-        const v = Number(p && p.loss);
-        if (Number.isFinite(v) && (!Number.isFinite(minLoss) || v < minLoss)) {{
-          minLoss = v;
-          minStep = Number(p.step);
-        }}
-      }}
-
-      statBaseline.textContent = Number.isFinite(baseline) ? fmtLoss(baseline) : "-";
-      statCurrent.textContent = Number.isFinite(current) ? fmtLoss(current) : (loss !== "-" ? loss : "-");
-      statMin.textContent = Number.isFinite(minLoss) ? fmtLoss(minLoss) : "-";
-      statMin.title = (Number.isFinite(minLoss) && minStep != null) ? ("出现在 step " + minStep) : "";
-
-      statDeltaCard.classList.remove("delta-down", "delta-up");
-      if (Number.isFinite(lossDelta)) {{
-        const sign = lossDelta > 0 ? "+" : (lossDelta < 0 ? "−" : "");
-        statDelta.textContent = sign + fmtLoss(Math.abs(lossDelta));
-        if (lossDelta < -1e-9) statDeltaCard.classList.add("delta-down");
-        else if (lossDelta > 1e-9) statDeltaCard.classList.add("delta-up");
-      }} else {{
-        statDelta.textContent = "-";
-      }}
-
-      statDrop.textContent = Number.isFinite(drop) ? (Math.max(0, drop).toFixed(1) + "%") : "-";
-      statTrendPill.className = trendClass;
-      statTrendPill.textContent = trend;
-
-      if (relativePoints.length < 2) {{
-        trendHeadline.textContent = "等待 Loss 数据";
-        trendCopy.textContent = "训练开始后会显示相对初始值的下降趋势。";
+      if (!series.length) {{
+        Object.keys(tbLossCharts).forEach(function(key) {{
+          tbLossCharts[key].dispose();
+          delete tbLossCharts[key];
+        }});
+        tbLossLayoutKey = "";
+        summary.innerHTML = '<span>当前 Loss：<strong>' + escapeHtml(fallbackLoss) + '</strong></span>' +
+          '<span class="muted">等待 TensorBoard event 写入 Loss scalar</span>';
+        area.className = "tb-loss-empty";
+        area.innerHTML = "等待 TensorBoard Loss 数据。训练刚启动时可能需要几十秒。";
         return;
       }}
 
-      const relValues = relativePoints.map(function(p) {{ return Number(p.relative); }}).filter(Number.isFinite);
-      const stepValues = relativePoints.map(function(p) {{ return Number(p.step) || 0; }});
-      const currentRel = relValues[relValues.length - 1];
-      const relativeDrop = Math.max(0, 100 - currentRel);
-      trendHeadline.textContent = "当前 Loss " + loss + " · 较初始下降 " + relativeDrop.toFixed(1) + "% · " + trend;
-      trendCopy.textContent = "以训练初期 Loss 为 100%，曲线越往下说明相对初始值下降越明显。滚轮缩放 · 拖拽平移 · 双击复位。";
+      const latestAverage = series.find(function(item) {{ return item.tag === "loss/average"; }}) || series[0];
+      summary.innerHTML = '<span>TensorBoard Loss：<strong>' + escapeHtml(fmtLoss(latestAverage.latest)) + '</strong></span>' +
+        '<span class="pill">' + escapeHtml(latestAverage.tag) + '</span>' +
+        '<span class="muted">真实 scalar 曲线，和 TensorBoard 同源</span>';
 
-      const chartDom = document.getElementById("lossTrendChart");
-      if (!lossChart) {{
-        lossChart = echarts.init(chartDom, null, {{ renderer: "canvas" }});
-        lossChart.on("dataZoom", function(params) {{
-          var opt = lossChart.getOption();
-          var dz = opt.dataZoom && opt.dataZoom[0];
-          if (dz && (dz.start > 0.01 || dz.end < 99.99)) {{
-            lossChartFollowing = false;
-            resetBtn.classList.remove("hidden");
-          }} else {{
-            lossChartFollowing = true;
-            resetBtn.classList.add("hidden");
-          }}
+      area.className = "tb-loss-grid";
+      const hasLearningRate = series.some(function(item) {{ return /^lr\\//.test(item.tag); }});
+      const displaySeries = hasLearningRate ? series : series.concat([{{
+        tag: "lr",
+        name: "learning rate",
+        points: [],
+        latest: null,
+        min: null,
+        run: "",
+        missing: true
+      }}]);
+      const layoutKey = displaySeries.map(function(item) {{ return item.tag + (item.missing ? ":missing" : ""); }}).join("|");
+      if (layoutKey !== tbLossLayoutKey) {{
+        Object.keys(tbLossCharts).forEach(function(key) {{
+          tbLossCharts[key].dispose();
+          delete tbLossCharts[key];
         }});
-        lossChart.getZr().on("dblclick", function() {{
-          lossChartFollowing = true;
-          resetBtn.classList.add("hidden");
-          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 0, start: 0, end: 100 }});
-          lossChart.dispatchAction({{ type: "dataZoom", dataZoomIndex: 1, start: 0, end: 100 }});
-        }});
-        window.addEventListener("resize", function() {{ lossChart && lossChart.resize(); }});
+        area.innerHTML = displaySeries.map(function(item, idx) {{
+          return '<div class="tb-loss-card">' +
+            '<div class="tb-loss-head">' +
+            '<div><div class="tb-loss-title">' + escapeHtml(item.tag) + '</div>' +
+            '<div class="muted">' + escapeHtml(item.run || "logs") + '</div></div>' +
+            '<div class="tb-loss-meta" id="tbLossMeta' + idx + '">latest ' + escapeHtml(fmtLoss(item.latest)) +
+            '<br>min ' + escapeHtml(fmtLoss(item.min)) + '</div>' +
+            '</div>' +
+            (item.missing
+              ? '<div class="tb-loss-missing">暂无 learning rate scalar</div>'
+              : '<div class="tb-loss-chart" id="tbLossChart' + idx + '"></div>') +
+            '</div>';
+        }}).join("");
+        tbLossLayoutKey = layoutKey;
       }}
 
-      var rawSteps = relativePoints.map(function(p) {{ return Number(p.step) || 0; }});
-      var rawLoss = points.map(function(p) {{ return Number(p.loss); }});
-
-      var minRel = Math.min.apply(null, relValues);
-      var maxRel = Math.max.apply(null, relValues);
-      var yAxisMax = Math.min(100, Math.ceil((maxRel + 2) / 5) * 5);
-      var yAxisMin = Math.max(0, Math.floor((minRel - 4) / 5) * 5);
-      if (yAxisMin >= yAxisMax) yAxisMin = yAxisMax - 5;
-
-      var option = {{
-        backgroundColor: "transparent",
-        animation: false,
-        tooltip: {{
-          trigger: "axis",
-          backgroundColor: "rgba(11,16,32,0.95)",
-          borderColor: "#26324d",
-          textStyle: {{ color: "#e5edf8", fontSize: 12 }},
-          formatter: function(params) {{
-            if (!params || !params.length) return "";
-            var html = '<div style="font-weight:700;margin-bottom:4px">Step ' + params[0].axisValue + '</div>';
-            for (var i = 0; i < params.length; i++) {{
-              var p = params[i];
-              html += '<div style="display:flex;align-items:center;gap:6px">' +
-                p.marker + '<span>' + p.seriesName + '：<strong>' + (typeof p.value === "number" ? p.value.toFixed(4) : p.value) + '</strong></span></div>';
-            }}
-            return html;
-          }}
-        }},
-        grid: {{
-          left: 60, right: 64, top: 36, bottom: 68,
-          containLabel: false
-        }},
-        xAxis: {{
-          type: "category",
-          data: stepValues,
-          name: "step",
-          nameLocation: "end",
-          nameTextStyle: {{ color: "#7286a3", fontSize: 11 }},
-          axisLine: {{ lineStyle: {{ color: "#26324d" }} }},
-          axisTick: {{ show: false }},
-          axisLabel: {{ color: "#7286a3", fontSize: 11, showMaxLabel: true }},
-          splitLine: {{ show: false }}
-        }},
-        yAxis: [
-          {{
-            type: "value",
-            name: "相对 Loss (%)",
-            nameTextStyle: {{ color: "#7286a3", fontSize: 11 }},
-            min: yAxisMin,
-            max: yAxisMax,
-            axisLine: {{ show: false }},
-            axisTick: {{ show: false }},
-            axisLabel: {{ color: "#7286a3", fontSize: 11, formatter: "{{value}}%" }},
-            splitLine: {{ lineStyle: {{ color: "#1e2a44", type: "dashed" }} }}
-          }},
-          {{
-            type: "value",
-            name: "原始 Loss",
-            nameTextStyle: {{ color: "#60a5fa", fontSize: 11 }},
-            axisLine: {{ show: false }},
-            axisTick: {{ show: false }},
-            axisLabel: {{ color: "#60a5fa", fontSize: 10, opacity: 0.85, formatter: function(v) {{ return v.toFixed(3); }} }},
-            splitLine: {{ show: false }}
-          }}
-        ],
-        dataZoom: [
-          {{
-            type: "inside",
-            xAxisIndex: 0,
-            filterMode: "none",
-            zoomOnMouseWheel: true,
-            moveOnMouseMove: true,
-            moveOnMouseWheel: false
-          }},
-          {{
-            type: "slider",
-            xAxisIndex: 0,
-            filterMode: "none",
-            height: 22,
-            bottom: 8,
+      displaySeries.forEach(function(item, idx) {{
+        const meta = document.getElementById("tbLossMeta" + idx);
+        if (meta) meta.innerHTML = "latest " + escapeHtml(fmtLoss(item.latest)) + "<br>min " + escapeHtml(fmtLoss(item.min));
+        if (item.missing) return;
+        const chartDom = document.getElementById("tbLossChart" + idx);
+        if (!chartDom) return;
+        const chart = tbLossCharts[item.tag] || echarts.init(chartDom, null, {{ renderer: "canvas" }});
+        tbLossCharts[item.tag] = chart;
+        const points = item.points || [];
+        const data = points.map(function(point) {{
+          return [Number(point.step) || 0, Number(point.value)];
+        }});
+        const dataZoom = [{{
+          type: "inside",
+          xAxisIndex: 0,
+          filterMode: "none",
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: false
+        }}];
+        if (!tbLossManualZoom && tbLossRange !== "all" && data.length) {{
+          const latestStep = data[data.length - 1][0];
+          const firstStep = data[0][0];
+          const span = Math.max(1, latestStep - firstStep + 1);
+          const percent = tbLossRange.endsWith("p") ? Number(tbLossRange.slice(0, -1)) : 20;
+          const range = Math.max(1, Math.round(span * Math.max(1, Math.min(100, percent)) / 100));
+          dataZoom[0].startValue = Math.max(firstStep, latestStep - range + 1);
+          dataZoom[0].endValue = latestStep;
+        }}
+        if (!chart.__tbLossZoomBound) {{
+          chart.on("dataZoom", function() {{
+            tbLossManualZoom = true;
+          }});
+          chart.__tbLossZoomBound = true;
+        }}
+        const option = {{
+          backgroundColor: "transparent",
+          animation: false,
+          grid: {{ left: 46, right: 18, top: 12, bottom: 24, containLabel: false }},
+          tooltip: {{
+            trigger: "axis",
+            backgroundColor: "rgba(11,16,32,0.95)",
             borderColor: "#26324d",
-            backgroundColor: "#0b1224",
-            fillerColor: "rgba(56,189,248,0.15)",
-            dataBackground: {{
-              lineStyle: {{ color: "#34d399", opacity: 0.5 }},
-              areaStyle: {{ color: "rgba(52,211,153,0.08)" }}
-            }},
-            selectedDataBackground: {{
-              lineStyle: {{ color: "#34d399" }},
-              areaStyle: {{ color: "rgba(52,211,153,0.15)" }}
-            }},
-            handleStyle: {{ color: "#38bdf8", borderColor: "#38bdf8" }},
-            textStyle: {{ color: "#7286a3", fontSize: 10 }},
-            labelFormatter: function(value) {{ return "Step " + value; }}
-          }}
-        ],
-        series: [
-          {{
-            name: "相对 Loss",
-            type: "line",
-            data: relValues,
-            yAxisIndex: 0,
-            smooth: 0.15,
-            symbol: "none",
-            lineStyle: {{ color: "#34d399", width: 2 }},
-            areaStyle: {{ color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              {{ offset: 0, color: "rgba(52,211,153,0.25)" }},
-              {{ offset: 1, color: "rgba(52,211,153,0.02)" }}
-            ]) }},
-            markLine: {{
-              silent: true,
-              symbol: "none",
-              lineStyle: {{ color: "#3a486a", type: "dashed", width: 1 }},
-              label: {{ show: true, position: "insideEndTop", color: "#7286a3", fontSize: 10, formatter: "初始 100%" }},
-              data: [{{ yAxis: 100 }}]
+            textStyle: {{ color: "#e5edf8", fontSize: 12 }},
+            formatter: function(params) {{
+              if (!params || !params.length) return "";
+              var value = params[0].value || [];
+              return '<strong>step ' + escapeHtml(value[0]) + '</strong><br>' +
+                escapeHtml(item.tag) + ': <strong>' + escapeHtml(fmtLoss(value[1])) + '</strong>';
             }}
           }},
-          {{
-            name: "原始 Loss",
+          xAxis: {{
+            type: "value",
+            axisLine: {{ lineStyle: {{ color: "#d6d6d6", opacity: 0.35 }} }},
+            axisTick: {{ show: false }},
+            axisLabel: {{ color: "#9aa7bd", fontSize: 10 }},
+            splitLine: {{ lineStyle: {{ color: "#2a344d", opacity: 0.55 }} }}
+          }},
+          yAxis: {{
+            type: "value",
+            scale: true,
+            axisLine: {{ show: false }},
+            axisTick: {{ show: false }},
+            axisLabel: {{ color: "#9aa7bd", fontSize: 10, formatter: function(v) {{ return fmtLoss(v); }} }},
+            splitLine: {{ lineStyle: {{ color: "#2a344d", opacity: 0.55 }} }}
+          }},
+          dataZoom: dataZoom,
+          series: [{{
+            name: item.tag,
             type: "line",
-            data: rawLoss,
-            yAxisIndex: 1,
-            smooth: 0.15,
-            symbol: "none",
-            lineStyle: {{ color: "#60a5fa", width: 1.8, opacity: 0.85 }},
-            areaStyle: null
-          }}
-        ]
-      }};
-
-      if (lossChartFollowing) {{
-        option.dataZoom[0].start = 0;
-        option.dataZoom[0].end = 100;
-        option.dataZoom[1].start = 0;
-        option.dataZoom[1].end = 100;
-      }}
-
-      lossChart.setOption(option, {{ replaceMerge: ["xAxis", "series"] }});
+            data: data,
+            showSymbol: false,
+            symbolSize: 2,
+            sampling: "lttb",
+            lineStyle: {{ color: "#16bac5", width: 1.5 }},
+            itemStyle: {{ color: "#16bac5" }},
+            areaStyle: {{ color: "rgba(22,186,197,0.08)" }}
+          }}]
+        }};
+        chart.setOption(option, {{ replaceMerge: ["dataZoom", "series"] }});
+      }});
     }}
 
     function renderFiles(files) {{
@@ -1456,7 +1443,7 @@ def render_page(status: dict) -> bytes:
       renderHero(status);
       renderCards(status);
       renderTrainParams(status);
-      renderLossChart(metrics);
+      renderLossChart(metrics, status);
       renderPreviews(status.previews, metrics);
       document.getElementById("resultFiles").innerHTML = renderResult(status.outputs);
       renderResultDuration(metrics);
@@ -1615,7 +1602,17 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def log_message(self, fmt: str, *args: object) -> None:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {self.address_string()} {fmt % args}")
+        message = fmt % args
+        is_success = " 200 " in message or " 304 " in message
+        is_noisy_poll = (
+            "GET /api/status" in message
+            or "GET /preview-image" in message
+            or "GET /assets/logo.png" in message
+            or "GET /favicon.ico" in message
+        )
+        if is_success and is_noisy_poll:
+            return
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {self.address_string()} {message}")
 
 
 def main() -> None:

@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
-                                   prepare_environment, check_port_avaliable, find_avaliable_ports)
+                                   prepare_environment, check_port_avaliable)
 from mikazuki.log import log
 from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
 
@@ -28,6 +28,23 @@ parser.add_argument("--browser", type=str, default=None,
                     choices=["chrome", "edge", "default"],
                     help="Browser to open GUI: chrome, edge, or default (system default)")
 parser.add_argument("--dev", action="store_true")
+
+
+def ensure_port_available(port: int, fallback_start: int, fallback_end: int, label: str, reserved_ports: set[int]) -> int:
+    if port not in reserved_ports and check_port_avaliable(port):
+        reserved_ports.add(port)
+        return port
+
+    for candidate in range(fallback_start, fallback_end):
+        if candidate in reserved_ports:
+            continue
+        if check_port_avaliable(candidate):
+            reserved_ports.add(candidate)
+            log.warning(f"{label} port {port} is already in use, using {candidate} instead.")
+            return candidate
+
+    log.error(f"{label} port finding fallback error")
+    return port
 
 
 @catch_exception
@@ -75,13 +92,18 @@ def launch():
     if not args.skip_prepare_environment:
         prepare_environment(disable_auto_mirror=args.disable_auto_mirror)
 
-    if not check_port_avaliable(args.port):
-        # Keep fallback ports in the same 28000 range for consistency.
-        avaliable = find_avaliable_ports(28000, 28000 + 20)
-        if avaliable:
-            args.port = avaliable
-        else:
-            log.error("port finding fallback error")
+    # Keep fallback ports near their defaults and reserve chosen ports so two
+    # child services cannot both fall back to the same port before they start.
+    reserved_ports: set[int] = set()
+    if not args.disable_tageditor:
+        reserved_ports.add(28001)
+    args.port = ensure_port_available(args.port, args.port, args.port + 20, "GUI", reserved_ports)
+    if not args.disable_tensorboard:
+        args.tensorboard_port = ensure_port_available(
+            args.tensorboard_port, args.tensorboard_port, args.tensorboard_port + 20, "TensorBoard", reserved_ports)
+    if not args.disable_train_monitor:
+        args.train_monitor_port = ensure_port_available(
+            args.train_monitor_port, args.train_monitor_port, args.train_monitor_port + 20, "Train monitor", reserved_ports)
 
     from mikazuki.update_check import local_version
     log.info(f"SD-Trainer Version: {local_version()}")
