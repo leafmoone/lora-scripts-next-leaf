@@ -58,6 +58,42 @@ train_monitor/
 
 **实现入口**：`train_monitor/server.py` 末尾 `if __name__ == "__main__": main()`，监听 `0.0.0.0:PORT`。
 
+### 主 WebUI 训练界面（端口 28000）
+
+训练监控页（6008）之外，还有一个主 WebUI（端口 28000），这才是用户配置和启动训练的主界面。
+
+**启动方式**：
+
+```bash
+cd d:\ai\lora-scripts-next
+python gui.py
+# 浏览器打开 http://localhost:28000
+# 默认跳转到 /lora/sd3.html（Anima LoRA 训练页）
+```
+
+**前端架构**：
+
+- 前端源码不在本项目，来自上游 [`Akegarasu/lora-scripts-frontend`](https://github.com/Akegarasu/lora-scripts-frontend)（VuePress SSR + hydration）
+- 编译产物 vendored 到 `frontend/dist/`，由 FastAPI `StaticFiles` 直接挂载
+- 本项目只对 dist 做了 27 处文字替换（SD3 → Anima LoRA），详见 `frontend/VENDOR.md`
+- 后端 API 路由在 `mikazuki/app/api.py`，前端 schema 在 `mikazuki/schema/`
+
+**训练页面列表**（`frontend/dist/lora/`）：
+
+| 页面 | 用途 |
+|------|------|
+| `sd3.html` | **Anima LoRA 训练**（默认入口，已改名） |
+| `flux.html` | Flux LoRA 训练 |
+| `sdxl.html` | SDXL LoRA 训练 |
+| `basic.html` | SD1.5 基础训练 |
+| `master.html` | 高级/专家模式 |
+| `params.html` | 参数说明 |
+| `tools.html` | 工具集 |
+
+**注意**：主 WebUI 的前端是预编译产物，无法从源码构建。如需修改主 WebUI 界面，只能：
+1. 直接 patch `frontend/dist/` 下的 JS/HTML 文件（如当前做法）
+2. 或 fork 上游前端源码仓库重新构建
+
 ### 技术栈
 
 - **无框架**：纯 HTML + CSS + Vanilla JS（无 React/Vue/Tailwind）

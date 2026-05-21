@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
@@ -136,6 +136,20 @@ if cors_config != "":
 
 
 @app.middleware("http")
+async def redirect_vuepress_md_to_html(request, call_next):
+    """VuePress sidebar links use *.md; vendored dist only ships *.html."""
+    path = request.url.path
+    if request.method == "GET" and path.endswith(".md"):
+        html_path = f"{path[:-3]}.html"
+        rel = html_path.lstrip("/")
+        if (_FRONTEND_DIST / rel).is_file():
+            query = request.url.query
+            target = f"{html_path}?{query}" if query else html_path
+            return RedirectResponse(url=target, status_code=302)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def add_cache_control_header(request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "max-age=0"
@@ -153,6 +167,12 @@ async def train_log_viewer():
     if not _TRAIN_LOG_HTML.is_file():
         raise HTTPException(status_code=404, detail="train_log.html not found")
     return FileResponse(str(_TRAIN_LOG_HTML))
+
+
+@app.get("/lora/sdxl.html")
+async def lora_sdxl_redirect():
+    """Legacy SDXL page → unified Stable Diffusion (master) entry."""
+    return RedirectResponse(url="/lora/master.html", status_code=302)
 
 
 @app.get("/")

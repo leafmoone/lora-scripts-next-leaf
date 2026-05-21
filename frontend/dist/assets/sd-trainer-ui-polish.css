@@ -1,0 +1,1476 @@
+
+/* ========== SD-Trainer UI polish (2026-05-21) ========== */
+/* 秋叶原版色系：白/浅灰两层 + 圆角与按钮层次打磨 */
+/* See frontend/DESIGN-training-params-ui.md */
+
+:root {
+  --sd-radius-sm: 6px;
+  --sd-radius-md: 10px;
+  --sd-radius-lg: 12px;
+  --sd-radius-pill: 999px;
+  --el-border-radius-base: var(--sd-radius-md);
+  --el-border-radius-small: var(--sd-radius-sm);
+  --el-border-radius-round: var(--sd-radius-pill);
+  --sd-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sd-primary-muted: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  --sd-warning-muted: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
+  /* 侧栏字号：在 16px 基准上分级，避免过小费眼 */
+  --sd-nav-l0: 1.125rem;
+  --sd-nav-l1: 1.0625rem;
+  --sd-nav-l2: 1rem;
+  --sd-nav-l3: 0.9375rem;
+  --sd-nav-footer: 0.875rem;
+  /* 侧栏字色：由深到浅，避免「全黑」单调 */
+  --sd-nav-l0-color: #1a1d21;
+  --sd-nav-l1-color: #2c3036;
+  --sd-nav-l2-color: #4a4f57;
+  --sd-nav-l3-color: #727780;
+  --sd-nav-l2-hover: #30343a;
+  --sd-nav-l3-hover: var(--el-color-primary);
+  --sd-nav-section-border: var(--c-border, #e4e7ed);
+  /* 主操作区：与表单区同款白底，不用主题色铺底 */
+  --sd-nav-primary-zone-bg: var(--c-bg-mute, #fff);
+  --sd-nav-primary-zone-border: var(--c-border, #e4e7ed);
+  --sd-nav-secondary-label: #909399;
+}
+
+/* ----- Layout balance（训练页三栏 · 小幅比例） ----- */
+.theme-container.no-navbar {
+  --sidebar-width: 22rem;
+}
+
+.theme-container.no-navbar .example-container > .schema-container {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 56%;
+}
+
+.theme-container.no-navbar .example-container > .right-container {
+  flex: 0 1 32%;
+  max-width: 32%;
+  min-width: 280px;
+}
+
+@media (max-width: 1279px) {
+  .theme-container.no-navbar .example-container > .schema-container {
+    max-width: 54%;
+  }
+
+  .theme-container.no-navbar .example-container > .right-container {
+    flex: 0 1 34%;
+    max-width: 34%;
+  }
+}
+
+/* ----- Sidebar：三级信息层级（分组 > 入口 > 子页） ----- */
+.sidebar .sidebar-item {
+  border-radius: var(--sd-radius-md);
+  margin: 1px 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* L0：产品名 SD-Trainer — 最深 */
+.sidebar-items > li:first-child > a.sidebar-item.sidebar-heading {
+  font-size: var(--sd-nav-l0) !important;
+  font-weight: 700;
+  color: var(--sd-nav-l0-color) !important;
+  margin-bottom: 0.35rem;
+  padding: 0.55rem 1rem 0.55rem 1.15rem;
+  line-height: 1.45;
+}
+
+.sidebar-items > li:first-child > a.sidebar-item.sidebar-heading:hover {
+  color: var(--sd-nav-l0-color) !important;
+}
+
+/* L1：一级目录 — 深色分组标题 + 淡紫分隔线 */
+.sidebar-items > li > p.sidebar-item.sidebar-heading {
+  font-size: var(--sd-nav-l1) !important;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--sd-nav-l1-color) !important;
+  margin: 1.1rem 12px 0.4rem;
+  padding: 0 0 0.45rem;
+  border-bottom: 1px solid var(--sd-nav-section-border);
+  cursor: default;
+  line-height: 1.45;
+}
+
+.sidebar-items > li > p.sidebar-item.sidebar-heading:hover {
+  background: transparent;
+  color: var(--sd-nav-l1-color) !important;
+}
+
+/* —— 主操作区：训练 — 白底卡片 + 左侧细条 accent（与秋叶表单区一致）—— */
+.sidebar-items > li:nth-child(2) {
+  margin: 0.35rem 6px 1.15rem;
+  padding: 0.5rem 0.25rem 0.65rem;
+  border-radius: var(--sd-radius-lg);
+  background: var(--sd-nav-primary-zone-bg);
+  border: 1px solid var(--sd-nav-primary-zone-border);
+  box-shadow: none;
+  border-left: 3px solid var(--el-color-primary);
+}
+
+.sidebar-items > li:nth-child(2) > p.sidebar-item.sidebar-heading {
+  margin: 0.15rem 10px 0.5rem;
+  padding: 0 0 0.45rem;
+  font-size: 1.125rem !important;
+  font-weight: 700;
+  color: var(--sd-nav-l1-color) !important;
+  border-bottom: 1px solid var(--c-border, #e4e7ed);
+  letter-spacing: 0.03em;
+}
+
+.sidebar-items > li:nth-child(2) > ul.sidebar-item-children {
+  padding-left: 0.25rem;
+  margin-bottom: 0.15rem;
+}
+
+/* 主区内二级略加深，强调可点入口 */
+.sidebar-items > li:nth-child(2) > ul.sidebar-item-children > li > a.sidebar-item:not(.active) {
+  color: #3d4249 !important;
+  font-weight: 650;
+}
+
+.sidebar-items > li:nth-child(2) > ul.sidebar-item-children .sidebar-item-children {
+  border-left-color: var(--c-border, #dcdfe6);
+}
+
+/* —— 辅助区：工具 / 帮助 / 其他 —— */
+.sidebar-items > li:nth-child(3) {
+  margin-top: 0.25rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed color-mix(in srgb, var(--c-border, #dcdfe6) 90%, transparent);
+}
+
+.sidebar-items > li:nth-child(3)::before {
+  content: "更多功能";
+  display: block;
+  margin: 0 14px 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--sd-nav-secondary-label);
+}
+
+.sidebar-items > li:nth-child(n + 3) > p.sidebar-item.sidebar-heading {
+  font-size: 0.8125rem !important;
+  font-weight: 600;
+  color: var(--sd-nav-l3-color) !important;
+  margin: 0.65rem 14px 0.2rem;
+  padding: 0;
+  border-bottom: none;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-items > li:nth-child(n + 3) > ul.sidebar-item-children {
+  padding-left: 0.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-items > li:nth-child(n + 3) > ul.sidebar-item-children > li > a.sidebar-item {
+  font-size: var(--sd-nav-l3) !important;
+  font-weight: 500;
+  padding: 0.32rem 0.65rem 0.32rem 1rem;
+  min-height: 1.75rem;
+}
+
+.sidebar-items > li:nth-child(n + 3) > ul.sidebar-item-children > li > a.sidebar-item:not(.active) {
+  color: var(--sd-nav-l3-color) !important;
+}
+
+.sidebar-items > li:nth-child(n + 3) > ul.sidebar-item-children > li > a.sidebar-item:hover:not(.active) {
+  color: var(--sd-nav-l2-hover) !important;
+  background: color-mix(in srgb, var(--c-bg-soft, #f5f7fa) 60%, transparent);
+}
+
+/* L1 下整块子树缩进（训练区外的通用兜底） */
+.sidebar-items > li > ul.sidebar-item-children {
+  padding-left: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+/* L2：二级入口 — 中灰（覆盖 VuePress 默认 accent 色） */
+.sidebar-items > li > ul.sidebar-item-children > li > a.sidebar-item:not(.active) {
+  color: var(--sd-nav-l2-color) !important;
+}
+
+.sidebar-items > li > ul.sidebar-item-children > li > a.sidebar-item {
+  font-size: var(--sd-nav-l2) !important;
+  font-weight: 600;
+  padding: 0.42rem 0.75rem 0.42rem 1.15rem;
+  width: calc(100% - 16px);
+  line-height: 1.5;
+  min-height: 2rem;
+}
+
+.sidebar-items > li > ul.sidebar-item-children > li > a.sidebar-item.sidebar-heading:not(.active) {
+  color: var(--sd-nav-l2-color) !important;
+}
+
+.sidebar-items > li > ul.sidebar-item-children > li > a.sidebar-item:hover:not(.active) {
+  color: var(--sd-nav-l2-hover) !important;
+  background: color-mix(in srgb, var(--c-bg-soft, #f5f7fa) 80%, transparent);
+}
+
+/* L3 容器：左侧引导线（中性灰，不染色） */
+.sidebar-items > li > ul.sidebar-item-children .sidebar-item-children {
+  margin: 0.15rem 10px 0.35rem 1.35rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--c-border, #dcdfe6);
+}
+
+/* L3：三级子页 — 浅灰，未选中明显弱于二级 */
+.sidebar-items > li > ul.sidebar-item-children .sidebar-item-children > li > a.sidebar-item:not(.sidebar-heading):not(.active) {
+  font-size: var(--sd-nav-l3) !important;
+  font-weight: 500;
+  color: var(--sd-nav-l3-color) !important;
+  padding: 0.38rem 0.75rem 0.38rem 1.1rem;
+  margin-left: 4px;
+  margin-right: 4px;
+  line-height: 1.5;
+  min-height: 1.85rem;
+}
+
+.sidebar-items > li > ul.sidebar-item-children .sidebar-item-children > li > a.sidebar-item:not(.sidebar-heading):hover:not(.active) {
+  color: var(--sd-nav-l3-hover) !important;
+  background: color-mix(in srgb, var(--el-color-primary) 6%, transparent);
+}
+
+/* 选中态：主题色 + 浅底，与未选中灰阶拉开 */
+.sidebar .sidebar-item.active:not(.sidebar-heading) {
+  background: var(--sd-primary-muted) !important;
+  border-left: 3px solid var(--el-color-primary);
+  padding-left: calc(1.1rem - 3px);
+  font-weight: 600;
+  color: var(--el-color-primary) !important;
+}
+
+.sidebar-items > li > ul.sidebar-item-children > li > a.sidebar-item.active.sidebar-heading {
+  background: var(--sd-primary-muted) !important;
+  border-left: 3px solid var(--el-color-primary);
+  padding-left: calc(1.15rem - 3px);
+  color: var(--el-color-primary) !important;
+  font-weight: 650;
+}
+
+/* 有子页选中时，父级 LoRA 保持中灰（避免父子同色抢眼） */
+.sidebar-items > li > ul.sidebar-item-children > li:has(.sidebar-item-children .sidebar-item.active) > a.sidebar-item.sidebar-heading:not(.active) {
+  color: var(--sd-nav-l2-color) !important;
+  font-weight: 600;
+}
+
+.sidebar-bottom {
+  border-top: 1px solid var(--c-border);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.sidebar-bottom .sidebar-item.sidebar-heading {
+  font-size: var(--sd-nav-footer) !important;
+  font-weight: 500;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.45;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+/* ----- 中栏：秋叶白表单区（沿用 --c-bg-mute = 白） ----- */
+.example-container .schema-container {
+  background-color: var(--c-bg-mute);
+}
+
+.example-container .schema-container form {
+  padding: 2rem 2.5rem;
+}
+
+/* 分组标题：秋叶扁平分隔，不做灰底卡片 */
+.example-container .schema-container > h2,
+.example-container .schema-container form > h2,
+.example-container .schema-container form > section > h2,
+.example-container .schema-container .el-form > h2 {
+  margin: 1.25rem 0 0.75rem;
+  padding: 0 0 0.5rem;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-bottom: 1px solid var(--c-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.example-container .schema-container > h2:first-child,
+.example-container .schema-container form > h2:first-child {
+  margin-top: 0;
+}
+
+.example-container .schema-container > h3,
+.example-container .schema-container form > h3,
+.example-container .schema-container form > section > h3 {
+  margin: 1rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: none;
+}
+
+.example-container .el-form-item {
+  margin-bottom: 18px;
+}
+
+.example-container .el-form-item__label {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* 输入框：圆角，背景交给 Element 默认白 */
+.example-container .el-input__wrapper,
+.example-container .el-textarea__inner,
+.example-container .el-select .el-input__wrapper {
+  border-radius: var(--sd-radius-md);
+}
+
+.example-container .el-input__wrapper.is-focus,
+.example-container .el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--sd-primary-muted);
+}
+
+.example-container .el-input-number {
+  border-radius: var(--sd-radius-md);
+  overflow: hidden;
+}
+
+/* ----- 右栏：秋叶白底 + 预览区单独浅灰槽（可读性保留） ----- */
+.example-container > .right-container {
+  background-color: var(--c-bg-mute);
+  border-right: none;
+  border-left: 1px solid var(--c-border);
+  box-shadow: none;
+}
+
+.example-container > .right-container section header {
+  height: auto;
+  min-height: 44px;
+  padding: 0 1.5rem;
+  border-top: none;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.example-container > .right-container .theme-default-content {
+  padding: 1rem 1.5rem;
+}
+
+.example-container > .right-container .theme-default-content h1 {
+  font-size: 1.5rem !important;
+  margin-top: 0.25rem !important;
+}
+
+.example-container > .right-container .theme-default-content h1 + p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-text-lighter, #606266);
+}
+
+.example-container > .right-container section .params-section {
+  padding: 0.75rem 1.5rem 0;
+}
+
+.example-container > .right-container section .params-section code,
+.example-container > .right-container section .params-section > div {
+  display: block;
+  border-radius: var(--sd-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-light, #f3f4f5);
+}
+
+.example-container > .right-container section .params-section code {
+  background: transparent;
+  color: inherit;
+}
+
+.example-container > .right-container section .params-section .el-scrollbar__view {
+  padding: 0.75rem 1rem;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.example-container > .right-container section .params-section .shiki,
+.example-container > .right-container section .params-section pre {
+  background: var(--c-bg-light, #f3f4f5) !important;
+}
+
+/* 按钮区 */
+.example-container > .right-container .el-row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 1rem 0.5rem !important;
+}
+
+.example-container .el-button.max-btn {
+  height: 36px;
+  border-radius: var(--sd-radius-md);
+  font-weight: 500;
+}
+
+.example-container .el-button.max-btn:not(.color-btn) {
+  background: var(--c-bg-light, #f3f4f5);
+  border-color: var(--c-border);
+}
+
+.example-container .el-button.max-btn:not(.color-btn):hover {
+  border-color: var(--el-color-primary-light-5, #b3d8ff);
+  color: var(--el-color-primary);
+  background: var(--sd-primary-muted);
+}
+
+.example-container .el-button.color-btn.el-button--primary.is-plain,
+.example-container .el-button.color-btn.el-button--primary {
+  background: var(--sd-primary-muted) !important;
+  border: 1px solid var(--el-color-primary) !important;
+  color: var(--el-color-primary) !important;
+  --el-button-text-color: var(--el-color-primary) !important;
+  font-weight: 650;
+  height: 40px;
+}
+
+.example-container .el-button.color-btn.el-button--primary.is-plain:hover,
+.example-container .el-button.color-btn.el-button--primary:hover {
+  background: color-mix(in srgb, var(--el-color-primary) 18%, #fff) !important;
+}
+
+.example-container .el-button.color-btn.el-button--warning.is-plain,
+.example-container .el-button.color-btn.el-button--warning {
+  background: var(--sd-warning-muted) !important;
+  border: 1px solid var(--el-color-warning) !important;
+  color: var(--el-color-warning) !important;
+  --el-button-text-color: var(--el-color-warning) !important;
+  font-weight: 650;
+  height: 40px;
+}
+
+.example-container .el-button.color-btn.el-button--warning.is-plain:hover,
+.example-container .el-button.color-btn.el-button--warning:hover {
+  background: color-mix(in srgb, var(--el-color-warning) 18%, #fff) !important;
+}
+
+.example-container > .right-container .el-row:has(.color-btn.el-button--primary) {
+  margin-top: 0.25rem;
+}
+
+/* 文档首页：轻卡片，白底 */
+main.page .theme-default-content {
+  max-width: 760px;
+  margin: 1.5rem auto 2.5rem;
+  padding: 1.75rem 2rem;
+  background: var(--c-bg-mute);
+  border: 1px solid var(--c-border);
+  border-radius: var(--sd-radius-lg);
+  box-shadow: var(--sd-shadow-sm);
+}
+
+.example-container .el-alert {
+  border-radius: var(--sd-radius-md);
+}
+
+/* ----- 暗色模式 ----- */
+html.dark {
+  --el-border-radius-base: var(--sd-radius-md);
+  --el-border-radius-small: var(--sd-radius-sm);
+  --sd-nav-l0-color: #e8eaed;
+  --sd-nav-l1-color: #d0d4da;
+  --sd-nav-l2-color: #a8adb8;
+  --sd-nav-l3-color: #7d8490;
+  --sd-nav-l2-hover: #e0e3e8;
+  --sd-nav-section-border: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border, #3a3f4b));
+  --sd-nav-primary-zone-bg: var(--c-bg-mute, #252529);
+  --sd-nav-primary-zone-border: var(--c-border, #3a3f4b);
+  --sd-nav-secondary-label: #6b7280;
+}
+
+html.dark .sidebar-items > li:nth-child(2) > ul.sidebar-item-children > li > a.sidebar-item:not(.active) {
+  color: #c4c8d0 !important;
+}
+
+html.dark .example-container > .right-container {
+  background-color: var(--code-bg-color);
+  box-shadow: none;
+}
+
+html.dark .example-container > .right-container section .params-section code,
+html.dark .example-container > .right-container section .params-section > div {
+  background: var(--c-bg-mute);
+  border-color: var(--c-border);
+}
+
+html.dark .example-container > .right-container section .params-section .shiki,
+html.dark .example-container > .right-container section .params-section pre {
+  background: var(--c-bg-mute) !important;
+}
