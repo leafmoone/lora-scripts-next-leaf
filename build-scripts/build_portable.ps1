@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
-    [string]$Version     = "2.4.0",
+    [string]$Version     = "2.5.0",
     [string]$PythonVer   = "3.10.11",
     [switch]$Clean,
     [switch]$Skip7z
@@ -163,12 +163,12 @@ $copyDirs = @(
     @{ Src = "frontend"; Dst = "frontend" },
     @{ Src = "config";   Dst = "config" },
     @{ Src = "scripts";  Dst = "scripts" },
-    @{ Src = "vendor";   Dst = "vendor" }
+    @{ Src = "vendor";   Dst = "vendor" },
+    @{ Src = "train_monitor"; Dst = "train_monitor" }
 )
 
 $copyFiles = @(
     "gui.py",
-    "train_status_server.py",
     "requirements.txt",
     "setup_environment.py",
     "apply_lora_next_anima_defaults.py",
