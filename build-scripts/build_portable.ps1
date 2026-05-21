@@ -324,24 +324,15 @@ $batContent += "exit /b 1`r`n"
 )
 Write-Host "  Created run_gui_portable.bat"
 
-# Keep run_gui.bat as the beginner-friendly stable entrypoint, but make it a
-# tiny wrapper so portable and source launch behavior never mix.
-$runGuiWrapper = "@echo off`r`n"
-$runGuiWrapper += "chcp 65001 >nul 2>&1`r`n"
-$runGuiWrapper += "cd /d `"%~dp0`"`r`n"
-$runGuiWrapper += "if not exist `"run_gui_portable.bat`" (`r`n"
-$runGuiWrapper += "    echo [ERROR] run_gui_portable.bat not found. Please re-extract the package.`r`n"
-$runGuiWrapper += "    pause`r`n"
-$runGuiWrapper += "    exit /b 1`r`n"
-$runGuiWrapper += ")`r`n"
-$runGuiWrapper += "call `"%~dp0run_gui_portable.bat`" %*`r`n"
-$runGuiWrapper += "exit /b %errorlevel%`r`n"
-[System.IO.File]::WriteAllText(
-    (Join-Path $portableDir "run_gui.bat"),
-    $runGuiWrapper,
-    (New-Object System.Text.UTF8Encoding $false)
-)
-Write-Host "  Created run_gui.bat wrapper"
+# Use the repo's run_gui.bat as the portable entrypoint (it auto-detects
+# python_embeded and dispatches to run_gui_portable.bat).
+$repoRunGui = Join-Path $ProjectRoot "run_gui.bat"
+if (Test-Path $repoRunGui) {
+    Copy-Item $repoRunGui -Destination (Join-Path $portableDir "run_gui.bat") -Force
+    Write-Host "  Copied run_gui.bat (unified launcher from repo)"
+} else {
+    Write-Host "  WARNING: run_gui.bat not found in repo root" -ForegroundColor Yellow
+}
 
 # update/
 $updateDir = Join-Path $portableDir "update"

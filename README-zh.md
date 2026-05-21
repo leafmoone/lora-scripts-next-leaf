@@ -124,7 +124,7 @@ bash install.bash && bash run_gui.sh
 推荐直接双击 `run_gui.bat`。如果一定要运行 `.ps1`：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\run_gui.ps1
+powershell -ExecutionPolicy Bypass -File .\run_gui_source.ps1
 ```
 
 </details>
