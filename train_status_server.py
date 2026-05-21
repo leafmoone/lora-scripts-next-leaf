@@ -469,25 +469,65 @@ def first_matching_line(lines: list[str], patterns: list[str]) -> str:
     return ""
 
 
-def gpu_memory_used_mb() -> int | None:
+_nvml_initialized = False
+
+
+def _ensure_nvml() -> bool:
+    global _nvml_initialized
+    if _nvml_initialized:
+        return True
     try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=1.2,
-        )
-    except (OSError, subprocess.SubprocessError):
+        import pynvml
+        pynvml.nvmlInit()
+        _nvml_initialized = True
+        return True
+    except Exception:
+        return False
+
+
+def gpu_info() -> dict | None:
+    """Collect GPU metrics via pynvml. Returns info for the first GPU."""
+    if not _ensure_nvml():
+        return None
+    try:
+        import pynvml
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        name = pynvml.nvmlDeviceGetName(handle)
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", errors="replace")
+        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+        try:
+            temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+        except Exception:
+            temp = None
+        try:
+            power_mw = pynvml.nvmlDeviceGetPowerUsage(handle)
+            power_w = round(power_mw / 1000, 1)
+        except Exception:
+            power_w = None
+        try:
+            power_limit_mw = pynvml.nvmlDeviceGetEnforcedPowerLimit(handle)
+            power_limit_w = round(power_limit_mw / 1000, 1)
+        except Exception:
+            power_limit_w = None
+        return {
+            "name": name,
+            "vram_used_mb": round(mem.used / (1024 * 1024)),
+            "vram_total_mb": round(mem.total / (1024 * 1024)),
+            "gpu_load": util.gpu,
+            "mem_load": util.memory,
+            "temperature": temp,
+            "power_w": power_w,
+            "power_limit_w": power_limit_w,
+        }
+    except Exception:
         return None
 
-    total = 0
-    for line in result.stdout.splitlines():
-        try:
-            total += int(line.strip())
-        except ValueError:
-            continue
-    return total
+
+def gpu_memory_used_mb() -> int | None:
+    info = gpu_info()
+    return info["vram_used_mb"] if info else None
 
 
 def format_duration(value: str) -> str:
@@ -736,6 +776,7 @@ def collect_status() -> dict:
         "log_files": newest_files(LOG_DIR),
         "train_params": _extract_train_params(train_config),
         "tensorboard_loss": tensorboard_loss_scalars(),
+        "gpu_info": gpu_info(),
     }
 
     try:
@@ -864,19 +905,28 @@ def render_page(status: dict) -> bytes:
     .tb-loss-control-help {{ color:var(--muted); font-size:12px; margin-left:4px; }}
     .tb-loss-chart {{ width:100%; height:190px; }}
     .tb-loss-empty {{ padding:16px; border:1px dashed var(--line); border-radius:10px; background:#0b1224; color:var(--muted); }}
-    .param-row {{ display:grid; grid-template-columns:1fr 3fr; gap:14px; align-items:stretch; }}
+    .param-row {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch; }}
     @media (max-width: 720px) {{ .param-row {{ grid-template-columns:1fr; }} }}
-    .param-card {{ border-radius:14px; background:var(--card); border:1px solid var(--line); }}
-    .param-card-hero {{ display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px 16px; gap:6px; }}
-    .param-card-hero .ph-label {{ color:var(--muted); font-size:12px; letter-spacing:.5px; }}
-    .param-card-hero .ph-value {{ color:#a5b4fc; font-size:32px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1; }}
-    .param-card-hero .ph-detail {{ color:var(--muted); font-size:11px; margin-top:4px; line-height:1.4; }}
-    .param-card-rest {{ display:grid; grid-template-columns:repeat(4,1fr); }}
-    .param-cell {{ padding:9px 12px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); }}
-    .param-cell:nth-child(4n) {{ border-right:none; }}
-    .param-card-rest .param-cell:nth-last-child(-n+4) {{ border-bottom:none; }}
-    .param-cell .pc-label {{ color:var(--muted); font-size:11px; margin-bottom:3px; }}
-    .param-cell .pc-value {{ color:var(--text); font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+    .param-card {{ border-radius:14px; background:var(--panel); border:1px solid var(--line); }}
+    .gpu-panel {{ padding:16px 18px; display:grid; gap:12px; }}
+    .gpu-header {{ display:flex; justify-content:space-between; align-items:center; }}
+    .gpu-name {{ font-size:15px; font-weight:750; color:var(--text); }}
+    .gpu-temp {{ font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; }}
+    .gpu-bars {{ display:grid; gap:10px; }}
+    .gpu-bar-row {{ display:grid; gap:4px; }}
+    .gpu-bar-label {{ display:flex; justify-content:space-between; color:var(--muted); font-size:12px; }}
+    .gpu-bar-label strong {{ color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; }}
+    .gpu-bar-track {{ width:100%; height:10px; border-radius:999px; background:#050816; overflow:hidden; border:1px solid var(--line); }}
+    .gpu-bar-fill {{ height:100%; border-radius:999px; transition:width .4s ease; }}
+    .gpu-bar-fill.load {{ background:linear-gradient(90deg,#38bdf8,#34d399); }}
+    .gpu-bar-fill.vram {{ background:linear-gradient(90deg,#a78bfa,#ec4899); }}
+    .gpu-power {{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }}
+    .param-summary {{ padding:16px 18px; display:flex; flex-direction:column; justify-content:center; gap:8px; }}
+    .param-summary-title {{ color:var(--muted); font-size:11px; letter-spacing:.5px; text-transform:uppercase; }}
+    .param-summary-items {{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px 14px; }}
+    .ps-item {{ }}
+    .ps-item .ps-label {{ color:var(--muted); font-size:11px; }}
+    .ps-item .ps-value {{ color:var(--text); font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
     .card {{ padding:14px; }}
     .label {{ color:var(--muted); font-size:12px; margin-bottom:6px; }}
     .value {{ font-size:18px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
@@ -1009,35 +1059,69 @@ def render_page(status: dict) -> bytes:
     let previewEnabled = localStorage.getItem("loraMonitorPreviewEnabled") === "1";
 
     function renderTrainParams(status) {{
-      const params = status.train_params || [];
       const el = document.getElementById("trainParams");
-      if (!params.length) {{
-        el.innerHTML = '<span class="muted" style="font-size:12px;">等待训练启动后显示关键超参。</span>';
-        return;
+      const gpu = status.gpu_info;
+      const params = status.train_params || [];
+      const metrics = status.metrics || {{}};
+
+      // GPU panel
+      var gpuHtml = '';
+      if (gpu) {{
+        const vramPct = gpu.vram_total_mb > 0 ? Math.round(gpu.vram_used_mb * 100 / gpu.vram_total_mb) : 0;
+        const vramGB = (gpu.vram_used_mb / 1024).toFixed(1);
+        const vramTotalGB = (gpu.vram_total_mb / 1024).toFixed(1);
+        const loadPct = gpu.gpu_load || 0;
+        const tempColor = (gpu.temperature || 0) >= 80 ? 'var(--err)' : (gpu.temperature || 0) >= 65 ? 'var(--warn)' : 'var(--ok)';
+        const tempText = gpu.temperature != null ? gpu.temperature + '°C' : '-';
+        const powerText = gpu.power_w != null ? gpu.power_w + 'W' + (gpu.power_limit_w ? ' / ' + gpu.power_limit_w + 'W' : '') : '';
+        gpuHtml = '<div class="param-card"><div class="gpu-panel">'
+          + '<div class="gpu-header"><span class="gpu-name">' + escapeHtml(gpu.name) + '</span>'
+          + '<span class="gpu-temp" style="color:' + tempColor + '">' + tempText + '</span></div>'
+          + '<div class="gpu-bars">'
+          + '<div class="gpu-bar-row"><div class="gpu-bar-label"><span>GPU Load</span><strong>' + loadPct + '%</strong></div>'
+          + '<div class="gpu-bar-track"><div class="gpu-bar-fill load" style="width:' + loadPct + '%"></div></div></div>'
+          + '<div class="gpu-bar-row"><div class="gpu-bar-label"><span>VRAM</span><strong>' + vramGB + ' / ' + vramTotalGB + ' GB</strong></div>'
+          + '<div class="gpu-bar-track"><div class="gpu-bar-fill vram" style="width:' + vramPct + '%"></div></div></div>'
+          + '</div>'
+          + (powerText ? '<div class="gpu-power">⚡ ' + powerText + '</div>' : '')
+          + '</div></div>';
+      }} else {{
+        gpuHtml = '<div class="param-card"><div class="gpu-panel"><span class="muted">GPU 信息不可用</span></div></div>';
       }}
-      var heroKeys = {{"总步数":1,"设定总步数":1,"每 Epoch":1}};
-      var hero = null;
-      var rest = [];
-      params.forEach(function(p) {{
-        if (heroKeys[p.label]) {{ hero = p; }} else {{ rest.push(p); }}
-      }});
-      var h = '';
-      if (hero) {{
-        var parts = escapeHtml(hero.value).match(/^(\\d+)(.*)$/);
-        var mainVal = parts ? parts[1] : escapeHtml(hero.value);
-        var detail = parts ? parts[2].replace(/^[（(]/, '').replace(/[)）]$/, '') : '';
-        h = '<div class="param-card param-card-hero">'
-          + '<div class="ph-label">' + escapeHtml(hero.label) + '</div>'
-          + '<div class="ph-value">' + mainVal + '</div>'
-          + (detail ? '<div class="ph-detail">' + detail + '</div>' : '')
-          + '</div>';
+
+      // Key params summary (concise)
+      var summaryItems = [];
+      var lr = metrics.lr;
+      if (!lr) {{
+        var lrParam = params.find(function(p) {{ return p.label === '学习率' || p.label === 'UNet LR'; }});
+        if (lrParam) lr = lrParam.value;
       }}
-      var r = '<div class="param-card"><div class="param-card-rest">'
-        + rest.map(function(p) {{
-          return '<div class="param-cell"><div class="pc-label">' + escapeHtml(p.label) + '</div><div class="pc-value" title="' + escapeHtml(p.value) + '">' + escapeHtml(p.value) + '</div></div>';
-        }}).join('')
-        + '</div></div>';
-      el.innerHTML = '<div class="param-row">' + h + r + '</div>';
+      if (lr) summaryItems.push({{label: '学习率', value: lr}});
+      var optParam = params.find(function(p) {{ return p.label === '优化器'; }});
+      if (optParam) summaryItems.push({{label: '优化器', value: optParam.value}});
+      var dimParam = params.find(function(p) {{ return p.label === 'Rank (dim)'; }});
+      if (dimParam) summaryItems.push({{label: 'Rank', value: dimParam.value}});
+      var alphaParam = params.find(function(p) {{ return p.label === 'Alpha'; }});
+      if (alphaParam) summaryItems.push({{label: 'Alpha', value: alphaParam.value}});
+      var precisionParam = params.find(function(p) {{ return p.label === '精度'; }});
+      if (precisionParam) summaryItems.push({{label: '精度', value: precisionParam.value}});
+      var resParam = params.find(function(p) {{ return p.label === '分辨率'; }});
+      if (resParam) summaryItems.push({{label: '分辨率', value: resParam.value}});
+
+      var paramHtml = '';
+      if (summaryItems.length > 0) {{
+        paramHtml = '<div class="param-card"><div class="param-summary">'
+          + '<div class="param-summary-title">训练参数</div>'
+          + '<div class="param-summary-items">'
+          + summaryItems.map(function(item) {{
+              return '<div class="ps-item"><div class="ps-label">' + escapeHtml(item.label) + '</div><div class="ps-value" title="' + escapeHtml(item.value) + '">' + escapeHtml(item.value) + '</div></div>';
+            }}).join('')
+          + '</div></div></div>';
+      }} else {{
+        paramHtml = '<div class="param-card"><div class="param-summary"><span class="muted" style="font-size:12px;">等待训练启动后显示参数。</span></div></div>';
+      }}
+
+      el.innerHTML = '<div class="param-row">' + gpuHtml + paramHtml + '</div>';
     }}
 
     function escapeHtml(value) {{
