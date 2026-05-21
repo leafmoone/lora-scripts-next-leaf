@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>Windows 一键 LoRA 训练工具</b> — 支持 <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  解压即用，无需配环境。基于 <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>，秋叶系 GUI 体验。
+  解压即用，无需配环境，12 GB 显存即可稳定训练 Anima LoRA。<br/>
+  <sub>基于 <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>，秋叶系 GUI 体验。</sub>
 </p>
 
 <p align="center">
@@ -87,9 +88,8 @@ bash install.bash && bash run_gui.sh
 
 ---
 
-## 显存参考
-
-Anima LoRA, 1024 分辨率, batch=1, bf16（RTX 4090 实测）：
+<details>
+<summary><b>显存参考（Anima LoRA, 1024 分辨率, RTX 4090 实测）</b></summary>
 
 | 显存 | 配置 | 备注 |
 |------|------|------|
@@ -99,9 +99,10 @@ Anima LoRA, 1024 分辨率, batch=1, bf16（RTX 4090 实测）：
 | ≥ 10 GB | 梯度检查点 + `blocks_to_swap=16` | 速度略降 |
 | ≥ 8 GB | 梯度检查点 + swap 24 + 缓存 TE + LoKr | 极限 |
 
----
+</details>
 
-## 文档
+<details>
+<summary><b>文档</b></summary>
 
 | 主题 | 链接 |
 |------|------|
@@ -110,6 +111,8 @@ Anima LoRA, 1024 分辨率, batch=1, bf16（RTX 4090 实测）：
 | 训练监控 & SSE 接口 | [docs/train-monitor.md](docs/train-monitor.md) |
 | Docker 部署 | [docs/docker.md](docs/docker.md) |
 | CLI 参数 | [docs/cli-args.md](docs/cli-args.md) |
+
+</details>
 
 ---
 
