@@ -923,7 +923,7 @@ def render_page(status: dict) -> bytes:
     .gpu-power {{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }}
     .param-summary {{ padding:16px 18px; display:flex; flex-direction:column; justify-content:center; gap:8px; }}
     .param-summary-title {{ color:var(--muted); font-size:11px; letter-spacing:.5px; text-transform:uppercase; }}
-    .param-summary-items {{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px 14px; }}
+    .param-summary-items {{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px 14px; }}
     .ps-item {{ }}
     .ps-item .ps-label {{ color:var(--muted); font-size:11px; }}
     .ps-item .ps-value {{ color:var(--text); font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
@@ -1089,24 +1089,31 @@ def render_page(status: dict) -> bytes:
         gpuHtml = '<div class="param-card"><div class="gpu-panel"><span class="muted">GPU 信息不可用</span></div></div>';
       }}
 
-      // Key params summary (concise)
+      // Key params summary
       var summaryItems = [];
+      function addParam(label, keys, fallback) {{
+        for (var i = 0; i < keys.length; i++) {{
+          var p = params.find(function(item) {{ return item.label === keys[i]; }});
+          if (p) {{ summaryItems.push({{label: label, value: p.value}}); return; }}
+        }}
+        if (fallback !== undefined && fallback !== null) summaryItems.push({{label: label, value: String(fallback)}});
+      }}
       var lr = metrics.lr;
       if (!lr) {{
         var lrParam = params.find(function(p) {{ return p.label === '学习率' || p.label === 'UNet LR'; }});
         if (lrParam) lr = lrParam.value;
       }}
       if (lr) summaryItems.push({{label: '学习率', value: lr}});
-      var optParam = params.find(function(p) {{ return p.label === '优化器'; }});
-      if (optParam) summaryItems.push({{label: '优化器', value: optParam.value}});
-      var dimParam = params.find(function(p) {{ return p.label === 'Rank (dim)'; }});
-      if (dimParam) summaryItems.push({{label: 'Rank', value: dimParam.value}});
-      var alphaParam = params.find(function(p) {{ return p.label === 'Alpha'; }});
-      if (alphaParam) summaryItems.push({{label: 'Alpha', value: alphaParam.value}});
-      var precisionParam = params.find(function(p) {{ return p.label === '精度'; }});
-      if (precisionParam) summaryItems.push({{label: '精度', value: precisionParam.value}});
-      var resParam = params.find(function(p) {{ return p.label === '分辨率'; }});
-      if (resParam) summaryItems.push({{label: '分辨率', value: resParam.value}});
+      addParam('优化器', ['优化器']);
+      addParam('调度器', ['调度器']);
+      addParam('Rank', ['Rank (dim)']);
+      addParam('Alpha', ['Alpha']);
+      addParam('精度', ['精度']);
+      addParam('分辨率', ['分辨率']);
+      addParam('总 Epochs', ['总 Epochs']);
+      addParam('保存频率', ['保存频率']);
+      addParam('Noise Offset', ['Noise Offset']);
+      addParam('Seed', ['Seed']);
 
       var paramHtml = '';
       if (summaryItems.length > 0) {{
