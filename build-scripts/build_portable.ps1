@@ -110,7 +110,12 @@ function Install-EmbeddedTkinter {
     $embedLib = Join-Path $EmbedDir "Lib"
     New-Item -ItemType Directory -Path $embedLib -Force | Out-Null
     Copy-Item $libTk (Join-Path $embedLib "tkinter") -Recurse -Force
-    Copy-Item (Join-Path $fullRoot "tcl") (Join-Path $EmbedDir "tcl") -Recurse -Force
+    $tclSrc = Join-Path $fullRoot "tcl"
+    if (Test-Path $tclSrc) {
+        Copy-Item $tclSrc (Join-Path $EmbedDir "tcl") -Recurse -Force
+    } else {
+        Write-Host "  WARNING: tcl directory not found at $tclSrc (tkinter may still work)" -ForegroundColor Yellow
+    }
     foreach ($name in @("_tkinter.pyd", "tcl86t.dll", "tk86t.dll")) {
         $src = Join-Path $dllDir $name
         if (Test-Path $src) {
@@ -125,7 +130,13 @@ function Install-EmbeddedTkinter {
     }
 }
 
-Install-EmbeddedTkinter -EmbedDir $pythonDir -ExpectedVersion "3.10"
+# Skip tkinter install if already present and working
+$tkCheck = & $pythonExe -s -c "import tkinter; print('ok')" 2>&1
+if ($LASTEXITCODE -eq 0 -and ($tkCheck -match "ok")) {
+    Write-Host "  tkinter already bundled, skip" -ForegroundColor Green
+} else {
+    Install-EmbeddedTkinter -EmbedDir $pythonDir -ExpectedVersion "3.10"
+}
 
 # get-pip.py
 $getPipPath = Join-Path $pythonDir "get-pip.py"
