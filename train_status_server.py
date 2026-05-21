@@ -905,9 +905,9 @@ def render_page(status: dict) -> bytes:
     .tb-loss-control-help {{ color:var(--muted); font-size:12px; margin-left:4px; }}
     .tb-loss-chart {{ width:100%; height:190px; }}
     .tb-loss-empty {{ padding:16px; border:1px dashed var(--line); border-radius:10px; background:#0b1224; color:var(--muted); }}
-    .param-row {{ display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:stretch; }}
+    .param-row {{ display:grid; grid-template-columns:2fr 3fr 2fr; gap:14px; align-items:stretch; }}
     @media (max-width: 900px) {{ .param-row {{ grid-template-columns:1fr; }} }}
-    .steps-hero {{ display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px 24px; min-width:140px; }}
+    .steps-hero {{ display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px 24px; }}
     .steps-hero .sh-label {{ color:var(--muted); font-size:11px; letter-spacing:.5px; text-transform:uppercase; }}
     .steps-hero .sh-value {{ color:#a5b4fc; font-size:36px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1; margin:6px 0; }}
     .steps-hero .sh-detail {{ color:var(--muted); font-size:11px; line-height:1.4; max-width:200px; }}
