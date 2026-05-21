@@ -33,7 +33,7 @@
 ## 三步开始训练
 
 ```
-1. 下载  →  从 Releases 下载 SD-Trainer-v2.4.0.7z（~21 MB），解压
+1. 下载  →  从 Releases 下载 SD-Trainer-v2.5.0.7z（~20 MB），解压
 2. 启动  →  双击 run_gui.bat（首次自动安装依赖 ~3 GB）
 3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
 ```
@@ -144,7 +144,7 @@ powershell -ExecutionPolicy Bypass -File .\run_gui_source.ps1
 <details>
 <summary><b>解压后路径嵌套两层</b></summary>
 
-若路径出现 `...\lora-scripts-next-2.4.0\lora-scripts-next-2.4.0\`，请进入内层含 `run_gui.bat` 的目录。
+若路径出现 `...\lora-scripts-next-2.5.0\lora-scripts-next-2.5.0\`，请进入内层含 `run_gui.bat` 的目录。
 
 </details>
 
