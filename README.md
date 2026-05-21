@@ -5,13 +5,13 @@
 <h1 align="center">SD-Trainer</h1>
 
 <p align="center">
-  <b>Windows 一键 LoRA 训练工具</b> — 支持 <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  解压即用，无需配环境，12 GB 显存即可稳定训练 Anima LoRA。<br/>
-  <sub>基于 <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>，秋叶系 GUI 体验。</sub>
+  <b>One-click LoRA training GUI for Windows</b> — supports <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
+  Extract and run. No environment setup needed. 12 GB VRAM is enough for Anima LoRA.<br/>
+  <sub>Powered by <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>, Akegarasu-style GUI.</sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=for-the-badge&color=a78bfa&label=%E4%B8%8B%E8%BD%BD%E6%95%B4%E5%90%88%E5%8C%85" alt="下载整合包"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=for-the-badge&color=a78bfa&label=Download" alt="Download"/></a>
 </p>
 
 <p align="center">
@@ -26,22 +26,22 @@
   <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer GUI" width="920" />
 </p>
 
-<p align="center"><sub>Anima LoRA 训练界面 — 左侧参数配置，右侧实时预览</sub></p>
+<p align="center"><sub>Anima LoRA training interface — parameter config on the left, real-time preview on the right</sub></p>
 
 ---
 
-## 三步开始训练
+## Get Started in 3 Steps
 
 ```
-1. 下载  →  从 Releases 下载 SD-Trainer-v2.4.0.7z（~21 MB），解压
-2. 启动  →  双击 run_gui.bat（首次自动安装依赖 ~3 GB）
-3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
+1. Download  →  SD-Trainer-v2.4.0.7z (~21 MB) from Releases, extract
+2. Launch    →  Double-click run_gui.bat (auto-installs deps on first run, ~3 GB)
+3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```
 
-> **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
+> **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
 
 <details>
-<summary><b>从源码安装（Linux / 高级用户）</b></summary>
+<summary><b>Install from source (Linux / advanced users)</b></summary>
 
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
@@ -54,90 +54,88 @@ run_gui.bat
 bash install.bash && bash run_gui.sh
 ```
 
-推荐 Python **3.10**。源码用户可启用 [Flash Attention 2](docs/flash-attention.md) 加速。
+Python **3.10** recommended. Source users can enable [Flash Attention 2](docs/flash-attention.md).
 
 </details>
 
 ---
 
-## 支持什么
+## What's Supported
 
-| 模型 | 网络类型 | 注意力后端 |
-|------|----------|------------|
-| **Anima** / SD3 | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA |
+| Model | Network Types | Attention Backend |
+|-------|---------------|-------------------|
+| **Anima** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA |
 | SD 1.5 / SDXL | LoRA · LoHa · LoKr | xformers / SDPA |
 | Flux | LoRA | xformers / SDPA |
 
 ---
 
-## 训练监控
+## Train Monitor
 
-训练启动后自动打开监控页（端口 6008），实时查看 Loss 曲线、预览图、训练日志。
-
-<p align="center">
-  <img src="assets/readme/train-monitor-loss.png" alt="Loss 曲线" width="920" />
-</p>
-
-<p align="center"><sub>TensorBoard 同源 Loss / LR 四宫格</sub></p>
+Automatically opens a monitor page (port 6008) when training starts — real-time Loss curves, preview samples, and training logs.
 
 <p align="center">
-  <img src="assets/readme/train-monitor-samples.png" alt="预览图" width="920" />
+  <img src="assets/readme/train-monitor-loss.png" alt="Loss Curves" width="920" />
 </p>
 
-<p align="center"><sub>训练预览图实时同步</sub></p>
+<p align="center"><sub>TensorBoard-backed Loss / LR scalar cards</sub></p>
+
+<p align="center">
+  <img src="assets/readme/train-monitor-samples.png" alt="Preview Samples" width="920" />
+</p>
+
+<p align="center"><sub>Preview samples update in real time</sub></p>
 
 ---
 
 <details>
-<summary><b>显存参考（Anima LoRA, 1024 分辨率, RTX 4090 实测）</b></summary>
+<summary><b>VRAM Reference (Anima LoRA, 1024 resolution, RTX 4090 benchmarked)</b></summary>
 
-| 显存 | 配置 | 备注 |
-|------|------|------|
-| ≥ 24 GB | 默认参数 | 最省心 |
-| ≥ 16 GB | `gradient_checkpointing` | 推荐日常 |
-| ≥ 12 GB | 梯度检查点 | 稳定 |
-| ≥ 10 GB | 梯度检查点 + `blocks_to_swap=16` | 速度略降 |
-| ≥ 8 GB | 梯度检查点 + swap 24 + 缓存 TE + LoKr | 极限 |
+| VRAM | Configuration | Notes |
+|------|---------------|-------|
+| ≥ 24 GB | Default settings | Easiest |
+| ≥ 16 GB | `gradient_checkpointing` | Recommended |
+| ≥ 12 GB | Gradient checkpointing | Stable |
+| ≥ 10 GB | Gradient checkpointing + `blocks_to_swap=16` | Slightly slower |
+| ≥ 8 GB | Gradient checkpointing + swap 24 + cache TE + LoKr | Tight |
 
 </details>
 
 <details>
-<summary><b>文档</b></summary>
+<summary><b>Documentation</b></summary>
 
-| 主题 | 链接 |
-|------|------|
-| Anima LoRA 训练指南 | [docs/anima-training.md](docs/anima-training.md) |
+| Topic | Link |
+|-------|------|
+| Anima LoRA Training Guide | [docs/anima-training.md](docs/anima-training.md) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
-| 训练监控 & SSE 接口 | [docs/train-monitor.md](docs/train-monitor.md) |
-| Docker 部署 | [docs/docker.md](docs/docker.md) |
-| CLI 参数 | [docs/cli-args.md](docs/cli-args.md) |
+| Train Monitor & SSE API | [docs/train-monitor.md](docs/train-monitor.md) |
+| Docker Deployment | [docs/docker.md](docs/docker.md) |
+| CLI Arguments | [docs/cli-args.md](docs/cli-args.md) |
+
+</details>
+
+<details>
+<summary><b>Changelog</b></summary>
+
+| Date | Version |
+|------|---------|
+| 2026-05-21 | **v2.4.0** — Training stability: env isolation, NaN filter, sample guard, attn_mode fallback, path normalization; Portable tkinter fix |
+| 2026-05-20 | **v2.3.0** — Train Monitor: TensorBoard-backed curves, parameter checks, log sync |
+| 2026-05-19 | **v2.2.0** — Portable flash-attn fix, crash logging, cross-drive monitor |
+| 2026-05-19 | **v2.1.0** — Flash Attention 2 prebuilt wheels, save-by-steps |
+| 2026-05-18 | **v2.0.0** — First portable release, AMD detection, bf16 fix |
+
+Full details in [CHANGELOG.md](CHANGELOG.md).
+
+</details>
+
+<details>
+<summary><b>Credits</b></summary>
+
+[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) · [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) · [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) · [T-LoRA](https://github.com/ControlGenAI/T-LoRA) — Full attribution in [NOTICE.md](NOTICE.md)
 
 </details>
 
 ---
 
-<details>
-<summary><b>更新日志</b></summary>
-
-| 日期 | 版本 |
-|------|------|
-| 2026-05-21 | **v2.4.0** — 训练稳定性：环境隔离、NaN 过滤、采样保护、attn_mode 降级、路径规范化；整合包 tkinter 修复 |
-| 2026-05-20 | **v2.3.0** — 训练监控升级：TensorBoard 同源曲线、参数速查、日志同步 |
-| 2026-05-19 | **v2.2.0** — 整合包 flash-attn 治本、闪退日志、跨盘监控 |
-| 2026-05-19 | **v2.1.0** — Flash Attention 2 预编译 wheel、按步数保存 |
-| 2026-05-18 | **v2.0.0** — 整合包首发、AMD 检测、bf16 修复 |
-
-详见 [CHANGELOG.md](CHANGELOG.md)。
-
-</details>
-
-<details>
-<summary><b>致谢</b></summary>
-
-[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) · [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) · [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) · [T-LoRA](https://github.com/ControlGenAI/T-LoRA) — 完整归属见 [NOTICE.md](NOTICE.md)
-
-</details>
-
----
-
-<p align="center"><sub>维护者：<b><a href="https://github.com/wochenlong">@wochenlong</a></b> · <a href="CONTRIBUTORS.md">贡献者</a></sub></p>
+<p align="center"><sub>Maintainer: <b><a href="https://github.com/wochenlong">@wochenlong</a></b> · <a href="CONTRIBUTORS.md">Contributors</a></sub></p>
