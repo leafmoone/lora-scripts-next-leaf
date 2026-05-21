@@ -52,7 +52,7 @@ def run_train_monitor():
     log.info(f"Starting train status monitor on port {args.train_monitor_port}...")
     env = os.environ.copy()
     env["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
-    subprocess.Popen([sys.executable, str(base_dir_path() / "train_status_server.py")], env=env)
+    subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
 
 
 @catch_exception
