@@ -12,6 +12,7 @@
 - **NaN 值过滤**：`network_args` / `optimizer_args` 中 `key=NaN` 的无效项现在被自动剥离，修复 LyCORIS `int("NaN")` 导致训练崩溃。
 - **采样保护**：若最终配置无 `sample_prompts`，自动移除 `sample_at_first` 等采样参数，避免 sd-scripts 在 step 0 因 `sample_prompts=None` 崩溃。
 - **attn_mode 自动降级**：配置中指定 `xformers` / `flash` 但对应后端未安装时，自动降级到可用方案（xformers → torch SDPA），并打印 WARNING 而非直接崩溃。
+- **路径规范化**：配置中的模型/数据/输出等路径字段自动将 `\` 转为 `/`，修复 Windows 手动粘贴路径时反斜杠导致的兼容性问题。
 
 ### 整合包改进
 

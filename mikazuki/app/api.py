@@ -137,6 +137,13 @@ def _is_invalid_value(value) -> bool:
     return False
 
 
+_PATH_FIELDS = {
+    "pretrained_model_name_or_path", "vae", "qwen3", "llm_adapter_path",
+    "t5_tokenizer_path", "resume", "train_data_dir", "reg_data_dir",
+    "output_dir", "logging_dir", "network_weights", "sample_prompts",
+}
+
+
 def sanitize_config(config: dict) -> None:
     """Remove all invalid/empty values from config before writing TOML."""
     keys_to_remove = [k for k, v in config.items() if _is_invalid_value(v)]
@@ -145,6 +152,9 @@ def sanitize_config(config: dict) -> None:
     for key in ("network_args", "optimizer_args"):
         if isinstance(config.get(key), list):
             config[key] = _normalize_kv_arg_list(config[key])
+    for key in _PATH_FIELDS:
+        if isinstance(config.get(key), str):
+            config[key] = config[key].replace("\\", "/")
 
 
 async def load_schemas():

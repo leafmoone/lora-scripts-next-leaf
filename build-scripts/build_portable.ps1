@@ -122,7 +122,9 @@ function Install-EmbeddedTkinter {
             Copy-Item $src (Join-Path $EmbedDir $name) -Force
         }
     }
+    $oldEAP2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
     $check = & (Join-Path $EmbedDir "python.exe") -c "import tkinter; print('ok')" 2>&1
+    $ErrorActionPreference = $oldEAP2
     if ($LASTEXITCODE -eq 0 -and ($check -match "ok")) {
         Write-Host "  tkinter bundled from $fullRoot" -ForegroundColor Green
     } else {
@@ -131,7 +133,9 @@ function Install-EmbeddedTkinter {
 }
 
 # Skip tkinter install if already present and working
+$oldEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
 $tkCheck = & $pythonExe -s -c "import tkinter; print('ok')" 2>&1
+$ErrorActionPreference = $oldEAP
 if ($LASTEXITCODE -eq 0 -and ($tkCheck -match "ok")) {
     Write-Host "  tkinter already bundled, skip" -ForegroundColor Green
 } else {
