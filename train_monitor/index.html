@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>训练监控</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/static/monitor.css">
+  <link rel="stylesheet" href="/static/monitor.css?v=20260521-ui6">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 </head>
 <body>
-  <header>
+  <header class="site-header">
     <div class="header-brand">
       <img src="/assets/logo.png" alt="SD-Trainer" width="40" height="40">
       <div><h1>训练监控</h1><div class="muted">端口 6008，每 2 秒自动更新</div></div>
@@ -17,7 +17,7 @@
     <div class="muted" id="updatedAt"></div>
   </header>
   <main>
-    <div class="panel err" id="errorBox" style="display:none"></div>
+    <div class="panel alert alert--error" id="errorBox" style="display:none"></div>
     <section class="hero">
       <div class="hero-top">
         <div>
@@ -26,28 +26,36 @@
         </div>
         <div class="hero-title" id="heroPercent">-</div>
       </div>
-      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-track" id="progressTrack">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
       <div class="loss-summary" id="lossSummary">Loss 曲线等待数据。</div>
       <div class="sample-progress" id="sampleProgress">
         <div class="hero-copy" id="sampleProgressText">预览图生成进度：等待下一次采样</div>
-        <div class="progress-track"><div class="progress-fill" id="sampleProgressFill"></div></div>
+        <div class="progress-track">
+          <div class="progress-fill progress-fill--sample" id="sampleProgressFill"></div>
+        </div>
       </div>
     </section>
     <section class="grid" id="cards"></section>
-    <div id="trainParamsSection" class="panel" style="padding:14px 18px;">
-      <div id="trainParams"><span class="muted" style="font-size:12px;">等待训练启动后显示关键超参。</span></div>
-    </div>
-    <section class="panel">
+    <section id="trainParamsSection" class="panel" data-section="hardware">
+      <h2 class="panel-section-title">硬件与训练参数</h2>
+      <div id="trainParams"><span class="muted">等待训练启动后显示关键超参。</span></div>
+    </section>
+    <section class="panel" data-section="preview">
       <div class="panel-head">
         <div>
           <h2>训练预览图</h2>
           <div class="privacy-note">默认关闭，开启后仅当前浏览器加载图片，保护公开端口下的训练隐私。</div>
         </div>
-        <button id="togglePreview" type="button">开启预览图</button>
+        <button id="togglePreview" type="button" class="preview-toggle" aria-pressed="false">
+          <span class="preview-toggle__track" aria-hidden="true"><span class="preview-toggle__thumb"></span></span>
+          <span class="preview-toggle__text">开启预览</span>
+        </button>
       </div>
-      <div id="previewArea"><div class="preview-hidden"><strong>预览图未加载</strong>点击右侧"开启预览图"后，当前浏览器才会加载训练图片。</div></div>
+      <div id="previewArea"><div class="preview-hidden"><strong>预览图未加载</strong>点击右侧「开启预览图」后，当前浏览器才会加载训练图片。</div></div>
     </section>
-    <section class="panel">
+    <section class="panel" data-section="loss">
       <div class="panel-head">
         <div>
           <h2>Loss 趋势</h2>
@@ -65,27 +73,28 @@
       </div>
       <div id="tensorboardLossArea" class="tb-loss-empty">等待 TensorBoard Loss 数据。</div>
     </section>
-    <details class="panel" id="logDetails">
+    <details class="panel" id="logDetails" data-section="log">
       <summary id="logSummary">训练日志</summary>
       <div class="details-body">
         <div class="log-tools">
           <span class="follow-state" id="followState">自动跟随最新</span>
           <button class="hidden" id="jumpLatest" type="button">回到最新</button>
         </div>
-        <div style="height:10px"></div>
+        <div class="spacer-sm"></div>
         <pre id="logBox">暂无训练日志。</pre>
       </div>
     </details>
-    <section class="panel">
+    <section class="panel" data-section="result">
       <div class="panel-head">
         <div>
           <h2>训练结果</h2>
           <div class="privacy-note">训练完成后，最新模型和保存位置会显示在这里。</div>
+          <div class="muted" id="resultDuration"></div>
         </div>
       </div>
       <div id="resultFiles"><div class="muted">暂无模型输出。训练完成后会在这里显示模型保存位置。</div></div>
     </section>
   </main>
-  <script src="/static/monitor.js"></script>
+  <script src="/static/monitor.js?v=20260521-ui6"></script>
 </body>
 </html>

@@ -122,6 +122,60 @@ def resolve_repo_path(value: str | None) -> Path | None:
 # File scanning
 # ---------------------------------------------------------------------------
 
+MODEL_FILE_GLOBS = ("*.safetensors", "*.ckpt", "*.pt")
+
+
+def _parse_epoch_from_name(name: str) -> int | None:
+    for pattern in (
+        r"-e(\d+)",
+        r"_e(\d+)",
+        r"epoch[_-]?(\d+)",
+        r"e(\d+)\.",
+        r"model-e(\d+)",
+    ):
+        match = re.search(pattern, name, flags=re.IGNORECASE)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                continue
+    return None
+
+
+def _model_file_entry(path: Path) -> dict:
+    st = path.stat()
+    try:
+        rel_path = str(path.relative_to(REPO)).replace("\\", "/")
+    except ValueError:
+        rel_path = str(path)
+    try:
+        folder = str(path.parent.relative_to(REPO)).replace("\\", "/")
+    except ValueError:
+        folder = str(path.parent)
+    return {
+        "name": path.name,
+        "path": str(path),
+        "size": human_size(st.st_size),
+        "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        "mtime_ts": st.st_mtime,
+        "rel_path": rel_path,
+        "folder": folder,
+        "ext": path.suffix.lower(),
+        "epoch": _parse_epoch_from_name(path.name),
+    }
+
+
+def newest_model_files(root: Path, limit: int = 12) -> list[dict]:
+    if not root.exists():
+        return []
+    files: list[Path] = []
+    for pattern in MODEL_FILE_GLOBS:
+        files.extend(root.rglob(pattern))
+    files = [p for p in files if p.is_file()]
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return [_model_file_entry(p) for p in files[:limit]]
+
+
 def newest_files(root: Path, limit: int = 8) -> list[dict]:
     if not root.exists():
         return []
@@ -139,8 +193,40 @@ def newest_files(root: Path, limit: int = 8) -> list[dict]:
             "path": str(p),
             "size": human_size(st.st_size),
             "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+            "mtime_ts": st.st_mtime,
         })
     return out
+
+
+def build_model_outputs(train_out: Path | None) -> dict:
+    scope_label = ""
+    if train_out is not None:
+        try:
+            scope_label = str(train_out.relative_to(REPO)).replace("\\", "/")
+        except ValueError:
+            scope_label = str(train_out)
+
+    primary: list[dict] = []
+    if train_out is not None and train_out.exists():
+        primary = newest_model_files(train_out, limit=12)
+
+    primary_paths = {item["path"] for item in primary}
+    other: list[dict] = []
+    if OUTPUT_DIR.exists():
+        for item in newest_model_files(OUTPUT_DIR, limit=24):
+            if item["path"] in primary_paths:
+                continue
+            other.append(item)
+            if len(other) >= 8:
+                break
+
+    combined = primary if primary else newest_model_files(OUTPUT_DIR, limit=8)
+    return {
+        "output_scope": scope_label,
+        "outputs_primary": primary,
+        "outputs_other": other,
+        "outputs": combined,
+    }
 
 
 def newest_preview_images(limit: int = 6) -> list[dict]:
@@ -762,8 +848,8 @@ def collect_status() -> dict:
         previews = []
 
     train_out = _training_output_dir()
-    output_scan_dir = train_out if train_out is not None and train_out.exists() else OUTPUT_DIR
     train_config = latest_training_config()
+    model_outputs = build_model_outputs(train_out)
 
     status = {
         "time": now,
@@ -771,12 +857,12 @@ def collect_status() -> dict:
         "state": "GUI 离线",
         "tasks": [],
         "active_task": None,
-        "model_type": "未知类型",
+        "model_type": None,
         "log_lines": [],
         "metrics": {},
         "previews": previews,
-        "outputs": newest_files(output_scan_dir),
         "log_files": newest_files(LOG_DIR),
+        **model_outputs,
         "train_params": _extract_train_params(train_config),
         "tensorboard_loss": tensorboard_loss_scalars(),
         "gpu_info": gpu_info(),
@@ -793,6 +879,7 @@ def collect_status() -> dict:
 
     if not status["tasks"]:
         status["state"] = "空闲"
+        status["model_type"] = None
         return status
 
     active = next((t for t in reversed(status["tasks"]) if t.get("status") == "RUNNING"), status["tasks"][-1])
