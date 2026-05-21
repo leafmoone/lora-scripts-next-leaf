@@ -905,8 +905,12 @@ def render_page(status: dict) -> bytes:
     .tb-loss-control-help {{ color:var(--muted); font-size:12px; margin-left:4px; }}
     .tb-loss-chart {{ width:100%; height:190px; }}
     .tb-loss-empty {{ padding:16px; border:1px dashed var(--line); border-radius:10px; background:#0b1224; color:var(--muted); }}
-    .param-row {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:stretch; }}
-    @media (max-width: 720px) {{ .param-row {{ grid-template-columns:1fr; }} }}
+    .param-row {{ display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:stretch; }}
+    @media (max-width: 900px) {{ .param-row {{ grid-template-columns:1fr; }} }}
+    .steps-hero {{ display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px 24px; min-width:140px; }}
+    .steps-hero .sh-label {{ color:var(--muted); font-size:11px; letter-spacing:.5px; text-transform:uppercase; }}
+    .steps-hero .sh-value {{ color:#a5b4fc; font-size:36px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1; margin:6px 0; }}
+    .steps-hero .sh-detail {{ color:var(--muted); font-size:11px; line-height:1.4; max-width:200px; }}
     .param-card {{ border-radius:14px; background:var(--panel); border:1px solid var(--line); }}
     .gpu-panel {{ padding:16px 18px; display:grid; gap:12px; }}
     .gpu-header {{ display:flex; justify-content:space-between; align-items:center; }}
@@ -1089,16 +1093,30 @@ def render_page(status: dict) -> bytes:
         gpuHtml = '<div class="param-card"><div class="gpu-panel"><span class="muted">GPU 信息不可用</span></div></div>';
       }}
 
+      // Steps hero card
+      var stepsHero = params.find(function(p) {{ return p.label === '总步数' || p.label === '设定总步数' || p.label === '每 Epoch'; }});
+      var stepsHtml = '';
+      if (stepsHero) {{
+        var parts = escapeHtml(stepsHero.value).match(/^(\d+)(.*)/);
+        var mainVal = parts ? parts[1] : escapeHtml(stepsHero.value);
+        var detail = parts && parts[2] ? parts[2].replace(/^[（(]\s*/, '').replace(/\s*[)）]$/, '') : '';
+        stepsHtml = '<div class="param-card"><div class="steps-hero">'
+          + '<div class="sh-label">' + escapeHtml(stepsHero.label) + '</div>'
+          + '<div class="sh-value">' + mainVal + '</div>'
+          + (detail ? '<div class="sh-detail">' + detail + '</div>' : '')
+          + '</div></div>';
+      }} else {{
+        stepsHtml = '<div class="param-card"><div class="steps-hero"><div class="sh-label">总步数</div><div class="sh-value">-</div></div></div>';
+      }}
+
       // Key params summary
       var summaryItems = [];
-      function addParam(label, keys, fallback) {{
+      function addParam(label, keys) {{
         for (var i = 0; i < keys.length; i++) {{
           var p = params.find(function(item) {{ return item.label === keys[i]; }});
           if (p) {{ summaryItems.push({{label: label, value: p.value}}); return; }}
         }}
-        if (fallback !== undefined && fallback !== null) summaryItems.push({{label: label, value: String(fallback)}});
       }}
-      addParam('总步数', ['总步数', '设定总步数', '每 Epoch']);
       var lr = metrics.lr;
       if (!lr) {{
         var lrParam = params.find(function(p) {{ return p.label === '学习率' || p.label === 'UNet LR'; }});
@@ -1112,9 +1130,7 @@ def render_page(status: dict) -> bytes:
       addParam('精度', ['精度']);
       addParam('分辨率', ['分辨率']);
       addParam('总 Epochs', ['总 Epochs']);
-      addParam('保存频率', ['保存频率']);
       addParam('Noise Offset', ['Noise Offset']);
-      addParam('Seed', ['Seed']);
 
       var paramHtml = '';
       if (summaryItems.length > 0) {{
@@ -1129,7 +1145,7 @@ def render_page(status: dict) -> bytes:
         paramHtml = '<div class="param-card"><div class="param-summary"><span class="muted" style="font-size:12px;">等待训练启动后显示参数。</span></div></div>';
       }}
 
-      el.innerHTML = '<div class="param-row">' + gpuHtml + paramHtml + '</div>';
+      el.innerHTML = '<div class="param-row">' + gpuHtml + stepsHtml + paramHtml + '</div>';
     }}
 
     function escapeHtml(value) {{
