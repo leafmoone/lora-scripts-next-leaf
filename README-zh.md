@@ -26,7 +26,7 @@
   <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer GUI" width="920" />
 </p>
 
-<p align="center"><sub>Anima LoRA 训练界面 — 左侧参数配置，右侧实时预览</sub></p>
+<p align="center"><sub>全新 UI — 左侧栏导航，中栏模型 & 参数表单，右栏实时配置预览</sub></p>
 
 ---
 
@@ -78,19 +78,25 @@ bash install_flash_attn.sh
 
 ## 训练监控
 
-训练启动后自动打开监控页（端口 6008），实时查看 Loss 曲线、预览图、训练日志。
+训练启动后自动打开监控页（端口 6008），GPU 状态、训练参数、Loss 曲线、预览图、日志一站式查看。
 
 <p align="center">
-  <img src="assets/readme/train-monitor-loss.png" alt="Loss 曲线" width="920" />
+  <img src="assets/readme/screenshot-train-monitor.png" alt="训练监控仪表盘" width="920" />
 </p>
 
-<p align="center"><sub>TensorBoard 同源 Loss / LR 四宫格</sub></p>
+<p align="center"><sub>GPU 负载 & 显存、总步数、训练参数一目了然</sub></p>
 
 <p align="center">
-  <img src="assets/readme/train-monitor-samples.png" alt="预览图" width="920" />
+  <img src="assets/readme/train-monitor-samples.png" alt="预览图与 Loss 曲线" width="920" />
 </p>
 
-<p align="center"><sub>训练预览图实时同步</sub></p>
+<p align="center"><sub>训练预览图 + TensorBoard 同源 Loss / LR 曲线</sub></p>
+
+<p align="center">
+  <img src="assets/readme/train-monitor-logs.png" alt="训练日志" width="920" />
+</p>
+
+<p align="center"><sub>实时训练日志，自动滚动</sub></p>
 
 ---
 
@@ -149,6 +155,7 @@ powershell -ExecutionPolicy Bypass -File .\run_gui_source.ps1
 
 | 日期 | 版本 |
 |------|------|
+| 2026-05-21 | **v2.5.0** — UI 焕新：侧栏导航重构、首页传送门、训练监控仪表盘新增 GPU 指标；CSS 去重清理 |
 | 2026-05-21 | **v2.4.0** — 训练稳定性：环境隔离、NaN 过滤、采样保护、attn_mode 降级、路径规范化；整合包 tkinter 修复 |
 | 2026-05-20 | **v2.3.0** — 训练监控升级：TensorBoard 同源曲线、参数速查、日志同步 |
 | 2026-05-19 | **v2.2.0** — 整合包 flash-attn 治本、闪退日志、跨盘监控 |

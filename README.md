@@ -26,7 +26,7 @@
   <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer GUI" width="920" />
 </p>
 
-<p align="center"><sub>Anima LoRA training interface — parameter config on the left, real-time preview on the right</sub></p>
+<p align="center"><sub>New UI — sidebar navigation, model & parameter form in the center, real-time config preview on the right</sub></p>
 
 ---
 
@@ -78,19 +78,25 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 
 ## Train Monitor
 
-Automatically opens a monitor page (port 6008) when training starts — real-time Loss curves, preview samples, and training logs.
+Automatically opens a monitor page (port 6008) when training starts — GPU stats, training parameters, Loss curves, preview samples, and logs all in one dashboard.
 
 <p align="center">
-  <img src="assets/readme/train-monitor-loss.png" alt="Loss Curves" width="920" />
+  <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor Dashboard" width="920" />
 </p>
 
-<p align="center"><sub>TensorBoard-backed Loss / LR scalar cards</sub></p>
+<p align="center"><sub>GPU load & VRAM, total steps, training params at a glance</sub></p>
 
 <p align="center">
-  <img src="assets/readme/train-monitor-samples.png" alt="Preview Samples" width="920" />
+  <img src="assets/readme/train-monitor-samples.png" alt="Preview Samples & Loss Curves" width="920" />
 </p>
 
-<p align="center"><sub>Preview samples update in real time</sub></p>
+<p align="center"><sub>Preview samples and TensorBoard-backed Loss / LR curves</sub></p>
+
+<p align="center">
+  <img src="assets/readme/train-monitor-logs.png" alt="Training Logs" width="920" />
+</p>
+
+<p align="center"><sub>Real-time training logs with auto-scroll</sub></p>
 
 ---
 
@@ -125,6 +131,7 @@ Automatically opens a monitor page (port 6008) when training starts — real-tim
 
 | Date | Version |
 |------|---------|
+| 2026-05-21 | **v2.5.0** — UI refresh: new sidebar navigation, home portal page, training monitor dashboard with GPU metrics; CSS cleanup |
 | 2026-05-21 | **v2.4.0** — Training stability: env isolation, NaN filter, sample guard, attn_mode fallback, path normalization; Portable tkinter fix |
 | 2026-05-20 | **v2.3.0** — Train Monitor: TensorBoard-backed curves, parameter checks, log sync |
 | 2026-05-19 | **v2.2.0** — Portable flash-attn fix, crash logging, cross-drive monitor |
