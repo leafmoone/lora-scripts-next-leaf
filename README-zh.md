@@ -52,9 +52,15 @@ run_gui.bat
 
 # Linux
 bash install.bash && bash run_gui.sh
+
+# 可选：安装 Flash Attention 2 加速 Anima 训练
+# Windows
+install_flash_attn.bat
+# Linux
+bash install_flash_attn.sh
 ```
 
-推荐 Python **3.10**。源码用户可启用 [Flash Attention 2](docs/flash-attention.md) 加速。
+推荐 Python **3.10**。详见 [Flash Attention 2 文档](docs/flash-attention.md)。
 
 </details>
 
