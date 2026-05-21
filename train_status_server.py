@@ -1098,6 +1098,7 @@ def render_page(status: dict) -> bytes:
         }}
         if (fallback !== undefined && fallback !== null) summaryItems.push({{label: label, value: String(fallback)}});
       }}
+      addParam('总步数', ['总步数', '设定总步数', '每 Epoch']);
       var lr = metrics.lr;
       if (!lr) {{
         var lrParam = params.find(function(p) {{ return p.label === '学习率' || p.label === 'UNet LR'; }});
