@@ -30,7 +30,8 @@ from mikazuki.utils import train_utils
 from mikazuki.utils.devices import printable_devices
 from mikazuki.portable_utils import flash_attn_stack_usable, is_embedded_python
 from mikazuki.utils.tk_window import (open_directory_selector,
-                                      open_file_selector)
+                                      open_file_selector,
+                                      tkinter_available)
 
 router = APIRouter()
 
@@ -91,7 +92,7 @@ def _normalize_kv_arg_list(values) -> list[str]:
         value = value.strip()
         if not key:
             continue
-        if value.lower() in {"undefined", "null"}:
+        if value.lower() in {"undefined", "null", "nan"}:
             continue
         normalized = f"{key}={value}"
         if key in key_index:
@@ -279,10 +280,29 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     elif mixed == "fp16" and not config.get("full_fp16"):
         config["full_fp16"] = True
 
-    if not config.get("attn_mode"):
+    requested_attn = config.get("attn_mode", "")
+    if not requested_attn:
         best = _detect_best_attn_mode()
         config["attn_mode"] = best
         log.info(f"Anima attn_mode auto-detected: {best}")
+    elif requested_attn == "xformers":
+        try:
+            import xformers  # noqa: F401
+        except ImportError:
+            best = _detect_best_attn_mode()
+            config["attn_mode"] = best
+            log.warning(
+                f"attn_mode='xformers' requested but xformers is not installed, "
+                f"falling back to '{best}'"
+            )
+    elif requested_attn == "flash":
+        if is_embedded_python() or not flash_attn_stack_usable():
+            best = _detect_best_attn_mode()
+            config["attn_mode"] = best
+            log.warning(
+                f"attn_mode='flash' requested but flash-attn is not available, "
+                f"falling back to '{best}'"
+            )
 
 
 @router.post("/run")
@@ -333,6 +353,11 @@ async def create_toml_file(request: Request):
 
     apply_anima_training_defaults(config, model_train_type)
     sanitize_config(config)
+
+    if not config.get("sample_prompts"):
+        config.pop("sample_at_first", None)
+        config.pop("sample_every_n_epochs", None)
+        config.pop("sample_every_n_steps", None)
 
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
@@ -397,11 +422,18 @@ async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: Backg
 
 @router.get("/pick_file")
 async def pick_file(picker_type: str):
+    if not tkinter_available():
+        return APIResponseFail(
+            message="当前环境未安装 tkinter，无法弹出系统文件夹/文件选择框。"
+            "请手动输入路径；整合包用户请使用已打包 tkinter 的版本或重新运行 build_portable.ps1。"
+        )
     if picker_type == "folder":
         coro = asyncio.to_thread(open_directory_selector, "")
     elif picker_type == "model-file":
         file_types = [("checkpoints", "*.safetensors;*.ckpt;*.pt"), ("all files", "*.*")]
         coro = asyncio.to_thread(open_file_selector, "", "Select file", file_types)
+    else:
+        return APIResponseFail(message=f"不支持的 picker_type: {picker_type}")
 
     result = await coro
     if result == "":

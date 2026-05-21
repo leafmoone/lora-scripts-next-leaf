@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
-    [string]$Version     = "2.3.0",
+    [string]$Version     = "2.4.0",
     [string]$PythonVer   = "3.10.11",
     [switch]$Clean,
     [switch]$Skip7z
@@ -54,11 +54,12 @@ if (Test-Path $pythonExe) {
     Write-Host "  Done" -ForegroundColor Green
 }
 
-# python310._pth
+# python310._pth (include Lib/ so bundled tkinter is importable)
 $pthLines = @(
     "../SD-Trainer",
     "../SD-Trainer/vendor/sd-scripts",
     "python310.zip",
+    "Lib",
     "Lib/site-packages",
     ".",
     "import site"
@@ -70,6 +71,61 @@ Write-Host "  Created python310._pth"
 # Lib/site-packages
 $sitePackages = Join-Path $pythonDir "Lib\site-packages"
 New-Item -ItemType Directory -Path $sitePackages -Force | Out-Null
+
+# tkinter for GUI folder/file picker (embeddable Python omits it by default)
+function Install-EmbeddedTkinter {
+    param(
+        [string]$EmbedDir,
+        [string]$ExpectedVersion = "3.10"
+    )
+    $fullRoot = $null
+    $candidates = @(
+        { & py "-$ExpectedVersion" -c "import sys; print(sys.base_prefix)" },
+        { & "C:\Program Files\Python310\python.exe" -c "import sys; print(sys.base_prefix)" }
+    )
+    foreach ($candidate in $candidates) {
+        try {
+            $out = (& $candidate 2>$null | Select-Object -First 1)
+            if ($out -and (Test-Path $out.Trim())) {
+                $fullRoot = $out.Trim()
+                break
+            }
+        } catch {
+            continue
+        }
+    }
+    if (-not $fullRoot) {
+        Write-Host "  WARNING: No full Python $ExpectedVersion found; tkinter not bundled (folder picker disabled)" -ForegroundColor Yellow
+        return
+    }
+    $libTk = Join-Path $fullRoot "Lib\tkinter"
+    if (-not (Test-Path $libTk)) {
+        $libTk = Join-Path $fullRoot "lib\tkinter"
+    }
+    $dllDir = Join-Path $fullRoot "DLLs"
+    if (-not (Test-Path $libTk) -or -not (Test-Path $dllDir)) {
+        Write-Host "  WARNING: tkinter/tcl files missing under $fullRoot" -ForegroundColor Yellow
+        return
+    }
+    $embedLib = Join-Path $EmbedDir "Lib"
+    New-Item -ItemType Directory -Path $embedLib -Force | Out-Null
+    Copy-Item $libTk (Join-Path $embedLib "tkinter") -Recurse -Force
+    Copy-Item (Join-Path $fullRoot "tcl") (Join-Path $EmbedDir "tcl") -Recurse -Force
+    foreach ($name in @("_tkinter.pyd", "tcl86t.dll", "tk86t.dll")) {
+        $src = Join-Path $dllDir $name
+        if (Test-Path $src) {
+            Copy-Item $src (Join-Path $EmbedDir $name) -Force
+        }
+    }
+    $check = & (Join-Path $EmbedDir "python.exe") -c "import tkinter; print('ok')" 2>&1
+    if ($LASTEXITCODE -eq 0 -and ($check -match "ok")) {
+        Write-Host "  tkinter bundled from $fullRoot" -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: tkinter copy failed verification: $check" -ForegroundColor Yellow
+    }
+}
+
+Install-EmbeddedTkinter -EmbedDir $pythonDir -ExpectedVersion "3.10"
 
 # get-pip.py
 $getPipPath = Join-Path $pythonDir "get-pip.py"
@@ -296,6 +352,25 @@ $updateDepsBat += "echo Done.`r`npause`r`n"
 )
 Write-Host "  Created update/ scripts"
 
+# install_xformers.bat — one-click xformers installer for portable users
+$xformersBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ntitle Install xformers`r`ncd /d `"%~dp0`"`r`n"
+$xformersBat += "set `"PYTHON_EXE=%~dp0python_embeded\python.exe`"`r`n"
+$xformersBat += "if not exist `"%PYTHON_EXE%`" (`r`n"
+$xformersBat += "    echo [ERROR] python_embeded\python.exe not found!`r`n"
+$xformersBat += "    pause`r`n    exit /b 1`r`n)`r`n"
+$xformersBat += "echo.`r`necho  Installing xformers 0.0.30 for Torch 2.7.0 + CUDA 12.8 ...`r`necho.`r`n"
+$xformersBat += "`"%PYTHON_EXE%`" -s -m pip install xformers==0.0.30 --index-url https://download.pytorch.org/whl/cu128 --no-warn-script-location`r`n"
+$xformersBat += "if errorlevel 1 (`r`n    echo [ERROR] xformers installation failed.`r`n    pause`r`n    exit /b 1`r`n)`r`n"
+$xformersBat += "echo.`r`necho  Verifying...`r`n"
+$xformersBat += "`"%PYTHON_EXE%`" -s -c `"import xformers; print(f'  xformers {xformers.__version__} OK')`"`r`n"
+$xformersBat += "echo.`r`necho  Done! You can now use attn_mode = xformers.`r`necho.`r`npause`r`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $portableDir "install_xformers.bat"),
+    $xformersBat,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+Write-Host "  Created install_xformers.bat"
+
 # Root-level utility bat files
 $templateDir = Join-Path $PSScriptRoot "templates"
 foreach ($bat in @("Update-SD-Trainer.bat", "Download-Anima-Model.bat")) {
@@ -338,6 +413,9 @@ $readme += "Requirements:`r`n"
 $readme += "  - Windows 10/11 64-bit`r`n"
 $readme += "  - NVIDIA GPU (RTX 20-series or newer)`r`n"
 $readme += "  - ~7 GB disk + ~3 GB download on first run`r`n`r`n"
+$readme += "xformers (recommended):`r`n"
+$readme += "  If xformers is missing, double-click install_xformers.bat to install.`r`n"
+$readme += "  xformers provides faster attention than PyTorch SDPA on most GPUs.`r`n`r`n"
 $readme += "Flash Attention 2:`r`n"
 $readme += "  This portable package does NOT use flash-attn (uses xformers / PyTorch SDPA).`r`n"
 $readme += "  Do not pip install flash-attn into python_embeded. See README in SD-Trainer/.`r`n"

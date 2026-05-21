@@ -186,7 +186,7 @@ def _normalize_network_args(values: Any) -> list[str]:
         value = value.strip()
         if not key:
             continue
-        if value.lower() in {"undefined", "null"}:
+        if value.lower() in {"undefined", "null", "nan"}:
             continue
 
         normalized = f"{key}={value}"

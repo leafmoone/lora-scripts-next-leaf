@@ -30,7 +30,7 @@
 
 ### Windows 整合包（推荐小白用户）
 
-从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.3.0.7z`**（~55 MB，含嵌入式 Python），解压后双击 `run_gui.bat` 即可启动。
+从 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 下载 **`SD-Trainer-v2.4.0.7z`**（~55 MB，含嵌入式 Python），解压后双击 `run_gui.bat` 即可启动。
 
 首次启动会自动安装 PyTorch + CUDA + 所有依赖（~3 GB 下载），国内用户自动走阿里云/清华镜像加速。
 
@@ -95,7 +95,7 @@ cd lora-scripts-next
 | 临时绕过 | 在 PowerShell 中：`powershell -ExecutionPolicy Bypass -File .\run_gui.ps1` |
 | 长期放宽（可选） | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`（仅影响当前用户） |
 
-解压后若路径出现 `...\lora-scripts-next-2.3.0\lora-scripts-next-2.3.0\`，说明多解压了一层，请进入**内层**含 `run_gui.bat` 的目录再启动。
+解压后若路径出现 `...\lora-scripts-next-2.4.0\lora-scripts-next-2.4.0\`，说明多解压了一层，请进入**内层**含 `run_gui.bat` 的目录再启动。
 
 #### 指定浏览器
 
@@ -247,6 +247,7 @@ python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary i
 
 | 日期 | 内容 |
 |------|------|
+| 2026-05-21 | **v2.4.0** — 训练稳定性：环境隔离（`PYTHONNOUSERSITE`）、NaN 参数过滤、采样保护、attn_mode 自动降级；整合包：tkinter 支持、`install_xformers.bat` 一键安装 |
 | 2026-05-20 | **v2.3.0** — 训练监控体验升级：TensorBoard 同源 Loss/LR 四宫格、关键参数速查、端口冲突自动回退、终端日志同步、后台轮询日志静默 |
 | 2026-05-19 | **v2.2.0** — 整合包 flash-attn/triton 治本、run_gui.bat 执行策略与闪退日志、跨盘训练监控、品牌/logo、CONTRIBUTORS.md |
 | 2026-05-19 | **v2.1.0** — Flash Attention 2 Windows 预编译 wheel（无需 C++ 编译器）、按步数保存模型、修复 LoKr conv_dim/conv_alpha 传入 undefined 的 bug |

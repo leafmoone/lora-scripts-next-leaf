@@ -76,6 +76,7 @@ def run_train(toml_path: str,
     customize_env["ACCELERATE_DISABLE_RICH"] = "1"
     customize_env["PYTHONUNBUFFERED"] = "1"
     customize_env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::UserWarning"
+    customize_env["PYTHONNOUSERSITE"] = "1"
 
     if gpu_ids:
         customize_env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)

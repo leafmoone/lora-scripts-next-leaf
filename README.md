@@ -30,7 +30,7 @@
 
 ### Windows Portable Package (recommended for beginners)
 
-Download **`SD-Trainer-v2.3.0.7z`** (~55 MB, includes embedded Python) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
+Download **`SD-Trainer-v2.4.0.7z`** (~55 MB, includes embedded Python) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract, and double-click `run_gui.bat`.
 
 First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). Chinese users get mirror acceleration automatically.
 
@@ -233,6 +233,7 @@ Then run `python gui.py` and start **Anima LoRA** training — logs should show 
 
 | Date | Update |
 |------|--------|
+| 2026-05-21 | **v2.4.0** — Training stability: env isolation (`PYTHONNOUSERSITE`), NaN arg filter, sample_prompts guard, attn_mode auto-fallback; Portable: tkinter, `install_xformers.bat` |
 | 2026-05-20 | **v2.3.0** — Train Monitor upgrade: TensorBoard-backed Loss/LR cards, key parameter quick check, safer port fallback, terminal log echo, quieter monitor backend |
 | 2026-05-19 | **v2.2.0** — Portable flash-attn/triton fix, run_gui.bat execution policy + crash logging, cross-drive monitor, branding/logo, CONTRIBUTORS.md |
 | 2026-05-19 | **v2.1.0** — Flash Attention 2 prebuilt wheels for Windows (no C++ compiler needed), save-by-steps option, fix LoKr conv_dim/conv_alpha undefined bug |

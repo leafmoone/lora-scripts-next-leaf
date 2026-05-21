@@ -4,6 +4,23 @@
 
 ---
 
+## v2.4.0 — 2026-05-21
+
+### 训练稳定性（整合包 + 源码）
+
+- **训练子进程环境隔离**：设置 `PYTHONNOUSERSITE=1`，防止系统用户级 site-packages（如残缺的 sklearn）污染训练子进程，修复 `No module named 'joblib'` 等 import 链断裂崩溃（[#16](https://github.com/wochenlong/lora-scripts-next/issues/16)）。
+- **NaN 值过滤**：`network_args` / `optimizer_args` 中 `key=NaN` 的无效项现在被自动剥离，修复 LyCORIS `int("NaN")` 导致训练崩溃。
+- **采样保护**：若最终配置无 `sample_prompts`，自动移除 `sample_at_first` 等采样参数，避免 sd-scripts 在 step 0 因 `sample_prompts=None` 崩溃。
+- **attn_mode 自动降级**：配置中指定 `xformers` / `flash` 但对应后端未安装时，自动降级到可用方案（xformers → torch SDPA），并打印 WARNING 而非直接崩溃。
+
+### 整合包改进
+
+- **tkinter 支持**：`build_portable.ps1` 打包时自动复制 tkinter + Tcl/Tk，修复文件夹选择器（`/pick_file`）无法弹出（[#20](https://github.com/wochenlong/lora-scripts-next/issues/20)）；缺失时 API 返回明确错误。
+- **xformers 一键安装**：新增 `install_xformers.bat`，整合包用户双击即可安装 xformers 0.0.30。
+- **config.json 启动修复**：空文件不再导致 JSON 解析报错。
+
+---
+
 ## v2.3.0 — 2026-05-20
 
 ### 训练监控体验升级
