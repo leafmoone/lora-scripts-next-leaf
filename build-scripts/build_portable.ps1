@@ -155,7 +155,7 @@ Write-Host "  Done" -ForegroundColor Green
 Write-Host ""
 Write-Host "[3/5] Creating launcher scripts..." -ForegroundColor Cyan
 
-# run_gui.bat — flat goto structure, no BOM
+# run_gui_portable.bat — portable-only launcher, flat goto structure, no BOM
 $batContent = "@echo off`r`n"
 $batContent += "chcp 65001 >nul 2>&1`r`n"
 $batContent += "title SD-Trainer`r`n"
@@ -247,11 +247,30 @@ $batContent += "echo.`r`n"
 $batContent += "pause`r`n"
 $batContent += "exit /b 1`r`n"
 [System.IO.File]::WriteAllText(
-    (Join-Path $portableDir "run_gui.bat"),
+    (Join-Path $portableDir "run_gui_portable.bat"),
     $batContent,
     (New-Object System.Text.UTF8Encoding $false)
 )
-Write-Host "  Created run_gui.bat"
+Write-Host "  Created run_gui_portable.bat"
+
+# Keep run_gui.bat as the beginner-friendly stable entrypoint, but make it a
+# tiny wrapper so portable and source launch behavior never mix.
+$runGuiWrapper = "@echo off`r`n"
+$runGuiWrapper += "chcp 65001 >nul 2>&1`r`n"
+$runGuiWrapper += "cd /d `"%~dp0`"`r`n"
+$runGuiWrapper += "if not exist `"run_gui_portable.bat`" (`r`n"
+$runGuiWrapper += "    echo [ERROR] run_gui_portable.bat not found. Please re-extract the package.`r`n"
+$runGuiWrapper += "    pause`r`n"
+$runGuiWrapper += "    exit /b 1`r`n"
+$runGuiWrapper += ")`r`n"
+$runGuiWrapper += "call `"%~dp0run_gui_portable.bat`" %*`r`n"
+$runGuiWrapper += "exit /b %errorlevel%`r`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $portableDir "run_gui.bat"),
+    $runGuiWrapper,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+Write-Host "  Created run_gui.bat wrapper"
 
 # update/
 $updateDir = Join-Path $portableDir "update"
@@ -305,6 +324,8 @@ $readme += "  1. Double-click run_gui.bat`r`n"
 $readme += "  2. First launch requires internet (downloads ~3 GB of PyTorch)`r`n"
 $readme += "  3. Open http://127.0.0.1:28000 in browser`r`n`r`n"
 $readme += "Directories:`r`n"
+$readme += "  run_gui.bat      - Stable entrypoint for portable users`r`n"
+$readme += "  run_gui_portable.bat - Portable-only launcher used by run_gui.bat`r`n"
 $readme += "  python_embeded/  - Python runtime`r`n"
 $readme += "  SD-Trainer/      - Project files`r`n"
 $readme += "  sd-models/       - Put your models here`r`n"

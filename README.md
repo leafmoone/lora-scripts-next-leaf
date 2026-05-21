@@ -36,7 +36,7 @@ First launch auto-installs PyTorch + CUDA + all dependencies (~3 GB download). C
 
 | File | Purpose |
 |------|---------|
-| `run_gui.bat` | Launch training GUI (http://127.0.0.1:28000) |
+| `run_gui.bat` | Portable entrypoint (dispatches to `run_gui_portable.bat`) |
 | `Update-SD-Trainer.bat` | Pull latest code from GitHub |
 | `Download-Anima-Model.bat` | Download Anima base model from ModelScope |
 
@@ -78,7 +78,7 @@ cd lora-scripts-next
 
 | OS | Action |
 |----|--------|
-| Windows | Double-click **`run_gui.bat`** (auto-installs on first run, then launches) |
+| Windows | Double-click **`run_gui.bat`** (source entrypoint, dispatches to `run_gui_source.bat`) |
 | Linux | `bash install.bash && bash run_gui.sh` |
 
 The browser auto-opens **http://127.0.0.1:28000** on launch.
@@ -118,8 +118,8 @@ Priority for Anima: `flash` → `xformers` → `torch` (PyTorch SDPA).
 
 ##### Option 1: Automatic (recommended)
 
-1. Clone the repo and run **`run_gui.bat`** on first launch (`install-cn.ps1` or `install.ps1` creates venv, deps, and tries the flash-attn wheel).
-2. On every launch, `run_gui.ps1` checks `triton` + `flash_attn`; if missing, it installs `triton-windows` then the prebuilt wheel (failure is non-fatal — falls back to xformers / SDPA).
+1. Clone the repo and run **`run_gui.bat`** or **`run_gui_source.bat`** on first launch (`install-cn.ps1` or `install.ps1` creates venv, deps, and tries the flash-attn wheel).
+2. On source launches, `run_gui_source.ps1` checks `triton` + `flash_attn`; if missing, it installs `triton-windows` then the prebuilt wheel (failure is non-fatal — falls back to xformers / SDPA).
 
 China mirror first-time install:
 

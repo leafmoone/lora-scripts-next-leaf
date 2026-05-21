@@ -2,29 +2,22 @@
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
-set "HF_HOME=huggingface"
-set "PYTHONUTF8=1"
-set "MIKAZUKI_PORT=28000"
+:: Stable user entrypoint. Dispatches to the correct launcher for the current layout.
+:: - Source checkout: run_gui_source.bat
+:: - Portable package: run_gui_portable.bat
 
-:: Do NOT run run_gui.ps1 directly — Windows may block it (execution policy).
-:: Always use this run_gui.bat file.
-
-if exist "venv\Scripts\python.exe" goto :launch
-if exist "python\python.exe" goto :launch
-
-echo [First run] Installing dependencies, please wait...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-cn.ps1"
-if errorlevel 1 (
-    echo Install failed. Check network and retry.
-    pause
-    exit /b 1
+if exist "python_embeded\python.exe" if exist "SD-Trainer\gui.py" (
+    if exist "run_gui_portable.bat" (
+        call "%~dp0run_gui_portable.bat" %*
+        exit /b %errorlevel%
+    )
 )
 
-:launch
-if exist "venv\Scripts\activate.bat" call "venv\Scripts\activate.bat"
-if exist "python\python.exe" set "PATH=%~dp0python;%PATH%"
+if exist "run_gui_source.bat" (
+    call "%~dp0run_gui_source.bat" %*
+    exit /b %errorlevel%
+)
 
-python gui.py
-set "EXIT_CODE=%errorlevel%"
-if %EXIT_CODE% neq 0 pause
-exit /b %EXIT_CODE%
+echo [ERROR] No launcher found. Please make sure the package is fully extracted.
+pause
+exit /b 1

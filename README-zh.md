@@ -36,7 +36,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `run_gui.bat` | 启动训练 GUI（http://127.0.0.1:28000） |
+| `run_gui.bat` | 整合包启动入口（内部转到 `run_gui_portable.bat`） |
 | `Update-SD-Trainer.bat` | 从 GitHub 拉取最新代码 |
 | `Download-Anima-Model.bat` | 从 ModelScope 下载 Anima 基础模型 |
 
@@ -78,7 +78,7 @@ cd lora-scripts-next
 
 | 系统 | 操作 |
 |------|------|
-| Windows | 双击 **`run_gui.bat`**（首次自动安装依赖，之后直接启动） |
+| Windows | 双击 **`run_gui.bat`**（源码入口，内部转到 `run_gui_source.bat`） |
 | Linux | `bash install.bash && bash run_gui.sh` |
 
 启动后浏览器自动打开 **http://127.0.0.1:28000**。
@@ -91,7 +91,7 @@ cd lora-scripts-next
 
 | 做法 | 说明 |
 |------|------|
-| **推荐** | 双击 **`run_gui.bat`**（整合包与源码均适用），不要直接运行 `run_gui.ps1` |
+| **推荐** | 双击 **`run_gui.bat`**（自动转到源码/整合包对应启动器），不要直接运行 `run_gui.ps1` |
 | 临时绕过 | 在 PowerShell 中：`powershell -ExecutionPolicy Bypass -File .\run_gui.ps1` |
 | 长期放宽（可选） | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`（仅影响当前用户） |
 
@@ -130,8 +130,8 @@ python gui.py --browser edge
 
 ##### 方式一：自动安装（推荐）
 
-1. 克隆仓库并进入目录，首次运行 **`run_gui.bat`**（会执行 `install-cn.ps1` 或 `install.ps1` 创建 venv、安装依赖，并尝试安装 flash-attn wheel）。
-2. 之后每次启动时，`run_gui.ps1` 会检测 `triton` + `flash_attn` 是否可用；若缺失，会先装 `triton-windows`，再装预编译 wheel（失败则回退到 xformers / SDPA，不影响训练）。
+1. 克隆仓库并进入目录，首次运行 **`run_gui.bat`** 或 **`run_gui_source.bat`**（会执行 `install-cn.ps1` 或 `install.ps1` 创建 venv、安装依赖，并尝试安装 flash-attn wheel）。
+2. 之后每次源码启动时，`run_gui_source.ps1` 会检测 `triton` + `flash_attn` 是否可用；若缺失，会先装 `triton-windows`，再装预编译 wheel（失败则回退到 xformers / SDPA，不影响训练）。
 
 国内用户首次安装依赖可用：
 
