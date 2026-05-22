@@ -30,7 +30,8 @@ class WaifuDiffusionInterrogator(Interrogator):
         self.kwargs = kwargs
 
     def download(self) -> Tuple[os.PathLike, os.PathLike]:
-        print(f"Loading {self.name} model file from {self.kwargs['repo_id']}")
+        repo_id = self.kwargs["repo_id"]
+        print(f"Loading {self.name} model from {repo_id} (first run may download ~400MB, see console log)")
 
         model_path = Path(hf_hub_download(
             **self.kwargs, filename=self.model_path))

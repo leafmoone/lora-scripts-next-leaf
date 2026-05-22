@@ -2,15 +2,30 @@
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
-:: Stable user entrypoint. Dispatches to the correct launcher for the current layout.
-:: - Source checkout: run_gui_source.bat
-:: - Portable package: run_gui_portable.bat
+:: =============================================================================
+:: Stable entrypoints (do not rename — portable 7z / user shortcuts bind here)
+::
+:: Portable layout:
+::   python_embeded\  +  SD-Trainer\gui.py
+::   Prefer SD-Trainer\scripts\portable\launch_portable.bat (updates with git/7z)
+::   Fallback: run_gui_portable.bat at package root (old releases)
+::
+:: Source checkout:
+::   run_gui_source.bat  ->  install-cn.ps1 on first run
+:: =============================================================================
 
 if exist "python_embeded\python.exe" if exist "SD-Trainer\gui.py" (
+    if exist "SD-Trainer\scripts\portable\launch_portable.bat" (
+        call "%~dp0SD-Trainer\scripts\portable\launch_portable.bat" %*
+        exit /b %errorlevel%
+    )
     if exist "run_gui_portable.bat" (
         call "%~dp0run_gui_portable.bat" %*
         exit /b %errorlevel%
     )
+    echo [ERROR] Portable launcher missing. Update SD-Trainer or re-download the release 7z.
+    pause
+    exit /b 1
 )
 
 if exist "run_gui_source.bat" (

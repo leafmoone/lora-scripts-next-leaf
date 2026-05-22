@@ -3,10 +3,12 @@ $Env:PIP_DISABLE_PIP_VERSION_CHECK = 1
 $Env:PIP_NO_CACHE_DIR = 1
 $Env:PIP_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
 
+. "$PSScriptRoot\install_preflight.ps1"
+
 function InstallFail {
     Write-Output "安装失败。"
     Read-Host | Out-Null
-    Exit
+    Exit 1
 }
 
 function Check {
@@ -19,12 +21,17 @@ function Check {
     }
 }
 
+if (-not (Test-InstallScriptFreshness)) { InstallFail }
+
 if (Test-Path -Path "python\python.exe") {
     Write-Output "使用 python 文件夹中的 python..."
     $py_path = (Get-Item "python").FullName
     $env:PATH = "$py_path;$env:PATH"
+    if (-not (Test-InstallPython)) { InstallFail }
 }
 else {
+    if (-not (Test-InstallPython)) { InstallFail }
+
     # Sync vendor/sd-scripts submodule (Anima training engine)
     if ((Test-Path -Path ".git") -or (Test-Path -Path ".git" -PathType Leaf)) {
         Write-Output "同步 git 子模块 (vendor/sd-scripts)..."
@@ -51,12 +58,18 @@ $install_torch = Read-Host "是否需要安装 Torch+xformers? [y/n] (默认为 
 if ($install_torch -eq "y" -or $install_torch -eq "Y" -or $install_torch -eq "") {
     python -m pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
     Check "torch 安装失败，请删除 venv 文件夹后重新运行。"
-    python -m pip install -U -I --no-deps xformers===0.0.30 --extra-index-url https://download.pytorch.org/whl/cu128
+    python -m pip install -U -I --no-deps xformers==0.0.30 --index-url https://download.pytorch.org/whl/cu128
     Check "xformers 安装失败。"
 }
 
 python -m pip install --upgrade -r requirements.txt
 Check "训练依赖库安装失败。"
+
+Write-Output "预下载默认 WD 打标模型 wd14-convnextv2-v2（约 388MB，首次较慢）..."
+python scripts/prefetch_default_tagger.py --if-missing
+if ($LASTEXITCODE -ne 0) {
+    Write-Output "警告: 默认打标模型预下载失败，可在启动后于「打标」页首次使用时自动下载。"
+}
 
 Write-Output "安装完成"
 Write-Output ""

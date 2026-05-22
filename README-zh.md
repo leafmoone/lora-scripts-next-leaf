@@ -38,6 +38,8 @@
 3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
 ```
 
+整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
+
 > **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
 
 <details>
@@ -128,6 +130,20 @@ bash install_flash_attn.sh
 
 ---
 
+## 仓库目录说明
+
+| 位置 | 用途 |
+|------|------|
+| 根目录 | 仅保留契约入口 + 薄转发器，详见 [docs/repo-layout.md](docs/repo-layout.md) |
+| `scripts/portable/` | 整合包启动逻辑 |
+| `scripts/autodl/` | 云 GPU 运维（根目录同名文件为转发） |
+| `scripts/cli/` | 旧式命令行训练（Anima 请用 WebUI） |
+| `legacy/` | 打标 / notebook 等，日常可忽略 |
+| `doc/local/` | 本地交接与 Issue 草稿（不上传 GitHub） |
+| `docs/` | 公开文档（含 AutoDL 部署等） |
+
+---
+
 ## 常见问题
 
 <details>
@@ -145,6 +161,49 @@ powershell -ExecutionPolicy Bypass -File .\run_gui_source.ps1
 <summary><b>解压后路径嵌套两层</b></summary>
 
 若路径出现 `...\lora-scripts-next-2.5.0\lora-scripts-next-2.5.0\`，请进入内层含 `run_gui.bat` 的目录。
+
+</details>
+
+<details>
+<summary><b>torch 安装失败 / No matching distribution</b></summary>
+
+**源码安装**（`run_gui.bat` 首次自动装依赖、或手动 `install-cn.ps1`）常见原因：
+
+1. **Python 版本不对** — 需要 **3.10 或 3.11、64 位**。3.12/3.13 没有对应 CUDA 预编译包，pip 会报「找不到匹配版本」。
+2. **仓库太旧** — 若脚本里仍是 `torch 2.0.x + cu118`，请 `git pull` 到最新，或改用 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 整合包。
+3. **半装坏的 venv** — 删掉项目下的 `venv` 文件夹后重装。
+
+**不想折腾环境**：直接下载 **SD-Trainer-v2.x.7z** 整合包，解压双击 `run_gui.bat`（内置 Python，无需自装 torch）。
+
+重装示例（PowerShell，在项目根目录）：
+
+```powershell
+Remove-Item -Recurse -Force venv -ErrorAction SilentlyContinue
+py -3.10 -m venv venv
+.\venv\Scripts\activate
+powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
+```
+
+</details>
+
+<details>
+<summary><b>打标模型放在哪 / 还要下载吗</b></summary>
+
+- **默认模型**：`wd14-convnextv2-v2`（HuggingFace：`SmilingWolf/wd-v1-4-convnextv2-tagger-v2`，revision `v2.0`）
+- **缓存路径**：项目根目录 `huggingface/hub/`（环境变量 `HF_HOME=huggingface`）
+- **整合包**：发布 7z 已内置，一般无需再下
+- **源码**：首次 `install-cn.ps1` 会预下载；之后每次 `run_gui.bat` 启动前若缺失会自动补下。手动：`python scripts/prefetch_default_tagger.py`
+
+</details>
+
+<details>
+<summary><b>整合包更新后打不开 / 启动脚本过时</b></summary>
+
+整合包布局固定为：根目录 `run_gui.bat` + `python_embeded/` + `SD-Trainer/`。
+
+- **用 `Update-SD-Trainer.bat` 拉代码后**：脚本会尝试刷新根目录 `run_gui.bat`；若仍失败，从新 Release 解压覆盖，或手动运行 `SD-Trainer\scripts\portable\sync_portable_root_launchers.bat`。
+- **只解压过旧 7z、没有 `SD-Trainer\scripts\portable\`**：需下载新版 7z，或至少用新版替换整个 `SD-Trainer` 文件夹与根目录 `run_gui.bat`。
+- 实际启动逻辑在 `SD-Trainer\scripts\portable\launch_portable.bat`，随项目更新，不要删改 `python_embeded` / `SD-Trainer` 文件夹名。
 
 </details>
 

@@ -11,6 +11,16 @@ set "MIKAZUKI_PORT=28000"
 if exist "venv\Scripts\python.exe" goto :launch
 if exist "python\python.exe" goto :launch
 
+findstr /C:"2.7.0+cu128" "%~dp0install-cn.ps1" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] 安装脚本过旧或与当前仓库不符。
+    echo   请在本目录执行 git pull，或下载最新 Release 整合包后双击 run_gui.bat。
+    echo.
+    pause
+    exit /b 1
+)
+
 echo [First run] Installing dependencies for source environment, please wait...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-cn.ps1"
 if errorlevel 1 (
@@ -22,6 +32,10 @@ if errorlevel 1 (
 :launch
 if exist "venv\Scripts\activate.bat" call "venv\Scripts\activate.bat"
 if exist "python\python.exe" set "PATH=%~dp0python;%PATH%"
+
+if exist "venv\Scripts\python.exe" (
+    "venv\Scripts\python.exe" scripts\prefetch_default_tagger.py --if-missing
+)
 
 python gui.py %*
 set "EXIT_CODE=%errorlevel%"

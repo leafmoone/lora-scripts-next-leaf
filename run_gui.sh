@@ -1,9 +1,19 @@
 #!/bin/bash
+# Linux/macOS GUI launcher. China mirrors: USE_CN_MIRROR=1 bash run_gui.sh
 
 export HF_HOME=huggingface
 export PYTHONUTF8=1
 
-# 自动检查并初始化所有 submodule（含 Anima 后端 vendor/sd-scripts）
+if [[ "${USE_CN_MIRROR:-}" == "1" ]]; then
+  export HF_ENDPOINT=https://hf-mirror.com
+  export PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+fi
+
+if [[ -f "./venv/bin/activate" ]]; then
+  # shellcheck source=/dev/null
+  source "./venv/bin/activate"
+fi
+
 if [ ! -f "vendor/sd-scripts/anima_train_network.py" ]; then
     echo -e "\033[36m首次运行：正在初始化必要组件，请稍候...\033[0m"
     git submodule update --init --recursive
@@ -15,4 +25,3 @@ if [ ! -f "vendor/sd-scripts/anima_train_network.py" ]; then
 fi
 
 python gui.py "$@"
-

@@ -122,7 +122,32 @@ python -c "import torch, accelerate, diffusers, transformers; print('torch', tor
 
 ## 7. 启动 WebUI
 
-AutoDL 需要监听外部访问地址，因此启动时使用 `--listen`。
+### 7.1 镜像开机入口（稳定契约）
+
+若 AutoDL **自定义镜像**或实例模板在「启动命令」里写死了：
+
+```bash
+bash /root/lora-scripts-next/start_autodl.sh
+```
+
+则仓库根目录的 **`start_autodl.sh` 不得移动、重命名或删除**（仅可修改文件内容）。整理项目根目录时务必保留此路径，否则已发布的云镜像会开机失败。
+
+该脚本会：
+
+- 监听 `0.0.0.0:6006`（与 AutoDL 常用映射一致）
+- 调用 `gui.py --skip-prepare-environment --disable-tensorboard`
+- 由 `gui.py` 自动拉起训练监控（默认 `6008`）
+
+手动调试时也可直接执行：
+
+```bash
+cd /root/lora-scripts-next
+bash start_autodl.sh
+```
+
+### 7.2 手动 / conda 环境启动
+
+在已激活 `lora-next` 等环境、且希望使用 **28000** 端口时：
 
 ```bash
 conda activate lora-next
@@ -130,18 +155,31 @@ cd /root/lora-scripts-next
 bash run_gui.sh --listen
 ```
 
-如果脚本不接收参数，则直接用 Python 启动：
+或：
 
 ```bash
 python gui.py --listen --host 0.0.0.0 --port 28000
 ```
 
-WebUI 默认端口：
+### 7.3 端口对照
 
-- 训练界面：`28000`
-- TensorBoard：`6006`
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| `start_autodl.sh` WebUI | `6006` | 镜像默认绑定入口 |
+| 常规 `run_gui.sh` WebUI | `28000` | 与 Windows 整合包一致 |
+| 训练监控 | `6008` | `gui.py` 子进程 |
+| TensorBoard | `6006` | 与 7.1 冲突时需 `--disable-tensorboard`（`start_autodl.sh` 已禁用） |
 
-在 AutoDL 控制台里开放或映射对应端口，然后从浏览器访问 AutoDL 提供的公网地址。
+在 AutoDL 控制台里开放或映射对应端口，然后从浏览器访问公网地址。
+
+### 7.4 与 `start_lora_next.sh` 的区别
+
+| 脚本 | 用途 |
+|------|------|
+| **`start_autodl.sh`** | 薄入口，给**云镜像开机**用；路径不可变 |
+| `scripts/autodl/start_lora_next.sh`（根目录同名文件为转发） | 完整链：conda、`apply_lora_next_anima_defaults.py`、清端口；适合已配置 `lora-next` 的运维 |
+
+新做镜像模板时，优先用 **`start_autodl.sh`** 作为开机命令，避免与旧 conda 链耦合。
 
 ## 8. 推荐目录规划
 

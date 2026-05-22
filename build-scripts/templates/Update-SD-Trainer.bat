@@ -25,6 +25,14 @@ echo Updating submodules / 更新子模块...
 git submodule update --init --recursive
 echo.
 
+if exist "scripts\portable\sync_portable_root_launchers.bat" (
+    echo Refreshing portable root launchers / 刷新整合包根目录启动脚本...
+    call "scripts\portable\sync_portable_root_launchers.bat" --nopause
+) else (
+    echo [Note] No scripts\portable\sync_portable_root_launchers.bat — if GUI fails after update, re-copy run_gui.bat from release or re-download 7z.
+)
+
+echo.
 echo ========================================
 echo   Done / 更新完成
 echo ========================================

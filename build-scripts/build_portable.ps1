@@ -34,7 +34,7 @@ New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
 
 # ==== Step 1: Python Embeddable ====
 
-Write-Host "[1/5] Preparing Python $PythonVer Embeddable..." -ForegroundColor Cyan
+Write-Host "[1/6] Preparing Python $PythonVer Embeddable..." -ForegroundColor Cyan
 
 $pythonZipName = "python-$PythonVer-embed-amd64.zip"
 $pythonUrl     = "https://www.python.org/ftp/python/$PythonVer/$pythonZipName"
@@ -152,7 +152,7 @@ if (-not (Test-Path $getPipPath)) {
 # ==== Step 2: Copy project files ====
 
 Write-Host ""
-Write-Host "[2/5] Copying project files..." -ForegroundColor Cyan
+Write-Host "[2/6] Copying project files..." -ForegroundColor Cyan
 
 Push-Location $ProjectRoot
 Pop-Location
@@ -171,7 +171,6 @@ $copyFiles = @(
     "gui.py",
     "requirements.txt",
     "setup_environment.py",
-    "apply_lora_next_anima_defaults.py",
     "VERSION",
     "LICENSE",
     "NOTICE.md",
@@ -221,108 +220,43 @@ foreach ($file in $copyFiles) {
 Write-Host "  Copied root files"
 Write-Host "  Done" -ForegroundColor Green
 
-# ==== Step 3: Create launcher scripts ====
+# ==== Step 3: Bundle default WD tagger (offline batch tagging) ====
 
 Write-Host ""
-Write-Host "[3/5] Creating launcher scripts..." -ForegroundColor Cyan
+Write-Host "[3/6] Bundling default WD tagger (wd14-convnextv2-v2, ~388 MB)..." -ForegroundColor Cyan
 
-# run_gui_portable.bat — portable-only launcher, flat goto structure, no BOM
-$batContent = "@echo off`r`n"
-$batContent += "chcp 65001 >nul 2>&1`r`n"
-$batContent += "title SD-Trainer`r`n"
-$batContent += "`r`n"
-$batContent += "set `"BASE_DIR=%~dp0`"`r`n"
-$batContent += "set `"HF_HOME=%~dp0huggingface`"`r`n"
-$batContent += "set `"PYTHONUTF8=1`"`r`n"
-$batContent += "set `"PYTHON_EXE=%~dp0python_embeded\python.exe`"`r`n"
-$batContent += "set `"LOG_FILE=%BASE_DIR%sd-trainer-log.txt`"`r`n"
-$batContent += "`r`n"
-$batContent += ":: Log header`r`n"
-$batContent += "echo ============================================ > `"%LOG_FILE%`"`r`n"
-$batContent += "echo  SD-Trainer Launch Log >> `"%LOG_FILE%`"`r`n"
-$batContent += "echo  Time: %date% %time% >> `"%LOG_FILE%`"`r`n"
-$batContent += "echo  Path: %BASE_DIR% >> `"%LOG_FILE%`"`r`n"
-$batContent += "echo  Python: %PYTHON_EXE% >> `"%LOG_FILE%`"`r`n"
-$batContent += "echo ============================================ >> `"%LOG_FILE%`"`r`n"
-$batContent += "echo. >> `"%LOG_FILE%`"`r`n"
-$batContent += "`r`n"
-$batContent += ":: Check python exists`r`n"
-$batContent += "if not exist `"%PYTHON_EXE%`" goto :no_python`r`n"
-$batContent += "`r`n"
-$batContent += ":: First run: install dependencies`r`n"
-$batContent += "if not exist `"%BASE_DIR%python_embeded\Lib\site-packages\torch`" goto :first_run`r`n"
-$batContent += "goto :launch`r`n"
-$batContent += "`r`n"
-$batContent += ":first_run`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo  [First Run] Installing dependencies, please keep network connected...`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo [setup] Starting setup_environment.py >> `"%LOG_FILE%`"`r`n"
-$batContent += "`"%PYTHON_EXE%`" -s `"%BASE_DIR%SD-Trainer\setup_environment.py`" 2>> `"%LOG_FILE%`"`r`n"
-$batContent += "if errorlevel 1 (`r`n"
-$batContent += "    echo [setup] FAILED >> `"%LOG_FILE%`"`r`n"
-$batContent += "    echo.`r`n"
-$batContent += "    echo  Setup failed. Check log: %LOG_FILE%`r`n"
-$batContent += "    goto :fail`r`n"
-$batContent += ")`r`n"
-$batContent += "echo [setup] OK >> `"%LOG_FILE%`"`r`n"
-$batContent += "`r`n"
-$batContent += ":launch`r`n"
-$batContent += "cd /d `"%BASE_DIR%SD-Trainer`"`r`n"
-$batContent += "if errorlevel 1 goto :no_project`r`n"
-$batContent += "`r`n"
-$batContent += "echo [launch] Starting gui.py >> `"%LOG_FILE%`"`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo  Starting SD-Trainer...`r`n"
-$batContent += "echo.`r`n"
-$batContent += "`r`n"
-$batContent += "`"%PYTHON_EXE%`" -s gui.py --skip-prepare-environment --port 28000 2>> `"%LOG_FILE%`"`r`n"
-$batContent += "set `"EXIT_CODE=%errorlevel%`"`r`n"
-$batContent += "echo [launch] gui.py exited with code %EXIT_CODE% >> `"%LOG_FILE%`"`r`n"
-$batContent += "`r`n"
-$batContent += "if %EXIT_CODE% neq 0 (`r`n"
-$batContent += "    echo.`r`n"
-$batContent += "    echo  ============================================`r`n"
-$batContent += "    echo   SD-Trainer exited abnormally [code: %EXIT_CODE%]`r`n"
-$batContent += "    echo   Log: %LOG_FILE%`r`n"
-$batContent += "    echo   Please send this log when reporting bugs.`r`n"
-$batContent += "    echo  ============================================`r`n"
-$batContent += "    echo.`r`n"
-$batContent += ")`r`n"
-$batContent += "pause`r`n"
-$batContent += "exit /b %EXIT_CODE%`r`n"
-$batContent += "`r`n"
-$batContent += ":no_python`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo  [ERROR] python_embeded\python.exe not found!`r`n"
-$batContent += "echo  Please make sure the package is fully extracted.`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo [ERROR] python_embeded\python.exe not found >> `"%LOG_FILE%`"`r`n"
-$batContent += "goto :fail`r`n"
-$batContent += "`r`n"
-$batContent += ":no_project`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo  [ERROR] SD-Trainer folder not found!`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo [ERROR] Cannot cd to %BASE_DIR%SD-Trainer >> `"%LOG_FILE%`"`r`n"
-$batContent += "goto :fail`r`n"
-$batContent += "`r`n"
-$batContent += ":fail`r`n"
-$batContent += "echo.`r`n"
-$batContent += "echo  ============================================`r`n"
-$batContent += "echo   SD-Trainer failed to start.`r`n"
-$batContent += "echo   Log: %LOG_FILE%`r`n"
-$batContent += "echo   Please send this log when reporting bugs.`r`n"
-$batContent += "echo  ============================================`r`n"
-$batContent += "echo.`r`n"
-$batContent += "pause`r`n"
-$batContent += "exit /b 1`r`n"
-[System.IO.File]::WriteAllText(
-    (Join-Path $portableDir "run_gui_portable.bat"),
-    $batContent,
-    (New-Object System.Text.UTF8Encoding $false)
-)
-Write-Host "  Created run_gui_portable.bat"
+$hfHome = Join-Path $portableDir "huggingface"
+New-Item -ItemType Directory -Path $hfHome -Force | Out-Null
+$prefetchScript = Join-Path $sdtDir "scripts\prefetch_default_tagger.py"
+
+if (-not (Test-Path $prefetchScript)) {
+    Write-Host "  WARNING: prefetch script missing, skip" -ForegroundColor Yellow
+} elseif (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Host "  WARNING: python not in PATH; tagger will download on first tag run" -ForegroundColor Yellow
+} else {
+    $env:HF_HOME = $hfHome
+    & python -m pip install -q huggingface_hub 2>$null
+    & python $prefetchScript --hf-home $hfHome --if-missing
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  WARNING: tagger prefetch failed; 7z may ship without offline tagger" -ForegroundColor Yellow
+    } else {
+        Write-Host "  Cached under huggingface/hub/" -ForegroundColor Green
+    }
+}
+
+# ==== Step 4: Create launcher scripts ====
+
+Write-Host ""
+Write-Host "[4/6] Creating launcher scripts..." -ForegroundColor Cyan
+
+# run_gui_portable.bat — root shim (logic lives in SD-Trainer/scripts/portable/, updates with project)
+$shimSrc = Join-Path $ProjectRoot "scripts\portable\run_gui_portable_shim.bat"
+if (Test-Path $shimSrc) {
+    Copy-Item $shimSrc -Destination (Join-Path $portableDir "run_gui_portable.bat") -Force
+    Write-Host "  Created run_gui_portable.bat (shim -> scripts/portable/launch_portable.bat)"
+} else {
+    Write-Host "  WARNING: scripts/portable/run_gui_portable_shim.bat not found" -ForegroundColor Yellow
+}
 
 # Use the repo's run_gui.bat as the portable entrypoint (it auto-detects
 # python_embeded and dispatches to run_gui_portable.bat).
@@ -387,10 +321,10 @@ foreach ($bat in @("Update-SD-Trainer.bat", "Download-Anima-Model.bat")) {
     }
 }
 
-# ==== Step 4: Empty dirs + README ====
+# ==== Step 5: Empty dirs + README ====
 
 Write-Host ""
-Write-Host "[4/5] Creating user directories and README..." -ForegroundColor Cyan
+Write-Host "[5/6] Creating user directories and README..." -ForegroundColor Cyan
 
 foreach ($d in @("sd-models", "output", "logs", "huggingface")) {
     $p = Join-Path $portableDir $d
@@ -404,9 +338,12 @@ $readme += "Quick Start:`r`n"
 $readme += "  1. Double-click run_gui.bat`r`n"
 $readme += "  2. First launch requires internet (downloads ~3 GB of PyTorch)`r`n"
 $readme += "  3. Open http://127.0.0.1:28000 in browser`r`n`r`n"
+$readme += "Tagging:`r`n"
+$readme += "  Default WD tagger (wd14-convnextv2-v2) is bundled under huggingface/`r`n"
+$readme += "  (~400 MB). Use the built-in Tagger page without extra model download.`r`n`r`n"
 $readme += "Directories:`r`n"
 $readme += "  run_gui.bat      - Stable entrypoint for portable users`r`n"
-$readme += "  run_gui_portable.bat - Portable-only launcher used by run_gui.bat`r`n"
+$readme += "  run_gui_portable.bat - Legacy shim (logic in SD-Trainer/scripts/portable/)`r`n"
 $readme += "  python_embeded/  - Python runtime`r`n"
 $readme += "  SD-Trainer/      - Project files`r`n"
 $readme += "  sd-models/       - Put your models here`r`n"
@@ -437,7 +374,7 @@ Write-Host "  Done" -ForegroundColor Green
 
 if (-not $Skip7z) {
     Write-Host ""
-    Write-Host "[5/5] Creating 7z archive..." -ForegroundColor Cyan
+    Write-Host "[6/6] Creating 7z archive..." -ForegroundColor Cyan
 
     if (-not $7zExe) {
         Write-Host "  [!] 7-Zip not found, skipping compression." -ForegroundColor Yellow
@@ -455,7 +392,7 @@ if (-not $Skip7z) {
     }
 } else {
     Write-Host ""
-    Write-Host "[5/5] Skipping 7z compression" -ForegroundColor Yellow
+    Write-Host "[6/6] Skipping 7z compression" -ForegroundColor Yellow
 }
 
 # ==== Done ====
