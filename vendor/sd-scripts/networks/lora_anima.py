@@ -337,6 +337,9 @@ def create_network(
 
 
 def create_network_from_weights(multiplier, file, ae, text_encoders, unet, weights_sd=None, for_inference=False, **kwargs):
+    if file is None and weights_sd is None:
+        return create_network(multiplier, **kwargs), None
+
     if weights_sd is None:
         if os.path.splitext(file)[1] == ".safetensors":
             from safetensors.torch import load_file

@@ -666,7 +666,7 @@ class NetworkTrainer:
                 net_kwargs[key] = value
 
         # if a new network is added in future, add if ~ then blocks for each network (;'∀')
-        if args.dim_from_weights:
+        if args.dim_from_weights and args.network_weights:
             network, _ = network_module.create_network_from_weights(1, args.network_weights, vae, text_encoder, unet, **net_kwargs)
         else:
             if "dropout" not in net_kwargs:
