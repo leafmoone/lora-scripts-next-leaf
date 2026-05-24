@@ -62,31 +62,47 @@ def run_tensorboard():
 
 @catch_exception
 def run_tag_editor():
-    launch_script = base_dir_path() / "mikazuki/dataset-tag-editor/scripts/launch.py"
+    scripts_dir = base_dir_path() / "mikazuki" / "dataset-tag-editor" / "scripts"
+    launch_script = scripts_dir / "launch.py"
     if not launch_script.exists():
         log.warning(
             "Dataset Tag Editor not found (submodule not initialized). "
-            "Skipping tag editor startup. "
-            "Run 'git submodule update --init' to install it. / "
-            "标签编辑器未找到（子模块未初始化），已跳过启动。"
-            "执行 git submodule update --init 可安装。"
+            "Attempting to initialize... / "
+            "标签编辑器未找到（子模块未初始化），正在尝试自动初始化..."
         )
-        return
+        try:
+            subprocess.run(
+                ["git", "submodule", "update", "--init", "--depth=1", "--", "mikazuki/dataset-tag-editor"],
+                cwd=str(base_dir_path()), timeout=120, check=False,
+            )
+        except Exception as e:
+            log.warning(f"Auto-init submodule failed: {e}")
+        if not launch_script.exists():
+            log.error(
+                "Dataset Tag Editor still not available after init attempt. "
+                "Please run 'git submodule update --init' manually. / "
+                "自动初始化失败，请手动执行 git submodule update --init。"
+            )
+            return
     log.info("Starting tageditor...")
-    cmd = [
-        sys.executable,
-        str(launch_script),
+    tag_args = [
         "--port", "28001",
         "--shadow-gradio-output",
         "--root-path", "/proxy/tageditor"
     ]
     if args.localization:
-        cmd.extend(["--localization", args.localization])
+        tag_args.extend(["--localization", args.localization])
     else:
         l = locale.getdefaultlocale()[0]
         if l and l.startswith("zh"):
-            cmd.extend(["--localization", "zh-Hans"])
-    subprocess.Popen(cmd)
+            tag_args.extend(["--localization", "zh-Hans"])
+    bootstrap = (
+        "import sys;"
+        f"sys.path.insert(0, {str(scripts_dir)!r});"
+        f"sys.argv = [{str(launch_script)!r}] + {tag_args!r};"
+        f"exec(compile(open({str(launch_script)!r}).read(), {str(launch_script)!r}, 'exec'))"
+    )
+    subprocess.Popen([sys.executable, "-s", "-c", bootstrap])
 
 
 def launch():
