@@ -146,6 +146,15 @@ _PATH_FIELDS = {
 
 def sanitize_config(config: dict) -> None:
     """Remove all invalid/empty values from config before writing TOML."""
+    if sys.platform == "win32" and config.get("torch_compile"):
+        log.warning(
+            "torch_compile is not supported on Windows (requires Triton, Linux-only). "
+            "Automatically disabled. / "
+            "torch_compile 在 Windows 上不可用（需要仅限 Linux 的 Triton 库），已自动关闭。"
+        )
+        config.pop("torch_compile", None)
+        config.pop("dynamo_backend", None)
+
     keys_to_remove = [k for k, v in config.items() if _is_invalid_value(v)]
     for k in keys_to_remove:
         del config[k]
