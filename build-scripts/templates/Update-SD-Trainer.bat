@@ -164,14 +164,52 @@ if errorlevel 1 (
 )
 echo.
 
-:: --------------- Submodules (non-blocking, with depth) ---------------
+:: --------------- Submodules (with mirror fallback) ---------------
 echo Updating submodules / 更新子模块...
-git submodule update --init --recursive --depth=1 2>nul
-if errorlevel 1 (
+echo.
+
+set "SUB_OK=0"
+
+:: Read original submodule URL
+set "SUB_ORIG_URL="
+for /f "tokens=*" %%u in ('git config --file .gitmodules submodule.mikazuki/dataset-tag-editor.url 2^>nul') do set "SUB_ORIG_URL=%%u"
+if not defined SUB_ORIG_URL set "SUB_ORIG_URL=https://github.com/Akegarasu/dataset-tag-editor"
+
+:: Attempt 1: direct
+echo [1/4] Submodule direct / 子模块直连
+git submodule update --init --recursive --depth=1 >nul 2>&1
+if !errorlevel! equ 0 (
+    set "SUB_OK=1"
+    echo   OK
+)
+
+:: Attempt 2-4: mirrors (temporarily rewrite submodule URL)
+if !SUB_OK! equ 0 (
+    echo   Failed / 失败
+    echo.
+    timeout /t 2 /nobreak >nul
+    call :try_submodule "2/4" "ghfast.top" "https://ghfast.top/!SUB_ORIG_URL!"
+)
+if !SUB_OK! equ 0 (
+    timeout /t 2 /nobreak >nul
+    call :try_submodule "3/4" "ghproxy mirror" "https://mirror.ghproxy.com/!SUB_ORIG_URL!"
+)
+if !SUB_OK! equ 0 (
+    timeout /t 2 /nobreak >nul
+    call :try_submodule "4/4" "gitmirror" "https://hub.gitmirror.com/!SUB_ORIG_URL!"
+)
+
+:: Restore original URL regardless of outcome
+git config --file .gitmodules submodule.mikazuki/dataset-tag-editor.url "!SUB_ORIG_URL!" >nul 2>&1
+git submodule sync >nul 2>&1
+
+if !SUB_OK! equ 0 (
     echo.
     echo [Warning] Optional submodule update failed / 可选子模块更新失败
     echo dataset-tag-editor is not required for the main training workflow.
     echo dataset-tag-editor 不影响主要训练流程，继续更新。
+) else (
+    echo Submodule updated successfully / 子模块更新成功
 )
 echo.
 
@@ -208,6 +246,22 @@ echo [%~1] %~2
 git fetch "%~3" %~4 --tags --depth=1 >nul 2>&1
 if !errorlevel! equ 0 (
     set "FETCH_OK=1"
+    echo   OK
+) else (
+    echo   Failed / 失败
+    echo.
+)
+goto :eof
+
+:: =============== Subroutine: try_submodule ===============
+:: Usage: call :try_submodule "label" "name" "mirror_url"
+:try_submodule
+echo [%~1] Submodule via %~2
+git config --file .gitmodules submodule.mikazuki/dataset-tag-editor.url "%~3" >nul 2>&1
+git submodule sync >nul 2>&1
+git submodule update --init --recursive --depth=1 >nul 2>&1
+if !errorlevel! equ 0 (
+    set "SUB_OK=1"
     echo   OK
 ) else (
     echo   Failed / 失败
