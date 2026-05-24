@@ -43,15 +43,13 @@ def ensure_port_available(port: int, fallback_start: int, fallback_end: int, lab
             log.warning(f"{label} port {port} is already in use, using {candidate} instead.")
             return candidate
 
-    log.error(f"{label} port finding fallback error")
+    log.error(f"{label}: no available port in range {fallback_start}-{fallback_end}.")
     return port
 
 
 @catch_exception
 def run_train_monitor():
-    log.info(f"Starting train status monitor on port {args.train_monitor_port}...")
     env = os.environ.copy()
-    env["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
     subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
 
 
@@ -64,10 +62,20 @@ def run_tensorboard():
 
 @catch_exception
 def run_tag_editor():
+    launch_script = base_dir_path() / "mikazuki/dataset-tag-editor/scripts/launch.py"
+    if not launch_script.exists():
+        log.warning(
+            "Dataset Tag Editor not found (submodule not initialized). "
+            "Skipping tag editor startup. "
+            "Run 'git submodule update --init' to install it. / "
+            "标签编辑器未找到（子模块未初始化），已跳过启动。"
+            "执行 git submodule update --init 可安装。"
+        )
+        return
     log.info("Starting tageditor...")
     cmd = [
         sys.executable,
-        base_dir_path() / "mikazuki/dataset-tag-editor/scripts/launch.py",
+        str(launch_script),
         "--port", "28001",
         "--shadow-gradio-output",
         "--root-path", "/proxy/tageditor"

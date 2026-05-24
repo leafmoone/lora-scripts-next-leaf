@@ -41,10 +41,22 @@ def reverse_proxy_maker(url_type: str, full_path: bool = False):
         try:
             rp_resp = await client.send(rp_req, stream=True)
         except ConnectError:
-            return PlainTextResponse(
-                content="The requested service not started yet or service started fail. This may cost a while when you first time startup\n请求的服务尚未启动或启动失败。若是第一次启动，可能需要等待一段时间后再刷新网页。",
-                status_code=502
-            )
+            if url_type == "tageditor":
+                hint = (
+                    "The requested service not started yet or service started fail. "
+                    "This may cost a while when you first time startup.\n"
+                    "请求的服务尚未启动或启动失败。若是第一次启动，可能需要等待一段时间后再刷新网页。\n\n"
+                    "If this persists, the dataset-tag-editor submodule may not be installed.\n"
+                    "如果持续出现此问题，可能是标签编辑器子模块未安装。\n"
+                    "Run: git submodule update --init --recursive"
+                )
+            else:
+                hint = (
+                    "The requested service not started yet or service started fail. "
+                    "This may cost a while when you first time startup.\n"
+                    "请求的服务尚未启动或启动失败。若是第一次启动，可能需要等待一段时间后再刷新网页。"
+                )
+            return PlainTextResponse(content=hint, status_code=502)
         return StreamingResponse(
             rp_resp.aiter_raw(),
             status_code=rp_resp.status_code,
