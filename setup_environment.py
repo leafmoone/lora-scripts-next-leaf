@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -20,6 +21,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 TORCH_VERSION = "2.7.0"
 TORCHVISION_VERSION = "0.22.0"
 CUDA_TAG = "cu128"
+PYTHON_TAG = "cp310"
+PLATFORM_TAG = "win_amd64"
+TORCH_WHEEL_NAME = (
+    f"torch-{TORCH_VERSION}+{CUDA_TAG}-{PYTHON_TAG}-{PYTHON_TAG}-{PLATFORM_TAG}.whl"
+)
+PROBE_BYTES = 32 * 1024 * 1024
+PROBE_MAX_SECONDS = 15
 
 MIRROR_PROFILES = {
     "china": {
@@ -167,18 +175,45 @@ def _run_pip(args):
     return subprocess.call(cmd, env=env) == 0
 
 
-def _probe_url(source, timeout=8):
-    t0 = time.time()
+def _join_wheel_url(base_url):
+    return base_url.rstrip("/") + "/" + urllib.parse.quote(TORCH_WHEEL_NAME, safe="")
+
+
+def _probe_url(source, timeout=15):
+    # Measure real wheel throughput instead of only first-byte latency. Some
+    # mirrors respond quickly but download large wheels very slowly.
+    t0 = time.perf_counter()
+    wheel_url = _join_wheel_url(source["url"])
     request = urllib.request.Request(
-        source["url"],
-        headers={"User-Agent": "SD-Trainer installer"},
+        wheel_url,
+        headers={
+            "User-Agent": "SD-Trainer installer",
+            "Range": f"bytes=0-{PROBE_BYTES - 1}",
+        },
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        response.read(1)
         status = getattr(response, "status", 200)
         if status >= 400:
             raise OSError(f"HTTP {status}")
-    return {**source, "elapsed": time.time() - t0}
+        bytes_read = 0
+        while (
+            bytes_read < PROBE_BYTES
+            and time.perf_counter() - t0 < PROBE_MAX_SECONDS
+        ):
+            chunk = response.read(min(1024 * 1024, PROBE_BYTES - bytes_read))
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+
+    elapsed = max(time.perf_counter() - t0, 0.001)
+    if bytes_read <= 0:
+        raise OSError("empty response")
+    return {
+        **source,
+        "elapsed": elapsed,
+        "bytes_read": bytes_read,
+        "mbps": bytes_read / elapsed / (1024 * 1024),
+    }
 
 
 def probe_pytorch_sources():
@@ -195,14 +230,17 @@ def probe_pytorch_sources():
             try:
                 result = future.result()
                 results.append(result)
-                print(f"    OK   {result['label']} ({result['elapsed']:.2f}s)")
+                print(
+                    f"    OK   {result['label']} "
+                    f"({result['mbps']:.1f} MB/s, {result['elapsed']:.2f}s)"
+                )
             except Exception as exc:
                 print(f"    FAIL {source['label']} ({exc})")
 
     if not results:
         return []
 
-    results.sort(key=lambda item: item["elapsed"])
+    results.sort(key=lambda item: (-item["mbps"], item["elapsed"]))
     print(f"  已选择最快源: {results[0]['label']}")
     return results
 

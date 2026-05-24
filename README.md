@@ -33,7 +33,7 @@
 ## Get Started in 3 Steps
 
 ```
-1. Download  →  SD-Trainer-v2.5.0.7z (~20 MB) from Releases, extract
+1. Download  →  SD-Trainer-v2.5.2.7z (~380 MB) from Releases, extract
 2. Launch    →  Double-click run_gui.bat (auto-installs deps on first run, ~3 GB)
 3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```

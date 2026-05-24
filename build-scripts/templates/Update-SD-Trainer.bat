@@ -73,10 +73,20 @@ if not defined ORIGIN_URL set "ORIGIN_URL=https://github.com/wochenlong/lora-scr
 echo Fetching latest code / 获取最新代码...
 echo.
 
+set "IS_SHALLOW=false"
+for /f "tokens=*" %%s in ('git rev-parse --is-shallow-repository 2^>nul') do set "IS_SHALLOW=%%s"
+set "FETCH_DEPTH_ARG=--depth=1"
+if /I "!IS_SHALLOW!"=="true" (
+    set "FETCH_DEPTH_ARG=--deepen=50"
+    echo Shallow git checkout detected; deepening history for safe fast-forward.
+    echo 检测到浅克隆仓库，正在补齐部分历史以便安全快进更新。
+    echo.
+)
+
 :: Attempt 1: direct
 set "FETCH_OK=0"
 echo [1/4] GitHub direct / GitHub 直连
-git fetch origin %UPDATE_BRANCH% --tags --depth=1 >nul 2>&1
+git fetch origin %UPDATE_BRANCH% --tags !FETCH_DEPTH_ARG! >nul 2>&1
 if !errorlevel! equ 0 (
     set "FETCH_OK=1"
     echo   OK
@@ -169,21 +179,34 @@ echo Updating submodules / 更新子模块...
 echo.
 
 set "SUB_OK=0"
+set "SUB_PATH=mikazuki/dataset-tag-editor"
+set "SUB_WORKTREE=mikazuki\dataset-tag-editor"
 
 :: Read original submodule URL
 set "SUB_ORIG_URL="
 for /f "tokens=*" %%u in ('git config --file .gitmodules submodule.mikazuki/dataset-tag-editor.url 2^>nul') do set "SUB_ORIG_URL=%%u"
 if not defined SUB_ORIG_URL set "SUB_ORIG_URL=https://github.com/Akegarasu/dataset-tag-editor"
 
-:: Attempt 1: direct
-echo [1/4] Submodule direct / 子模块直连
-git submodule update --init --recursive --depth=1 >nul 2>&1
-if !errorlevel! equ 0 (
+:: Portable packages may already contain dataset-tag-editor files copied by
+:: robocopy, but without submodule git metadata. In that case, cloning into the
+:: non-empty directory fails; treat the bundled files as usable.
+if exist "!SUB_WORKTREE!\scripts\launch.py" if not exist "!SUB_WORKTREE!\.git" (
+    echo Bundled dataset-tag-editor files detected; skipping submodule clone.
+    echo 检测到整合包已内置 dataset-tag-editor 文件，跳过子模块克隆。
     set "SUB_OK=1"
-    echo   OK
 )
 
-:: Attempt 2-4: mirrors (temporarily rewrite submodule URL)
+:: Attempt 1: direct
+if !SUB_OK! equ 0 (
+    echo [1/4] Submodule direct / 子模块直连
+    git submodule update --init --recursive --depth=1 "!SUB_PATH!" >nul 2>&1
+    if !errorlevel! equ 0 (
+        set "SUB_OK=1"
+        echo   OK
+    )
+)
+
+:: Attempt 2-4: mirrors (temporary config override; do not modify .gitmodules)
 if !SUB_OK! equ 0 (
     echo   Failed / 失败
     echo.
@@ -198,10 +221,6 @@ if !SUB_OK! equ 0 (
     timeout /t 2 /nobreak >nul
     call :try_submodule "4/4" "gitmirror" "https://hub.gitmirror.com/!SUB_ORIG_URL!"
 )
-
-:: Restore original URL regardless of outcome
-git config --file .gitmodules submodule.mikazuki/dataset-tag-editor.url "!SUB_ORIG_URL!" >nul 2>&1
-git submodule sync >nul 2>&1
 
 if !SUB_OK! equ 0 (
     echo.
@@ -243,7 +262,7 @@ exit /b 0
 :: Usage: call :try_mirror "label" "name" "url" branch
 :try_mirror
 echo [%~1] %~2
-git fetch "%~3" %~4 --tags --depth=1 >nul 2>&1
+git fetch "%~3" %~4 --tags !FETCH_DEPTH_ARG! >nul 2>&1
 if !errorlevel! equ 0 (
     set "FETCH_OK=1"
     echo   OK
@@ -257,9 +276,7 @@ goto :eof
 :: Usage: call :try_submodule "label" "name" "mirror_url"
 :try_submodule
 echo [%~1] Submodule via %~2
-git config --file .gitmodules submodule.mikazuki/dataset-tag-editor.url "%~3" >nul 2>&1
-git submodule sync >nul 2>&1
-git submodule update --init --recursive --depth=1 >nul 2>&1
+git -c "submodule.mikazuki/dataset-tag-editor.url=%~3" submodule update --init --recursive --depth=1 "!SUB_PATH!" >nul 2>&1
 if !errorlevel! equ 0 (
     set "SUB_OK=1"
     echo   OK

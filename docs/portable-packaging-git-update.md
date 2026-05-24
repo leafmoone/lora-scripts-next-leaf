@@ -91,6 +91,7 @@ sd-trainer-log.txt
 4. 提示用户先关闭 WebUI
 5. git fetch（带镜像回退）：
    - 先直连 origin → 失败后依次尝试 ghfast.top / ghproxy / gitmirror
+   - 若整合包是浅克隆，使用 `--deepen=50` 补齐部分历史，避免看不到共同祖先导致 `--ff-only` 失败
    - 每个镜像之间等待 2 秒
    - 全部失败则输出排障建议并退出
 6. 备份本地改动：
@@ -101,7 +102,10 @@ sd-trainer-log.txt
    - git merge --ff-only FETCH_HEAD
    - git pull --ff-only --depth=1 origin <branch>
 8. 更新子模块：
-   - dataset-tag-editor 失败只 warning，加 --depth=1 减少传输量
+   - 若整合包已内置 `dataset-tag-editor/scripts/launch.py` 但没有子模块 `.git` 元数据，直接复用内置文件，跳过 clone
+   - 否则直连 GitHub → 失败后依次尝试 ghfast.top / ghproxy / gitmirror
+   - 镜像尝试使用临时 `git -c submodule...url=...`，不要改写 `.gitmodules`
+   - dataset-tag-editor 失败只 warning，加 `--depth=1` 减少传输量
 9. 刷新根目录启动器：
    - scripts/portable/sync_portable_root_launchers.bat --nopause
 10. 输出当前版本和成功提示
@@ -121,6 +125,27 @@ sd-trainer-log.txt
 | 4 | gitmirror | `git fetch https://hub.gitmirror.com/<origin_url> <branch>` |
 
 镜像站点为公益服务，可能不定期下线。后续维护时如发现某站不可用，替换为当前可用的镜像即可。备用域名汇总站：<https://ghproxy.link/>
+
+### 浅克隆更新注意事项
+
+整合包为了控制体积，只打入 `depth=1` 的 `.git`。如果更新脚本继续使用 `git fetch --depth=1` 获取最新提交，Git 可能把本地 `HEAD` 和 `origin/main` 都视为孤立浅提交，找不到共同祖先，从而误报：
+
+```text
+fast-forward update failed
+```
+
+因此浅克隆场景必须使用 `git fetch --deepen=50`，先补齐一段历史，再执行 `git merge --ff-only`。
+
+## 首次依赖安装测速
+
+`setup_environment.py` 不应只测试镜像首字节延迟。PyTorch wheel 约 3 GB，首响应快不代表大文件下载快。
+
+当前策略：
+
+- 直接测速 `torch-2.7.0+cu128` Windows wheel。
+- 每个源最多读取 32 MB。
+- 单源测速最多 15 秒，慢源按已下载数据计算 MB/s。
+- 按真实吞吐量排序选择 PyTorch 源，官方源也参与测速。
 
 ## 依赖同步
 
