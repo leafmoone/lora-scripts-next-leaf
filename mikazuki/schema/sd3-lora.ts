@@ -197,7 +197,7 @@ Schema.intersect([
 
     Schema.object(
         UpdateSchema(SHARED_SCHEMAS.RAW.PRECISION_CACHE_BATCH, {
-            full_fp16: Schema.boolean().description("完全使用 FP16 精度训练可训练权重。Anima 一般不建议开启；Automagic / CAME 会自动禁用以降低 loss=nan 风险"),
+            full_fp16: Schema.boolean().description("完全使用 FP16 精度训练可训练权重。Anima 一般不建议开启；Automagic / CAME 会自动禁用以降低 loss=nan 风险。fp16 不是 NaN 绕过方案，支持 bf16 的显卡会自动改回 bf16"),
             full_bf16: Schema.boolean().description("完全使用 BF16 精度训练可训练权重。Anima 一般不建议开启；Automagic / CAME 会自动禁用以降低 loss=nan 风险"),
             fp8_base: Schema.boolean().default(false).description("对基础模型使用 FP8 精度"),
             fp8_base_unet: Schema.boolean().default(false).description("仅对 DiT / U-Net 使用 FP8 精度"),

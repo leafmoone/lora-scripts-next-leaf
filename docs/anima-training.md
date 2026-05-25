@@ -105,7 +105,7 @@ T-LoRA（Timestep-Dependent LoRA）是一种改进的 LoRA 方法。普通 LoRA 
 
 **Q: 使用 Automagic / CAME 训练时 loss 变成 NaN？**
 
-优先确认 PyTorch 版本 ≥ 2.5，并避免开启 `full_bf16` / `full_fp16`。Anima 页面仍可使用 `mixed_precision=bf16`，但可训练 LoRA 权重建议保持 FP32；后端会在 `Automagic` 和 `pytorch_optimizer.CAME` 下自动关闭 full 半精度训练，以降低 NaN 风险。
+优先确认 PyTorch 版本 ≥ 2.5，并避免开启 `full_bf16` / `full_fp16`。Anima 页面仍可使用 `mixed_precision=bf16`，但可训练 LoRA 权重建议保持 FP32；后端会在 `Automagic` 和 `pytorch_optimizer.CAME` 下自动关闭 full 半精度训练，以降低 NaN 风险。不要把 bf16 改成 fp16 作为绕过方案；fp16 数值范围更窄，通常只会让 NaN 晚几步出现。支持 bf16 的显卡上，后端会把这两个优化器的 Anima fp16 配置自动改回 bf16。
 
 **Q: T-LoRA 和 LoKr 哪个好？**
 

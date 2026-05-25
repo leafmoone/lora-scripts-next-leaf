@@ -282,6 +282,14 @@ def _detect_best_attn_mode() -> str:
     return "torch"
 
 
+def _cuda_bf16_supported() -> bool:
+    try:
+        import torch
+        return bool(torch.cuda.is_available() and torch.cuda.is_bf16_supported())
+    except Exception:
+        return False
+
+
 def apply_anima_training_defaults(config: dict, model_train_type: str):
     if model_train_type not in ANIMA_TRAIN_TYPES:
         return
@@ -296,6 +304,13 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
 
     optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
     if optimizer_type in ANIMA_FULL_PRECISION_UNSAFE_OPTIMIZERS:
+        if config.get("mixed_precision") == "fp16" and _cuda_bf16_supported():
+            config["mixed_precision"] = "bf16"
+            log.warning(
+                "Changed Anima mixed_precision from fp16 to bf16 for optimizer "
+                f"{config.get('optimizer_type')}. fp16 is more likely to produce loss=nan."
+            )
+
         disabled = []
         for key in ("full_bf16", "full_fp16"):
             if config.pop(key, None):
