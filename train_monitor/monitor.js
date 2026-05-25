@@ -191,6 +191,7 @@ function renderHero(status) {
   const pct = Number(metrics.percent || 0);
   const hasPct = Number.isFinite(pct) && pct > 0;
   const error = status.error || status.log_error || metrics.has_error;
+  const guiWarning = status.gui_warning || "";
   const attention = metrics.needs_attention || metrics.progress_stalled;
   const isTraining = state === "训练中" && !error && !attention;
   let title = heroTitleText(status);
@@ -217,7 +218,7 @@ function renderHero(status) {
       (lossText ? "，" + lossText + trendText : "") + "，最新模型已保存到输出目录。";
   } else if (isIdleState(state)) {
     copy = state === "GUI 离线"
-      ? "主 GUI 未连接，无法获取任务列表；GPU 与历史预览仍可从本页读取。"
+      ? (guiWarning || "主 GUI 未连接，无法获取任务列表；GPU、训练参数与 TensorBoard Loss 仍可从本页读取。")
       : "当前没有进行中的训练；启动训练后将显示模型类型与实时进度。";
   }
 
@@ -662,9 +663,12 @@ function renderStatus(status) {
   document.getElementById("updatedAt").textContent = status.time || "";
   const metrics = status.metrics || {};
   const error = status.error || status.log_error || "";
+  const guiWarning = status.gui_warning || "";
   const errorBox = document.getElementById("errorBox");
-  errorBox.textContent = error;
-  errorBox.style.display = error ? "block" : "none";
+  errorBox.textContent = error || guiWarning;
+  errorBox.classList.toggle("alert--error", Boolean(error));
+  errorBox.classList.toggle("alert--warn", Boolean(!error && guiWarning));
+  errorBox.style.display = (error || guiWarning) ? "block" : "none";
   renderHero(status);
   renderCards(status);
   renderTrainParams(status);

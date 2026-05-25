@@ -185,6 +185,13 @@ main {
   border-left: 3px solid var(--color-status-error);
 }
 
+.alert--warn {
+  color: var(--color-status-warning);
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.32);
+  border-left: 3px solid var(--color-status-warning);
+}
+
 .err { color: var(--color-status-error); }
 
 /* Hero */

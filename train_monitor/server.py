@@ -877,6 +877,7 @@ def collect_status() -> dict:
     status = {
         "time": now,
         "gui_online": False,
+        "gui_warning": "",
         "state": "GUI 离线",
         "tasks": [],
         "active_task": None,
@@ -898,7 +899,10 @@ def collect_status() -> dict:
         status["gui_online"] = True
         status["tasks"] = tasks
     except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        status["error"] = f"无法连接 GUI API（尝试 {', '.join(gui_api_candidates())}）：{exc}"
+        status["gui_warning"] = (
+            f"主 GUI API 暂不可用（尝试 {', '.join(gui_api_candidates())}）：{exc}。"
+            "训练参数、GPU 状态和 TensorBoard Loss 仍会继续同步。"
+        )
         return status
 
     if not status["tasks"]:
