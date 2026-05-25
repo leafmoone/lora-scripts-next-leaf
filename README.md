@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/readme/anima-cover.png" alt="lora-scripts-next · Anima Trainer" width="880" />
+  <img src="assets/readme/next-trainer-cover.png" alt="Next Trainer" width="880" />
 </p>
 
-<h1 align="center">SD-Trainer</h1>
+<h1 align="center">Next Trainer</h1>
 
 <p align="center">
   <b>One-click LoRA training GUI for Windows</b> — supports <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
@@ -23,7 +23,7 @@
 ---
 
 <p align="center">
-  <img src="assets/readme/screenshot-webui.png" alt="SD-Trainer GUI" width="920" />
+  <img src="assets/readme/screenshot-webui.png" alt="Next Trainer GUI" width="920" />
 </p>
 
 <p align="center"><sub>New UI — sidebar navigation, model & parameter form in the center, real-time config preview on the right</sub></p>

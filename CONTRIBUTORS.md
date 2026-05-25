@@ -19,6 +19,7 @@
 |--------|----------|-----|
 | [@ageless-h](https://github.com/ageless-h) | Anima 训练后端迁移至 kohya-ss/sd-scripts、submodule 自动初始化、LoHa/LoKr schema 扩展、训练日志 URL 输出 | [#2](https://github.com/wochenlong/lora-scripts-next/pull/2) |
 | [@SupermarKleet](https://github.com/SupermarKleet) | 项目 UI 设计 | [#1](https://github.com/wochenlong/lora-scripts-next/pull/1) |
+| [@SupermarKleet](https://github.com/SupermarKleet) | Next Trainer 看板娘与品牌素材（Logo、README 首图、Favicon、社交预览图） | — |
 | [@niangao2331](https://github.com/niangao2331) | 修复 `Download-Anima-Model.bat` 在整合包内重复创建嵌套 `SD-Trainer` 目录的问题，模型正确下载至 `sd-models/anima/` | [#23](https://github.com/wochenlong/lora-scripts-next/pull/23) |
 
 上游项目与完整归属信息见 [`NOTICE.md`](NOTICE.md)。
