@@ -85,7 +85,7 @@ bash install_flash_attn.sh
 
 ## 训练监控
 
-训练启动后自动打开监控页（端口 6008），GPU 状态、训练参数、Loss 曲线、预览图、日志一站式查看。
+训练启动后自动打开监控页（默认端口 6008，可自动回退），GPU 状态、训练参数、Loss 曲线、预览图、日志一站式查看。
 
 <p align="center">
   <img src="assets/readme/screenshot-train-monitor.png" alt="训练监控仪表盘" width="920" />

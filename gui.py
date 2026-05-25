@@ -30,13 +30,20 @@ parser.add_argument("--browser", type=str, default=None,
 parser.add_argument("--dev", action="store_true")
 
 
-def ensure_port_available(port: int, fallback_start: int, fallback_end: int, label: str, reserved_ports: set[int]) -> int:
-    if port not in reserved_ports and check_port_avaliable(port):
+def ensure_port_available(
+    port: int,
+    fallback_start: int,
+    fallback_end: int,
+    label: str,
+    reserved_ports: set[int],
+    preferred_reserved_port: int | None = None,
+) -> int:
+    if (port == preferred_reserved_port or port not in reserved_ports) and check_port_avaliable(port):
         reserved_ports.add(port)
         return port
 
     for candidate in range(fallback_start, fallback_end):
-        if candidate in reserved_ports:
+        if candidate in reserved_ports and candidate != preferred_reserved_port:
             continue
         if check_port_avaliable(candidate):
             reserved_ports.add(candidate)
@@ -61,7 +68,7 @@ def run_tensorboard():
 
 
 @catch_exception
-def run_tag_editor():
+def run_tag_editor(port: int):
     scripts_dir = base_dir_path() / "mikazuki" / "dataset-tag-editor" / "scripts"
     launch_script = scripts_dir / "launch.py"
     if not launch_script.exists():
@@ -86,7 +93,7 @@ def run_tag_editor():
             return
     log.info("Starting tageditor...")
     tag_args = [
-        "--port", "28001",
+        "--port", str(port),
         "--shadow-gradio-output",
         "--root-path", "/proxy/tageditor"
     ]
@@ -116,18 +123,43 @@ def launch():
     if not args.skip_prepare_environment:
         prepare_environment(disable_auto_mirror=args.disable_auto_mirror)
 
-    # Keep fallback ports near their defaults and reserve chosen ports so two
-    # child services cannot both fall back to the same port before they start.
-    reserved_ports: set[int] = set()
+    # Protect each service's default port before scanning fallbacks. Otherwise
+    # TensorBoard can claim 6008 as a fallback and make monitor links open it.
+    protected_default_ports = {args.port}
     if not args.disable_tageditor:
-        reserved_ports.add(28001)
-    args.port = ensure_port_available(args.port, args.port, args.port + 20, "GUI", reserved_ports)
+        protected_default_ports.add(28001)
+    if not args.disable_tensorboard:
+        protected_default_ports.add(args.tensorboard_port)
+    if not args.disable_train_monitor:
+        protected_default_ports.add(args.train_monitor_port)
+
+    reserved_ports: set[int] = set(protected_default_ports)
+    tageditor_port = 28001
+    if not args.disable_tageditor:
+        tageditor_port = ensure_port_available(
+            28001, 28001, 28020, "Tag editor", reserved_ports, preferred_reserved_port=28001
+        )
+    args.port = ensure_port_available(
+        args.port, args.port, args.port + 20, "GUI", reserved_ports, preferred_reserved_port=args.port
+    )
     if not args.disable_tensorboard:
         args.tensorboard_port = ensure_port_available(
-            args.tensorboard_port, args.tensorboard_port, args.tensorboard_port + 20, "TensorBoard", reserved_ports)
+            args.tensorboard_port,
+            args.tensorboard_port,
+            args.tensorboard_port + 20,
+            "TensorBoard",
+            reserved_ports,
+            preferred_reserved_port=args.tensorboard_port,
+        )
     if not args.disable_train_monitor:
         args.train_monitor_port = ensure_port_available(
-            args.train_monitor_port, args.train_monitor_port, args.train_monitor_port + 20, "Train monitor", reserved_ports)
+            args.train_monitor_port,
+            args.train_monitor_port,
+            args.train_monitor_port + 20,
+            "Train monitor",
+            reserved_ports,
+            preferred_reserved_port=args.train_monitor_port,
+        )
 
     from mikazuki.update_check import local_version
     log.info(f"SD-Trainer Version: {local_version()}")
@@ -137,6 +169,7 @@ def launch():
     os.environ["MIKAZUKI_TENSORBOARD_HOST"] = args.tensorboard_host
     os.environ["MIKAZUKI_TENSORBOARD_PORT"] = str(args.tensorboard_port)
     os.environ["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
+    os.environ["MIKAZUKI_TAGEDITOR_PORT"] = str(tageditor_port)
     os.environ["MIKAZUKI_DEV"] = "1" if args.dev else "0"
     if args.browser:
         os.environ["MIKAZUKI_BROWSER"] = args.browser
@@ -146,7 +179,7 @@ def launch():
         args.tensorboard_host = "0.0.0.0"
 
     if not args.disable_tageditor:
-        run_tag_editor()
+        run_tag_editor(tageditor_port)
 
     if not args.disable_tensorboard:
         run_tensorboard()
