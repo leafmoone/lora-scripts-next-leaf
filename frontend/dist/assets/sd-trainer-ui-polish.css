@@ -83,6 +83,34 @@
   color: var(--sd-nav-l0-color) !important;
 }
 
+/* 版本号：贴在「Next Trainer」标题右侧（坐标由 sd-trainer-brand.js 计算） */
+.sd-brand-version-chip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--sd-radius-pill, 999px);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-nav-secondary-label, #909399);
+  background: color-mix(in srgb, var(--c-bg, #fff) 92%, transparent);
+  border: 1px solid var(--c-border, #e4e7ed);
+  pointer-events: none;
+  user-select: none;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+html.dark .sd-brand-version-chip {
+  color: var(--c-text-lighter, #a3a6ad);
+  background: color-mix(in srgb, var(--c-bg, #22272e) 92%, transparent);
+  border-color: var(--c-border, #3d444d);
+}
+
 /* L1：一级目录 — 深色分组标题 + 淡紫分隔线 */
 .sidebar-items > li > p.sidebar-item.sidebar-heading {
   font-size: var(--sd-nav-l1) !important;
@@ -791,4 +819,388 @@ html.dark .example-container > .right-container section .params-section > div {
 html.dark .example-container > .right-container section .params-section .shiki,
 html.dark .example-container > .right-container section .params-section pre {
   background: var(--c-bg-mute) !important;
+}
+
+/* ----- Tagger：底部操作坞（进度 + 启动/重置 一体，docs/design/tagger-progress-ui.md） ----- */
+.example-container > .right-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.example-container > .right-container > section:first-of-type {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.example-container > .right-container > section:first-of-type .el-scrollbar {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* dock 就绪时隐藏 Vue 原按钮；dock 未挂载时保留 Vue 按钮作回退 */
+.example-container > .right-container:has(#sd-tagger-dock [data-start-btn]) > button.el-button {
+  display: none !important;
+}
+
+.example-container > .right-container .sd-tagger-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+  padding: 0.625rem 1.125rem 0.85rem;
+  border-top: 1px solid var(--c-border, #ebeef5);
+  background: var(--c-bg-mute, #fafafa);
+  --sd-tagger-progress: 0;
+}
+
+/* 完成态沿用训练器主色，不用 Element 默认绿 */
+.example-container > .right-container .sd-tagger-dock--done {
+  background: var(--c-bg-mute, #fafafa);
+  border-top-color: color-mix(in srgb, var(--el-color-primary) 18%, var(--c-border, #ebeef5));
+}
+
+.example-container > .right-container .sd-tagger-dock__status {
+  margin-bottom: 0.5rem;
+}
+
+.example-container > .right-container .sd-tagger-dock__status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  min-height: 1.25rem;
+}
+
+.example-container > .right-container .sd-tagger-dock--idle .sd-tagger-dock__phase,
+.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__phase {
+  display: none;
+}
+
+.example-container > .right-container .sd-tagger-dock__phase {
+  flex: 0 0 auto;
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--sd-radius-pill, 999px);
+  background: var(--c-bg-light, #f3f4f5);
+  color: var(--c-text-lighter, #909399);
+}
+
+.example-container > .right-container .sd-tagger-dock__phase[data-phase="tagging"],
+.example-container > .right-container .sd-tagger-dock__phase[data-phase="downloading"] {
+  background: var(--sd-primary-muted);
+  color: var(--el-color-primary);
+}
+
+.example-container > .right-container .sd-tagger-dock__phase[data-phase="done"] {
+  background: var(--sd-primary-muted);
+  color: var(--el-color-primary);
+}
+
+.example-container > .right-container .sd-tagger-dock__phase[data-phase="error"] {
+  background: color-mix(in srgb, var(--el-color-danger, #f56c6c) 12%, #fff);
+  color: var(--el-color-danger, #f56c6c);
+}
+
+.example-container > .right-container .sd-tagger-dock__phase[data-phase="pending"] {
+  background: var(--sd-primary-muted);
+  color: var(--el-color-primary);
+}
+
+.example-container > .right-container .sd-tagger-dock--pending .sd-tagger-dock__meters,
+.example-container > .right-container .sd-tagger-dock--downloading .sd-tagger-dock__meters {
+  display: flex;
+}
+
+.example-container > .right-container .sd-tagger-dock--downloading .sd-tagger-dock__meter[data-block="tagging"] {
+  display: none;
+}
+
+.example-container > .right-container .sd-tagger-dock--downloading .sd-tagger-dock__phase {
+  display: inline-block;
+}
+
+.example-container > .right-container .sd-tagger-dock--pending .sd-tagger-dock__fill--tagging {
+  width: 35% !important;
+  animation: sd-tagger-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sd-tagger-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.example-container > .right-container .sd-tagger-dock__message {
+  flex: 1 1 auto;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--c-text-lighter, #909399);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.example-container > .right-container .sd-tagger-dock--busy .sd-tagger-dock__message {
+  color: var(--c-text, #303133);
+  font-weight: 500;
+}
+
+.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__message {
+  color: var(--el-color-primary);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__message::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  vertical-align: 0.05em;
+  box-shadow: 0 0 0 3px var(--sd-primary-muted);
+}
+
+.example-container > .right-container .sd-tagger-dock--error .sd-tagger-dock__message {
+  color: var(--el-color-danger, #f56c6c);
+  font-weight: 500;
+}
+
+.example-container > .right-container .sd-tagger-dock__meters {
+  display: none;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.example-container > .right-container .sd-tagger-dock__meters.is-visible {
+  display: flex;
+}
+
+.example-container > .right-container .sd-tagger-dock__meters.is-compact .sd-tagger-dock__meter-head {
+  display: none;
+}
+
+.example-container > .right-container .sd-tagger-dock__meters.is-compact {
+  margin-top: 0.15rem;
+  gap: 0;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter {
+  opacity: 0.5;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter.is-active {
+  opacity: 1;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter[data-block="download"]:not(.is-active) {
+  display: none;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.6875rem;
+  color: var(--c-text-lighter, #909399);
+  margin-bottom: 0.15rem;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter-head span:last-child {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.625rem;
+  letter-spacing: 0.02em;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter.is-active .sd-tagger-dock__meter-head span:first-child {
+  color: var(--c-text, #606266);
+  font-weight: 600;
+}
+
+.example-container > .right-container .sd-tagger-dock__track {
+  height: 4px;
+  border-radius: var(--sd-radius-pill, 999px);
+  background: color-mix(in srgb, var(--c-border, #dcdfe6) 55%, #fff);
+  overflow: hidden;
+}
+
+.example-container > .right-container .sd-tagger-dock__fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.example-container > .right-container .sd-tagger-dock__fill--download {
+  background: color-mix(in srgb, var(--el-color-primary) 55%, #fff);
+}
+
+.example-container > .right-container .sd-tagger-dock__fill--tagging {
+  background: var(--el-color-primary);
+}
+
+.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__fill--tagging {
+  background: color-mix(in srgb, var(--el-color-primary) 75%, #fff);
+}
+
+.example-container > .right-container .sd-tagger-dock__link {
+  flex: 0 0 auto;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--sd-radius-pill, 999px);
+  background: transparent;
+  font-size: 0.6875rem;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.example-container > .right-container .sd-tagger-dock__link:hover:not(:disabled) {
+  background: var(--sd-primary-muted);
+  border-color: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+}
+
+.example-container > .right-container .sd-tagger-dock__link:disabled,
+.example-container > .right-container .sd-tagger-dock__link.is-loading {
+  opacity: 0.45;
+  cursor: wait;
+  text-decoration: none;
+}
+
+.example-container > .right-container .sd-tagger-dock__link.sd-tagger-dock__link--cancel {
+  color: #c45656;
+  border-color: color-mix(in srgb, #c45656 35%, transparent);
+  background: color-mix(in srgb, #c45656 8%, transparent);
+}
+
+.example-container > .right-container .sd-tagger-dock__link.sd-tagger-dock__link--cancel:hover:not(:disabled) {
+  color: #c45656;
+  border-color: color-mix(in srgb, #c45656 50%, transparent);
+  background: color-mix(in srgb, #c45656 14%, transparent);
+}
+
+.example-container > .right-container .sd-tagger-dock__buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  align-self: center;
+  gap: 0.45rem;
+  width: min(10rem, 100%);
+  margin: 0.6rem 0 0;
+  padding: 0;
+  border-top: none;
+}
+
+.example-container > .right-container .sd-tagger-dock__start,
+.example-container > .right-container .sd-tagger-dock__reset {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 0.9rem;
+  border-radius: var(--sd-radius-md, 8px);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.1s ease;
+}
+
+/* 与训练页 .color-btn.el-button--primary 同款：浅紫底 + 紫边紫字 */
+.example-container > .right-container .sd-tagger-dock__start {
+  flex: none;
+  border: 1px solid var(--el-color-primary);
+  background: var(--sd-primary-muted);
+  color: var(--el-color-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+}
+
+.example-container > .right-container .sd-tagger-dock__start:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--el-color-primary) 18%, #fff);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+.example-container > .right-container .sd-tagger-dock__start:active:not(:disabled) {
+  background: color-mix(in srgb, var(--el-color-primary) 22%, var(--c-bg-light, #f3f4f5));
+}
+
+.example-container > .right-container .sd-tagger-dock__start:disabled,
+.example-container > .right-container .sd-tagger-dock__start.is-loading {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.example-container > .right-container .sd-tagger-dock__start.sd-tagger-dock__start--cancel {
+  border-color: #c45656;
+  color: #c45656;
+  background: color-mix(in srgb, #c45656 10%, var(--c-bg-light, #f3f4f5));
+}
+
+.example-container > .right-container .sd-tagger-dock__start.sd-tagger-dock__start--cancel:hover:not(:disabled) {
+  border-color: #c45656;
+  color: #c45656;
+  background: color-mix(in srgb, #c45656 18%, var(--c-bg-light, #f3f4f5));
+}
+
+.example-container > .right-container .sd-tagger-dock__reset {
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--c-border, #dcdfe6) 90%, var(--el-color-primary));
+  background: var(--c-bg, #fff);
+  color: var(--c-text-lighter, #606266);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.example-container > .right-container .sd-tagger-dock__reset:hover:not(:disabled) {
+  border-color: var(--el-color-primary-light-5, #b3d8ff);
+  color: var(--el-color-primary);
+  background: var(--sd-primary-muted);
+}
+
+html.dark .example-container > .right-container .sd-tagger-dock {
+  background: var(--c-bg-mute, #252529);
+  border-top-color: var(--c-border);
+}
+
+html.dark .example-container > .right-container .sd-tagger-dock--done {
+  background: var(--c-bg-mute, #252529);
+  border-top-color: color-mix(in srgb, var(--el-color-primary) 22%, var(--c-border));
+}
+
+html.dark .example-container > .right-container .sd-tagger-dock__reset {
+  background: var(--c-bg-mute, #2c2c30);
+  border-color: var(--c-border);
+  color: var(--c-text-lighter);
+  box-shadow: none;
+}
+
+html.dark .example-container > .right-container .sd-tagger-dock__start {
+  background: var(--sd-primary-muted);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+html.dark .example-container > .right-container .sd-tagger-dock__start:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--el-color-primary) 22%, var(--c-bg-mute));
 }

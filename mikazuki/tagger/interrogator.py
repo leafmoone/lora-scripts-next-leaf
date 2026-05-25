@@ -17,6 +17,7 @@ from mikazuki.tagger import dbimutils, format
 from mikazuki.tagger.interrogators.base import Interrogator
 from mikazuki.tagger.interrogators.wd14 import WaifuDiffusionInterrogator
 from mikazuki.tagger.interrogators.cl import CLTaggerInterrogator
+from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
 tag_escape_pattern = re.compile(r'([\\()])')
 
@@ -98,7 +99,8 @@ def on_interrogate(
         replace_underscore_excludes: str,
         escape_tag: bool,
 
-        unload_model_after_running: bool
+        unload_model_after_running: bool,
+        progress_model_key: str | None = None,
 ):
     postprocess_opts = (
         threshold,
@@ -136,6 +138,8 @@ def on_interrogate(
         # check the input directory path
         if not os.path.isdir(base_dir):
             print('input path is not a directory / 输入的路径不是文件夹，终止识别')
+            if progress_model_key:
+                tagger_progress.finish_error('input path is not a directory')
             return 'input path is not a directory'
 
         # this line is moved here because some reason
@@ -154,89 +158,101 @@ def on_interrogate(
 
         print(f'found {len(paths)} image(s)')
 
-        for path in paths:
-            try:
-                image = Image.open(path)
-            except UnidentifiedImageError:
-                # just in case, user has mysterious file...
-                print(f'${path} is not supported image type')
-                continue
+        if progress_model_key:
+            tagger_progress.begin_tagging(progress_model_key, len(paths))
 
-            # guess the output path
-            base_dir_last = Path(base_dir).parts[-1]
-            base_dir_last_idx = path.parts.index(base_dir_last)
-            output_dir = Path(
-                batch_output_dir) if batch_output_dir else Path(base_dir)
-            output_dir = output_dir.joinpath(
-                *path.parts[base_dir_last_idx + 1:]).parent
-
-            output_dir.mkdir(0o777, True, True)
-
-            # format output filename
-            format_info = format.Info(path, 'txt')
-
-            try:
-                formatted_output_filename = format.pattern.sub(
-                    lambda m: format.format(m, format_info),
-                    batch_output_filename_format
-                )
-            except (TypeError, ValueError) as error:
-                return str(error)
-
-            output_path = output_dir.joinpath(
-                formatted_output_filename
-            )
-
-            output = []
-
-            if output_path.is_file():
-                output.append(output_path.read_text(errors='ignore').strip())
-
-                if batch_output_action_on_conflict == 'ignore':
-                    print(f'skipping {path}')
+        try:
+            for index, path in enumerate(paths, start=1):
+                if progress_model_key:
+                    tagger_progress.check_cancelled()
+                    tagger_progress.set_tagging(index, len(paths), path.name)
+                try:
+                    image = Image.open(path)
+                except UnidentifiedImageError:
+                    # just in case, user has mysterious file...
+                    print(f'${path} is not supported image type')
                     continue
 
-            tags = interrogator.interrogate(image)
-            processed_tags = Interrogator.postprocess_tags(
-                tags,
-                *postprocess_opts
-            )
+                # guess the output path
+                base_dir_last = Path(base_dir).parts[-1]
+                base_dir_last_idx = path.parts.index(base_dir_last)
+                output_dir = Path(
+                    batch_output_dir) if batch_output_dir else Path(base_dir)
+                output_dir = output_dir.joinpath(
+                    *path.parts[base_dir_last_idx + 1:]).parent
 
-            # TODO: switch for less print
-            print(
-                f'found {len(processed_tags)} tags out of {len(tags)} from {path}'
-            )
+                output_dir.mkdir(0o777, True, True)
 
-            plain_tags = ', '.join(processed_tags)
+                # format output filename
+                format_info = format.Info(path, 'txt')
 
-            if batch_output_action_on_conflict == 'copy':
-                output = [plain_tags]
-            elif batch_output_action_on_conflict == 'prepend':
-                output.insert(0, plain_tags)
-            else:
-                output.append(plain_tags)
+                try:
+                    formatted_output_filename = format.pattern.sub(
+                        lambda m: format.format(m, format_info),
+                        batch_output_filename_format
+                    )
+                except (TypeError, ValueError) as error:
+                    return str(error)
 
-            if batch_remove_duplicated_tag:
-                output_path.write_text(
-                    ', '.join(
-                        OrderedDict.fromkeys(
-                            map(str.strip, ','.join(output).split(','))
-                        )
-                    ),
-                    encoding='utf-8'
-                )
-            else:
-                output_path.write_text(
-                    ', '.join(output),
-                    encoding='utf-8'
+                output_path = output_dir.joinpath(
+                    formatted_output_filename
                 )
 
-            if batch_output_save_json:
-                output_path.with_suffix('.json').write_text(
-                    json.dumps(tags)
+                output = []
+
+                if output_path.is_file():
+                    output.append(output_path.read_text(errors='ignore').strip())
+
+                    if batch_output_action_on_conflict == 'ignore':
+                        print(f'skipping {path}')
+                        continue
+
+                tags = interrogator.interrogate(image)
+                processed_tags = Interrogator.postprocess_tags(
+                    tags,
+                    *postprocess_opts
                 )
 
-        print('all done / 识别完成')
+                # TODO: switch for less print
+                print(
+                    f'found {len(processed_tags)} tags out of {len(tags)} from {path}'
+                )
+
+                plain_tags = ', '.join(processed_tags)
+
+                if batch_output_action_on_conflict == 'copy':
+                    output = [plain_tags]
+                elif batch_output_action_on_conflict == 'prepend':
+                    output.insert(0, plain_tags)
+                else:
+                    output.append(plain_tags)
+
+                if batch_remove_duplicated_tag:
+                    output_path.write_text(
+                        ', '.join(
+                            OrderedDict.fromkeys(
+                                map(str.strip, ','.join(output).split(','))
+                            )
+                        ),
+                        encoding='utf-8'
+                    )
+                else:
+                    output_path.write_text(
+                        ', '.join(output),
+                        encoding='utf-8'
+                    )
+
+                if batch_output_save_json:
+                    output_path.with_suffix('.json').write_text(
+                        json.dumps(tags)
+                    )
+
+            print('all done / 识别完成')
+        except TaggerCancelled:
+            print('tagging cancelled / 打标已中止')
+            if unload_model_after_running:
+                interrogator.unload()
+            return 'Cancelled'
 
     if unload_model_after_running:
         interrogator.unload()

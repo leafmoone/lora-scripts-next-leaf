@@ -2,6 +2,10 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Union, Dict, Any
 
 
+class TaggerPrefetchRequest(BaseModel):
+    interrogator_model: str = Field(default="wd14-convnextv2-v2")
+
+
 class TaggerInterrogateRequest(BaseModel):
     path: str
     interrogator_model: str = Field(

@@ -1,6 +1,7 @@
 import asyncio
 import mimetypes
 import os
+import re
 import sys
 import webbrowser
 from contextlib import asynccontextmanager
@@ -152,7 +153,15 @@ async def redirect_vuepress_md_to_html(request, call_next):
 @app.middleware("http")
 async def add_cache_control_header(request, call_next):
     response = await call_next(request)
-    response.headers["Cache-Control"] = "max-age=0"
+    path = request.url.path
+    if path.endswith(".html") or path.endswith("/assets/tagger-progress.js") or path.endswith(
+        "/assets/sd-trainer-brand.js"
+    ):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    elif re.search(r"\.[a-f0-9]{8}\.(js|css|webp)$", path):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    else:
+        response.headers["Cache-Control"] = "max-age=0"
     return response
 
 app.include_router(api_router, prefix="/api")

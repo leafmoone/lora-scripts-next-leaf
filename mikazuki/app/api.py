@@ -20,10 +20,12 @@ import mikazuki.process as process
 from mikazuki import launch_utils
 from mikazuki.app.config import app_config
 from mikazuki.app.models import (APIResponse, APIResponseFail,
-                                 APIResponseSuccess, TaggerInterrogateRequest)
+                                 APIResponseSuccess, TaggerInterrogateRequest,
+                                 TaggerPrefetchRequest)
 from mikazuki.log import log
-from mikazuki.tagger.interrogator import (available_interrogators,
-                                          on_interrogate)
+from mikazuki.tagger.interrogator import available_interrogators
+from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
+from mikazuki.tagger.progress import tagger_progress
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
 from mikazuki.utils import train_utils
@@ -434,34 +436,56 @@ async def run_script(request: Request, background_tasks: BackgroundTasks):
     return APIResponseSuccess()
 
 
+@router.get("/tagger/status")
+async def tagger_status():
+    return APIResponseSuccess(data=tagger_progress.get())
+
+
+@router.get("/tagger/download-status")
+async def tagger_download_status():
+    snap = tagger_progress.get()
+    return APIResponseSuccess(data={
+        "phase": snap.get("phase"),
+        "model": snap.get("model"),
+        "download": snap.get("download"),
+        "message": snap.get("message"),
+        "error": snap.get("error"),
+    })
+
+
+@router.post("/tagger/cancel")
+async def tagger_cancel():
+    if not tagger_progress.request_cancel():
+        return APIResponseSuccess(message="当前无运行中的任务")
+    return APIResponseSuccess(message="正在中止任务…")
+
+
+@router.post("/tagger/reset")
+async def tagger_reset():
+    if tagger_progress.is_busy():
+        tagger_progress.request_cancel()
+    tagger_progress.reset_idle("配置参数后点击启动")
+    return APIResponseSuccess(message="已重置打标状态")
+
+
+@router.post("/tagger/prefetch")
+async def tagger_prefetch(req: TaggerPrefetchRequest, background_tasks: BackgroundTasks):
+    if req.interrogator_model not in available_interrogators:
+        return APIResponseFail(message=f"未知模型: {req.interrogator_model}")
+    if tagger_progress.is_busy():
+        return APIResponseFail(message="已有打标或下载任务进行中")
+    background_tasks.add_task(run_prefetch_job, req)
+    return APIResponseSuccess(message="模型下载已开始")
+
+
 @router.post("/interrogate")
 async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: BackgroundTasks):
-    interrogator = available_interrogators.get(req.interrogator_model, available_interrogators["wd14-convnextv2-v2"])
-    background_tasks.add_task(
-        on_interrogate,
-        image=None,
-        batch_input_glob=req.path,
-        batch_input_recursive=req.batch_input_recursive,
-        batch_output_dir="",
-        batch_output_filename_format="[name].[output_extension]",
-        batch_output_action_on_conflict=req.batch_output_action_on_conflict,
-        batch_remove_duplicated_tag=True,
-        batch_output_save_json=False,
-        interrogator=interrogator,
-        threshold=req.threshold,
-        character_threshold=req.character_threshold,
-        add_rating_tag=req.add_rating_tag,
-        add_model_tag=req.add_model_tag,
-        additional_tags=req.additional_tags,
-        exclude_tags=req.exclude_tags,
-        sort_by_alphabetical_order=False,
-        add_confident_as_weight=False,
-        replace_underscore=req.replace_underscore,
-        replace_underscore_excludes=req.replace_underscore_excludes,
-        escape_tag=req.escape_tag,
-        unload_model_after_running=True
-    )
-    return APIResponseSuccess()
+    if req.interrogator_model not in available_interrogators:
+        return APIResponseFail(message=f"未知模型: {req.interrogator_model}")
+    if tagger_progress.is_busy():
+        return APIResponseFail(message="已有打标或下载任务进行中")
+    background_tasks.add_task(run_interrogate_job, req)
+    return APIResponseSuccess(message="打标任务已提交")
 
 
 @router.get("/pick_file")

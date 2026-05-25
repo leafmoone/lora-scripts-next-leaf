@@ -94,7 +94,8 @@ async def proxy_ws_reverse(ws_a: WebSocket, ws_b: websockets.WebSocketClientProt
 @router.websocket("/proxy/tageditor/queue/join")
 async def websocket_a(ws_a: WebSocket):
     # for temp use
-    ws_b_uri = "ws://127.0.0.1:28001/queue/join"
+    port = os.environ.get("MIKAZUKI_TAGEDITOR_PORT", "28001")
+    ws_b_uri = f"ws://127.0.0.1:{port}/queue/join"
     await ws_a.accept()
     async with websockets.connect(ws_b_uri, timeout=360, ping_timeout=None) as ws_b_client:
         fwd_task = asyncio.create_task(proxy_ws_forward(ws_a, ws_b_client))
