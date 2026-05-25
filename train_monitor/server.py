@@ -22,7 +22,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 
@@ -66,6 +66,29 @@ WARNING_PATTERNS = [
 def fetch_json(url: str, timeout: float = 2.5) -> dict:
     with urlopen(url, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def gui_api_candidates() -> list[str]:
+    ports: list[int] = []
+    for value in (os.environ.get("MIKAZUKI_PORT"), "28000"):
+        try:
+            port = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        if port not in ports:
+            ports.append(port)
+    return [f"http://127.0.0.1:{port}/api" for port in ports]
+
+
+def fetch_gui_json(path: str, timeout: float = 2.5) -> tuple[dict, str]:
+    errors: list[str] = []
+    for api_base in gui_api_candidates():
+        try:
+            return fetch_json(f"{api_base}{path}", timeout=timeout), api_base
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            errors.append(f"{api_base}: {exc}")
+            continue
+    raise OSError("; ".join(errors) or "no GUI API candidates")
 
 
 def api_data(payload: dict) -> dict:
@@ -868,13 +891,14 @@ def collect_status() -> dict:
         "gpu_info": gpu_info(),
     }
 
+    gui_api = GUI_API
     try:
-        tasks_payload = fetch_json(f"{GUI_API}/train/tasks")
+        tasks_payload, gui_api = fetch_gui_json("/train/tasks")
         tasks = api_data(tasks_payload).get("tasks", [])
         status["gui_online"] = True
         status["tasks"] = tasks
-    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        status["error"] = f"无法连接 6006 GUI API: {exc}"
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        status["error"] = f"无法连接 GUI API（尝试 {', '.join(gui_api_candidates())}）：{exc}"
         return status
 
     if not status["tasks"]:
@@ -895,7 +919,7 @@ def collect_status() -> dict:
     task_id = active.get("id")
     if task_id:
         try:
-            tail_payload = fetch_json(f"{GUI_API}/train/log/tail/{task_id}?limit=2000")
+            tail_payload = fetch_json(f"{gui_api}/train/log/tail/{task_id}?limit=2000")
             data = api_data(tail_payload)
             lines = data.get("lines", [])
             status["log_lines"] = lines
