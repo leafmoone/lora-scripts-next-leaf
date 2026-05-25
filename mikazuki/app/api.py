@@ -49,6 +49,7 @@ ANIMA_DEFAULT_SAMPLE_NEGATIVE = (
 )
 ANIMA_DEFAULT_UNET_LR = 5e-5
 ANIMA_LEGACY_UNET_LR = {"0.0001", "1e-4", "1E-4"}
+ANIMA_FULL_PRECISION_UNSAFE_OPTIMIZERS = {"automagic", "pytorch_optimizer.came"}
 
 avaliable_scripts = [
     "networks/extract_lora_from_models.py",
@@ -293,11 +294,18 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     if is_preview_enabled(config) or config.get("sample_prompts"):
         config["sample_at_first"] = True
 
-    mixed = config.get("mixed_precision", "")
-    if mixed == "bf16" and not config.get("full_bf16"):
-        config["full_bf16"] = True
-    elif mixed == "fp16" and not config.get("full_fp16"):
-        config["full_fp16"] = True
+    optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
+    if optimizer_type in ANIMA_FULL_PRECISION_UNSAFE_OPTIMIZERS:
+        disabled = []
+        for key in ("full_bf16", "full_fp16"):
+            if config.pop(key, None):
+                disabled.append(key)
+        if disabled:
+            log.warning(
+                "Disabled Anima full half-precision training for optimizer "
+                f"{config.get('optimizer_type')} ({', '.join(disabled)}). "
+                "This keeps trainable LoRA weights in fp32 to reduce loss=nan risk."
+            )
 
     requested_attn = config.get("attn_mode", "")
     if not requested_attn:

@@ -103,6 +103,10 @@ T-LoRA（Timestep-Dependent LoRA）是一种改进的 LoRA 方法。普通 LoRA 
 
 可以。T-LoRA 的模型权重格式与普通 LoRA 兼容，推理时使用完整 rank（不做时间步动态调整），可以在任何支持 LoRA 的推理工具中正常加载。
 
+**Q: 使用 Automagic / CAME 训练时 loss 变成 NaN？**
+
+优先确认 PyTorch 版本 ≥ 2.5，并避免开启 `full_bf16` / `full_fp16`。Anima 页面仍可使用 `mixed_precision=bf16`，但可训练 LoRA 权重建议保持 FP32；后端会在 `Automagic` 和 `pytorch_optimizer.CAME` 下自动关闭 full 半精度训练，以降低 NaN 风险。
+
 **Q: T-LoRA 和 LoKr 哪个好？**
 
 两者解决不同的问题：
