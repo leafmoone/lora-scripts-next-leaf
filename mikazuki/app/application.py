@@ -169,6 +169,13 @@ async def train_log_viewer():
     return FileResponse(str(_TRAIN_LOG_HTML))
 
 
+@app.get("/train-monitor")
+async def train_monitor_redirect():
+    """Open the lightweight monitor on the actual runtime port."""
+    monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
+    return RedirectResponse(url=f"http://127.0.0.1:{monitor_port}", status_code=302)
+
+
 @app.get("/lora/sdxl.html")
 async def lora_sdxl_redirect():
     """Legacy SDXL page → unified Stable Diffusion (master) entry."""
