@@ -1,6 +1,7 @@
 """Process UI deliverables from doc/local into committed assets."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from PIL import Image
@@ -9,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "doc" / "local" / "Next Trainer" / "Next Trainer"
 ICON_SRC = SRC / "icon_4.png"
 BANNER_SRC = SRC / "banner.png"
+DIST = ROOT / "frontend" / "dist"
+FAVICON_VERSION = "20260525-nt"
 
 
 def cover_resize(img: Image.Image, size: tuple[int, int], bg: tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
@@ -36,6 +39,63 @@ def square_icon(img: Image.Image, size: int) -> Image.Image:
     return cropped.resize((size, size), Image.Resampling.LANCZOS)
 
 
+def favicon_head_html() -> str:
+    v = FAVICON_VERSION
+    return (
+        f'    <link rel="icon" href="/favicon.ico?v={v}" sizes="any">\n'
+        f'    <link rel="icon" href="/assets/icon.65fd68ba.webp?v={v}" type="image/webp" sizes="512x512">\n'
+        f'    <link rel="apple-touch-icon" href="/assets/icon.png?v={v}">'
+    )
+
+
+def patch_dist_favicon_links() -> None:
+    head = favicon_head_html()
+    icon_link_re = re.compile(r'\s*<link rel="(?:icon|apple-touch-icon)"[^>]*>\s*', re.I)
+    for html_path in DIST.rglob("*.html"):
+        text = html_path.read_text(encoding="utf-8")
+        text = icon_link_re.sub("\n", text)
+        marker = '<meta name="viewport"'
+        idx = text.find(marker)
+        if idx < 0:
+            continue
+        end = text.find(">", idx) + 1
+        text = text[:end] + "\n" + head + text[end:]
+        html_path.write_text(text, encoding="utf-8")
+    print(f"patched favicon links in {DIST.relative_to(ROOT)}/**/*.html")
+
+
+def patch_home_icon_cache_buster() -> None:
+    index_js = DIST / "assets" / "index.html.c6ef684b.js"
+    text = index_js.read_text(encoding="utf-8")
+    text = text.replace(
+        'var t="/assets/icon.65fd68ba.webp"',
+        f'var t="/assets/icon.65fd68ba.webp?v={FAVICON_VERSION}"',
+    )
+    index_js.write_text(text, encoding="utf-8")
+
+    index_html = DIST / "index.html"
+    html = index_html.read_text(encoding="utf-8")
+    html = html.replace(
+        'src="/assets/icon.65fd68ba.webp"',
+        f'src="/assets/icon.65fd68ba.webp?v={FAVICON_VERSION}"',
+    )
+    index_html.write_text(html, encoding="utf-8")
+    print("patched home icon cache buster")
+
+
+def patch_train_monitor_favicon() -> None:
+    path = ROOT / "train_monitor" / "index.html"
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r'<link rel="icon" href="[^"]*"[^>]*>', "", text)
+    text = text.replace(
+        "<head>",
+        f"<head>\n  <link rel=\"icon\" href=\"/favicon.ico?v={FAVICON_VERSION}\" sizes=\"any\">",
+        1,
+    )
+    path.write_text(text, encoding="utf-8")
+    print("patched train_monitor/index.html favicon")
+
+
 def main() -> None:
     icon = Image.open(ICON_SRC)
     banner = Image.open(BANNER_SRC)
@@ -52,16 +112,19 @@ def main() -> None:
 
     logo = square_icon(icon, 256)
     logo.save(ROOT / "assets" / "logo.png", optimize=True)
+    logo.save(DIST / "assets" / "icon.png", optimize=True)
 
     webp_src = square_icon(icon, 512)
-    webp_src.save(ROOT / "frontend" / "dist" / "assets" / "icon.65fd68ba.webp", format="WEBP", quality=90, method=6)
+    webp_src.save(DIST / "assets" / "icon.65fd68ba.webp", format="WEBP", quality=90, method=6)
 
     ico_master = square_icon(icon, 256)
-    ico_master.save(
-        ROOT / "assets" / "favicon.ico",
-        format="ICO",
-        sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)],
-    )
+    ico_sizes = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)]
+    for dest in (ROOT / "assets" / "favicon.ico", DIST / "favicon.ico"):
+        ico_master.save(dest, format="ICO", sizes=ico_sizes)
+
+    patch_dist_favicon_links()
+    patch_home_icon_cache_buster()
+    patch_train_monitor_favicon()
 
     print("Wrote:")
     for p in [
@@ -69,8 +132,10 @@ def main() -> None:
         readme_dir / "anima-cover.png",
         readme_dir / "next-trainer-social.png",
         ROOT / "assets" / "logo.png",
-        ROOT / "frontend" / "dist" / "assets" / "icon.65fd68ba.webp",
+        DIST / "assets" / "icon.png",
+        DIST / "assets" / "icon.65fd68ba.webp",
         ROOT / "assets" / "favicon.ico",
+        DIST / "favicon.ico",
     ]:
         print(f"  {p.relative_to(ROOT)} ({p.stat().st_size // 1024} KB)")
 
