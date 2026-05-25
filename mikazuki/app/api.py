@@ -327,7 +327,9 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
 @router.post("/run")
 async def create_toml_file(request: Request):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    toml_file = os.path.join(os.getcwd(), f"config", "autosave", f"{timestamp}.toml")
+    autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
+    os.makedirs(autosave_dir, exist_ok=True)
+    toml_file = os.path.join(autosave_dir, f"{timestamp}.toml")
     json_data = await request.body()
 
     config: dict = json.loads(json_data.decode("utf-8"))
@@ -360,7 +362,7 @@ async def create_toml_file(request: Request):
             positive_prompt, sample_prompts_arg = get_sample_prompts(config=config, model_train_type=model_train_type)
 
             if positive_prompt is not None and train_utils.is_promopt_like(sample_prompts_arg):
-                sample_prompts_file = os.path.join(os.getcwd(), f"config", "autosave", f"{timestamp}-promopt.txt")
+                sample_prompts_file = os.path.join(autosave_dir, f"{timestamp}-promopt.txt")
                 with open(sample_prompts_file, "w", encoding="utf-8") as f:
                     f.write(sample_prompts_arg)
                 config["sample_prompts"] = sample_prompts_file
