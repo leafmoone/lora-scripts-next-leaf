@@ -21,6 +21,7 @@ import os
 import random
 import hashlib
 import subprocess
+import traceback
 from io import BytesIO
 import toml
 
@@ -4903,13 +4904,43 @@ def read_config_from_file(args: argparse.Namespace, parser: argparse.ArgumentPar
 # region utils
 
 
+def _infer_step_from_state_dir(state_dir: str) -> int:
+    match = re.search(r"-step(\d+)-state$", os.path.basename(os.path.normpath(state_dir)))
+    return int(match.group(1)) if match else 0
+
+
+def _is_accelerate_missing_step_error(exc: KeyError) -> bool:
+    if exc.args != ("step",):
+        return False
+    for frame in traceback.extract_tb(exc.__traceback__):
+        filename = frame.filename.replace("\\", "/")
+        if filename.endswith("accelerate/accelerator.py") and frame.name == "load_state":
+            return True
+    return False
+
+
+def _load_accelerate_state_with_step_fallback(accelerator, state_dir: str):
+    try:
+        accelerator.load_state(state_dir)
+    except KeyError as exc:
+        if not _is_accelerate_missing_step_error(exc):
+            raise
+        step = _infer_step_from_state_dir(state_dir)
+        accelerator.step = step
+        logger.warning(
+            "Accelerate state is missing internal 'step' metadata; "
+            f"continuing resume with inferred step={step}. "
+            "This is usually caused by accelerate checkpoint compatibility."
+        )
+
+
 def resume_from_local_or_hf_if_specified(accelerator, args):
     if not args.resume:
         return
 
     if not args.resume_from_huggingface:
         logger.info(f"resume training from local state: {args.resume}")
-        accelerator.load_state(args.resume)
+        _load_accelerate_state_with_step_fallback(accelerator, args.resume)
         return
 
     logger.info(f"resume training from huggingface state: {args.resume}")
@@ -4953,7 +4984,7 @@ def resume_from_local_or_hf_if_specified(accelerator, args):
             "No files found in the specified repo id/path/revision / 指定されたリポジトリID/パス/リビジョンにファイルが見つかりませんでした"
         )
     dirname = os.path.dirname(results[0])
-    accelerator.load_state(dirname)
+    _load_accelerate_state_with_step_fallback(accelerator, dirname)
 
 
 def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
