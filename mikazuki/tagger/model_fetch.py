@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import os
+import sys
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Iterator
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
-from huggingface_hub.utils import tqdm as hf_hub_tqdm
 
 from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
@@ -62,7 +62,18 @@ def interrogator_assets_ready(interrogator: "Interrogator") -> bool:
     return all(_file_cached(kwargs, filename) for filename in files)
 
 
-class _TaggerDownloadTqdm(hf_hub_tqdm):
+def _hf_tqdm_module():
+    """Return the real tqdm submodule (not the tqdm class re-exported by `import ...tqdm`)."""
+    import huggingface_hub.utils  # noqa: F401 — ensure submodule is loaded
+
+    return sys.modules["huggingface_hub.utils.tqdm"]
+
+
+def _hf_tqdm_class():
+    return _hf_tqdm_module().tqdm
+
+
+class _TaggerDownloadTqdm(_hf_tqdm_class()):
     """Bridge Hugging Face hub tqdm bytes to tagger_progress API."""
 
     _file_index: int = 1
@@ -87,21 +98,25 @@ class _TaggerDownloadTqdm(hf_hub_tqdm):
 
 @contextmanager
 def _hub_download_progress(file_index: int, file_total: int, filename: str) -> Iterator[None]:
-    from huggingface_hub.utils import tqdm as tqdm_module
+    import huggingface_hub.utils as hf_utils
 
     class _BoundTaggerDownloadTqdm(_TaggerDownloadTqdm):
-        pass
+        _file_index = file_index
+        _file_total = file_total
+        _filename = filename
 
-    _BoundTaggerDownloadTqdm._file_index = file_index
-    _BoundTaggerDownloadTqdm._file_total = file_total
-    _BoundTaggerDownloadTqdm._filename = filename
-
-    original = tqdm_module.tqdm
-    tqdm_module.tqdm = _BoundTaggerDownloadTqdm
+    hf_tqdm_module = _hf_tqdm_module()
+    originals = {
+        "module": hf_tqdm_module.tqdm,
+        "utils": hf_utils.tqdm,
+    }
+    hf_tqdm_module.tqdm = _BoundTaggerDownloadTqdm
+    hf_utils.tqdm = _BoundTaggerDownloadTqdm
     try:
         yield
     finally:
-        tqdm_module.tqdm = original
+        hf_tqdm_module.tqdm = originals["module"]
+        hf_utils.tqdm = originals["utils"]
 
 
 def download_interrogator_assets(
