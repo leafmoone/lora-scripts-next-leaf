@@ -10,6 +10,7 @@ output/*
 outputs/
 
 .tmp/
+.runtime/
 
 scripts/dev/configs/
 
@@ -48,7 +49,10 @@ config/.update_cache.json
 # Local docs (not uploaded to GitHub)
 doc/
 
-# Agent internal handover docs
+# Local one-off scripts (not uploaded to GitHub); public scripts live in scripts/
+script/
+
+# Agent internal handover (canonical path: doc/local/AGENT_INTERNAL.md)
 AGENT_INTERNAL.md
 
 # Agent scratch at repo root — use doc/local/scratch/

@@ -1,0 +1,52 @@
+---
+description: 本地文档索引 — doc/local 与 doc/ 根目录；GitHub 操作、交接、规划类 Agent 必读路径
+alwaysApply: true
+---
+
+# 本地文档索引（Agent 检索）
+
+`doc/` 在 `.gitignore` 中，**不会进 GitHub**，语义检索也可能漏掉。涉及下表主题时，**必须用 Read / Grep 并带上完整路径**（不要只搜 `docs/`）。
+
+目录说明：**`doc/local/README.md`**。公开文档仍在 **`docs/`**（复数）。
+
+## 必读（按任务触发）
+
+| 何时 | 先读文件 |
+|------|----------|
+| 创建/关闭 Issue、PR、Release；`gh` 不可用；问 Token / remote | **`doc/local/AGENT_INTERNAL.md`** |
+| 整合包启动、`run_gui.bat`、`launch_portable.bat`、`setup_environment`、便携 7z | **`doc/local/AGENT_INTERNAL.md`** § 整合包、§ 已知坑 |
+| 多服务端口、`/train-monitor`、6006/6008/28000 错连 | **`doc/local/AGENT_INTERNAL.md`** § 端口 + **`.cursor/rules/embedded-service-ports.mdc`** |
+| 本机 Python 路径、PowerShell 限制（无 `&&`、无 heredoc） | **`doc/local/AGENT_INTERNAL.md`** § 项目环境 |
+| 训练监控 / Loss 图表等长期交接 | **`doc/local/handover/HANDOVER.md`**、`doc/local/handover/LOSS_CHART_HANDOVER.md` |
+| Anima / anima_lora / Turbo 双引擎迁移与选型 | **`doc/02_迁移技术难题与选择汇总.md`**、**`doc/双模式Turbo集成计划.md`** |
+| anima_lora 集成讨论草稿 | **`doc/discussion_anima_lora_integration.md`** |
+| 改 `frontend/dist/`、首页/训练页 UI patch | **`doc/frontend-agent-guide.md`**、**`doc/前端设计-Agent使用说明.md`** |
+| 美术 / 看板娘素材需求 | **`doc/local/ART_BRIEF.md`** |
+| 某 Issue 已有本地调查草稿 | **`doc/local/scratch/issue-{n}-*.md`** 或 **`doc/local/scratch/_issue*.md`**（`rg` 多试编号格式） |
+
+## 稳定路径速查
+
+| 路径 | 用途 |
+|------|------|
+| `doc/local/AGENT_INTERNAL.md` | Agent 交接主文档（GitHub、环境、整合包、端口、坑） |
+| `doc/local/README.md` | `doc/local` 子目录与命名规范 |
+| `doc/local/handover/` | 功能级长期交接 |
+| `doc/local/scratch/` | Issue/PR/Release 草稿（可删） |
+| `doc/local/assets/` | 设计素材（建议） |
+| `doc/02_迁移技术难题与选择汇总.md` | Anima 迁移难题与双引擎结论 |
+| `doc/双模式Turbo集成计划.md` | Turbo 集成实施计划 |
+| `doc/frontend-agent-guide.md` | 前端 dist patch 指南 |
+| `doc/前端设计-Agent使用说明.md` | 前端设计说明（中文） |
+
+## 检索命令示例
+
+```text
+rg "关键词" doc/local doc --glob "*.md"
+```
+
+Issue 草稿：`rg "issue-54|portable" doc/local/scratch`
+
+## 禁止
+
+- 不要把 `doc/local/` 内容复制进 `docs/` 提交（除非刻意公开且脱敏）。
+- 不要在仓库根长期维护第二份 `AGENT_INTERNAL.md`（根目录同名仍 ignore，以 **`doc/local/AGENT_INTERNAL.md`** 为准）。
