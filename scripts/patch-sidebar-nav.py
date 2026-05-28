@@ -134,7 +134,7 @@ def build_sidebar_html(rel_path: str) -> str:
         + item_heading(
             "/lora/anima-finetune.md",
             "全量微调",
-            "全量微调",
+            "Full Finetune",
             finetune_heading_active,
         )
         + "<!--]--></ul></li>"

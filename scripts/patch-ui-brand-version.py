@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "frontend" / "dist"
 STYLE = DIST / "assets" / "style.874872ce.css"
 MARKER = "sd-trainer-brand.js"
+NAV_I18N_MARKER = "sd-nav-i18n.js"
 
 VERSION_CHIP_CSS = """
 /* 版本号：贴在「Next Trainer」标题右侧 */
@@ -40,9 +41,12 @@ html.dark .sd-brand-version-chip {
 """
 
 
-def script_tag() -> str:
+def script_tags() -> str:
     ver = (ROOT / "VERSION").read_text(encoding="utf-8").strip() or "0"
-    return f'<script src="/assets/sd-trainer-brand.js?v={ver}" defer></script>'
+    return (
+        f'<script src="/assets/sd-trainer-brand.js?v={ver}" defer></script>\n'
+        f'    <script src="/assets/sd-nav-i18n.js?v={ver}" defer></script>'
+    )
 
 
 def ensure_version_css() -> None:
@@ -58,7 +62,7 @@ def ensure_version_css() -> None:
 
 def patch_html_files() -> None:
     ver = (ROOT / "VERSION").read_text(encoding="utf-8").strip() or "0"
-    tag = script_tag()
+    tags = script_tags()
     count = 0
     for path in DIST.rglob("*.html"):
         html = path.read_text(encoding="utf-8")
@@ -66,16 +70,28 @@ def patch_html_files() -> None:
         if MARKER not in html:
             needle = '<script type="module" src="/assets/app.'
             if needle in html:
-                html = html.replace(needle, tag + "\n    " + needle, 1)
+                html = html.replace(needle, tags + "\n    " + needle, 1)
         html = re.sub(
             r'src="/assets/sd-trainer-brand\.js(\?v=[^"]*)?"',
             f'src="/assets/sd-trainer-brand.js?v={ver}"',
             html,
         )
+        html = re.sub(
+            r'src="/assets/sd-nav-i18n\.js(\?v=[^"]*)?"',
+            f'src="/assets/sd-nav-i18n.js?v={ver}"',
+            html,
+        )
+        if NAV_I18N_MARKER not in html and MARKER in html:
+            html = html.replace(
+                f'src="/assets/sd-trainer-brand.js?v={ver}" defer></script>',
+                f'src="/assets/sd-trainer-brand.js?v={ver}" defer></script>\n'
+                f'    <script src="/assets/sd-nav-i18n.js?v={ver}" defer></script>',
+                1,
+            )
         if html != original:
             path.write_text(html, encoding="utf-8")
             count += 1
-    print(f"patched {count} html file(s) (brand script v={ver})")
+    print(f"patched {count} html file(s) (brand + nav i18n v={ver})")
 
 
 def main() -> None:

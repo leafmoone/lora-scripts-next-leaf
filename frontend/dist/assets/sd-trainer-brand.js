@@ -8,6 +8,17 @@
   const GAP_PX = 6;
   const OFFSET_Y_PX = 3;
 
+  function versionFromScriptTag() {
+    const el = document.querySelector('script[src*="sd-trainer-brand.js"]');
+    if (!el) return null;
+    try {
+      const v = new URL(el.src, window.location.origin).searchParams.get("v");
+      return v ? String(v).trim() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function fetchVersion() {
     try {
       const res = await fetch(VERSION_URL);
@@ -18,7 +29,7 @@
     } catch (e) {
       /* backend offline */
     }
-    return null;
+    return versionFromScriptTag();
   }
 
   function findBrandLink() {
@@ -94,7 +105,7 @@
   }
 
   async function boot() {
-    const version = await fetchVersion();
+    const version = (await fetchVersion()) || versionFromScriptTag();
     if (!version) return;
     ensureChip(version);
 
