@@ -50,8 +50,17 @@
 **请求体**
 
 ```json
-{ "interrogator_model": "wd14-convnextv2-v2" }
+{
+  "interrogator_model": "wd14-convnextv2-v2",
+  "download_endpoint": "默认"
+}
 ```
+
+`download_endpoint` 可选值：
+
+- `默认`（官方源）
+- `https://hf-mirror.com`
+- `https://modelscope.cn`
 
 **成功**：`status: success`，`message: 模型下载已开始`  
 **失败**：已有任务进行中、未知模型等返回 `status: fail`。
@@ -60,4 +69,5 @@
 
 与现网兼容；提交后由后台任务更新 `tagging` 进度。若已有下载/打标任务则返回失败。
 
-请求体字段见 `TaggerInterrogateRequest`（`mikazuki/app/models.py`）。
+请求体字段见 `TaggerInterrogateRequest`（`mikazuki/app/models.py`）。  
+其中 `download_endpoint` 同上，可用于打标前模型下载阶段选择加速源。

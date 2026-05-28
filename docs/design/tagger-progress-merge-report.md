@@ -97,8 +97,9 @@ python scripts/patch-ui-brand-version.py
 | `patch-spa-frontend-cache.py` | HTML 缓存破坏版本号 |
 | `patch-ui-brand-version.py` | 侧栏版本 chip（main 已有则 0 文件变更） |
 
-**确认**：`frontend/dist/tagger.html` 含  
-`<script src="/assets/tagger-progress.js?v=2.5.3" defer></script>`
+**确认**：`frontend/dist/tagger.html` 含缓存参数化资源引用（版本 + 文件时间戳），例如：  
+`<script src="/assets/tagger-progress.js?v=2.5.3-<mtime>" defer></script>`  
+`<link rel="stylesheet" href="/assets/style.874872ce.css?v=2.5.3-<mtime>">`
 
 ### 未纳入本次 rebase 的 dist 变更
 

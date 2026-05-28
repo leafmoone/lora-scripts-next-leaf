@@ -106,3 +106,14 @@
 - [ ] 预下载 CL / WD 非默认模型时，下载条有 1/N 文件阶段反馈
 - [ ] 打标 100+ 张时，打标条与 `current/total` 同步
 - [ ] 与浅色训练页、新手上路卡片风格协调（圆角、浅边框、非亮蓝链接色）
+
+---
+
+## 7. 2026-05-28 补充（UI 抛光 + 加速源）
+
+- 底部 dock 按钮升级为更圆润风格，启动/重置保持同一视觉层级。
+- 进度条默认折叠，仅在 `downloading` / `tagging` / `pending` / `cancelling` 时展开。
+- 下载阶段在无法拿到精确字节百分比时，展示 `indeterminate` 动画条，避免“看起来卡死”。
+- 新增 `download_endpoint`（默认 / `https://hf-mirror.com` / `https://modelscope.cn`），采用 schema 原生下拉渲染。
+- 已移除页面底部兜底行逻辑，避免 `download_endpoint` 重复显示。
+- `tagger.html` 对 `tagger-progress.js` 与 `style.874872ce.css` 增加版本+时间戳参数，降低首次刷新命中旧缓存概率。
