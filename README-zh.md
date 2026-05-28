@@ -28,7 +28,7 @@
 ---
 
 <p align="center">
-  <img src="assets/readme/screenshot-webui.png" alt="Next Trainer GUI" width="920" />
+  <img src="assets/readme/screenshot-webui.png?v=20260528" alt="Next Trainer 首页" width="920" />
 </p>
 
 <p align="center"><sub>首页传送门 — 训练、监控与新手上路快捷入口</sub></p>
@@ -84,13 +84,13 @@ bash install_flash_attn.sh
 | Flux | LoRA | xformers / SDPA |
 
 <p align="center">
-  <img src="assets/readme/screenshot-anima-lora.png" alt="Anima LoRA 训练界面" width="920" />
+  <img src="assets/readme/screenshot-anima-lora.png?v=20260528" alt="Anima LoRA 训练界面" width="920" />
 </p>
 
 <p align="center"><sub>Anima LoRA — 侧栏导航、中栏模型与数据集表单、右栏配置预览</sub></p>
 
 <p align="center">
-  <img src="assets/readme/screenshot-anima-finetune.png" alt="Anima 全量微调界面" width="920" />
+  <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima 全量微调界面" width="920" />
 </p>
 
 <p align="center"><sub>Anima 全量微调 — 侧栏「全量微调 → Anima Finetune」，更新完整 DiT 权重</sub></p>

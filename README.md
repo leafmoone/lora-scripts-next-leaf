@@ -28,7 +28,7 @@
 ---
 
 <p align="center">
-  <img src="assets/readme/screenshot-webui.png" alt="Next Trainer GUI" width="920" />
+  <img src="assets/readme/screenshot-webui.png?v=20260528" alt="Next Trainer home portal" width="920" />
 </p>
 
 <p align="center"><sub>Home portal — quick links to training, monitor, and onboarding</sub></p>
@@ -82,13 +82,13 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 | Flux | LoRA | xformers / SDPA |
 
 <p align="center">
-  <img src="assets/readme/screenshot-anima-lora.png" alt="Anima LoRA training UI" width="920" />
+  <img src="assets/readme/screenshot-anima-lora.png?v=20260528" alt="Anima LoRA training UI" width="920" />
 </p>
 
 <p align="center"><sub>Anima LoRA — sidebar, model &amp; dataset form, config preview on the right</sub></p>
 
 <p align="center">
-  <img src="assets/readme/screenshot-anima-finetune.png" alt="Anima full finetune UI" width="920" />
+  <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima full finetune UI" width="920" />
 </p>
 
 <p align="center"><sub>Anima Finetune — full DiT weights under <b>全量微调</b> in the sidebar</sub></p>
