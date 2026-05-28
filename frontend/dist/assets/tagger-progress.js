@@ -276,8 +276,8 @@
       '<div class="sd-tagger-dock__track"><div class="sd-tagger-dock__fill sd-tagger-dock__fill--tagging" data-tagging-bar></div></div>' +
       "</div></div>" +
       '<div class="sd-tagger-dock__buttons">' +
-      '<button type="button" class="sd-tagger-dock__start" data-start-btn>启动</button>' +
-      '<button type="button" class="sd-tagger-dock__reset" data-reset-btn>重置</button>' +
+      '<button type="button" class="el-button max-btn color-btn el-button--primary is-plain sd-tagger-dock__start" data-start-btn>启动</button>' +
+      '<button type="button" class="el-button max-btn sd-tagger-dock__reset" data-reset-btn>重置</button>' +
       "</div>"
     );
   }
@@ -356,6 +356,23 @@
     return !!(dock && dock.querySelector("[data-start-btn]"));
   }
 
+  function ensureRefreshHint() {
+    if (!isTaggerPage()) return;
+    const content = document.querySelector(".example-container > .right-container .theme-default-content main > div");
+    if (!content) return;
+    if (content.querySelector("[data-tagger-refresh-hint]")) return;
+    const hint = document.createElement("p");
+    hint.setAttribute("data-tagger-refresh-hint", "1");
+    hint.textContent = "提示：若未看到下载/打标进度或按钮样式更新，请按 Ctrl+F5 强制刷新页面。";
+    hint.style.margin = "0.35rem 0 0.7rem";
+    hint.style.fontSize = "12px";
+    hint.style.color = "var(--c-text-lighter, #909399)";
+    hint.style.lineHeight = "1.55";
+    const sectionTitle = content.querySelector("h3");
+    if (sectionTitle && sectionTitle.parentElement === content) content.insertBefore(hint, sectionTitle);
+    else content.appendChild(hint);
+  }
+
   function ensureDock() {
     if (!isTaggerPage()) return null;
 
@@ -381,8 +398,14 @@
     }
     if (!btnWrap.querySelector("[data-start-btn]")) {
       btnWrap.innerHTML =
-        '<button type="button" class="sd-tagger-dock__start" data-start-btn>启动</button>' +
-        '<button type="button" class="sd-tagger-dock__reset" data-reset-btn>重置</button>';
+        '<button type="button" class="el-button max-btn color-btn el-button--primary is-plain sd-tagger-dock__start" data-start-btn>启动</button>' +
+        '<button type="button" class="el-button max-btn sd-tagger-dock__reset" data-reset-btn>重置</button>';
+    }
+
+    // JS 兜底隐藏 Vue 原始按钮，避免依赖 :has 选择器兼容性
+    const legacyButtons = right.querySelectorAll(":scope > button.el-button");
+    for (let i = 0; i < legacyButtons.length; i++) {
+      legacyButtons[i].style.display = "none";
     }
 
     return dock;
@@ -735,10 +758,12 @@
     if (!isTaggerPage()) return;
 
     scheduleMount();
+    ensureRefreshHint();
     pollStatus();
     setInterval(pollStatus, POLL_MS);
     setInterval(function () {
       if (!dockHasButtons()) scheduleMount();
+      ensureRefreshHint();
     }, 800);
 
     document.addEventListener("click", onDockClick);
