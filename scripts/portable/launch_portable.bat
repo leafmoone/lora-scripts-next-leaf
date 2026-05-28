@@ -11,6 +11,7 @@ title SD-Trainer
 set "PORTABLE_ROOT=%~dp0..\..\..\"
 set "BASE_DIR=%PORTABLE_ROOT%"
 set "HF_HOME=%PORTABLE_ROOT%huggingface"
+if not defined HF_ENDPOINT set "HF_ENDPOINT=https://hf-mirror.com"
 set "PYTHONUTF8=1"
 set "PYTHON_EXE=%PORTABLE_ROOT%python_embeded\python.exe"
 set "LOG_FILE=%PORTABLE_ROOT%sd-trainer-log.txt"

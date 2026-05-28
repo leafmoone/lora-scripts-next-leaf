@@ -2,6 +2,7 @@ param(
     [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
     [string]$Version     = "2.5.0",
     [string]$PythonVer   = "3.10.11",
+    [string]$TkinterSourceRoot = "",
     [switch]$Clean,
     [switch]$Skip7z
 )
@@ -13,6 +14,7 @@ $buildDir    = Join-Path $ProjectRoot "build"
 $portableDir = Join-Path $buildDir "SD-Trainer-Portable"
 $pythonDir   = Join-Path $portableDir "python_embeded"
 $sdtDir      = Join-Path $portableDir "SD-Trainer"
+$tempGitCloneDir = Join-Path $buildDir "_portable_git_metadata"
 
 $7zExe = "C:\Program Files\7-Zip\7z.exe"
 if (-not (Test-Path $7zExe)) {
@@ -31,6 +33,59 @@ if ($Clean -and (Test-Path $portableDir)) {
     Remove-Item $portableDir -Recurse -Force
 }
 New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
+
+function Invoke-GitChecked {
+    param(
+        [string[]]$Arguments,
+        [string]$WorkingDirectory = $ProjectRoot,
+        [string]$ErrorMessage = "git command failed"
+    )
+    & git -C $WorkingDirectory @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw $ErrorMessage
+    }
+}
+
+function Initialize-DatasetTagEditor {
+    Write-Host "  Checking dataset-tag-editor submodule..."
+    $tagEditorLaunch = Join-Path $ProjectRoot "mikazuki\dataset-tag-editor\scripts\launch.py"
+    if (-not (Test-Path $tagEditorLaunch)) {
+        Write-Host "  Initializing dataset-tag-editor submodule..."
+        Invoke-GitChecked `
+            -Arguments @("submodule", "update", "--init", "--recursive", "--depth=1", "--", "mikazuki/dataset-tag-editor") `
+            -ErrorMessage "dataset-tag-editor submodule init failed"
+    }
+    if (-not (Test-Path $tagEditorLaunch)) {
+        throw "dataset-tag-editor\scripts\launch.py missing after submodule init"
+    }
+}
+
+function Clone-SDTrainerGitMetadata {
+    param([string]$Destination)
+    Write-Host "  Embedding shallow .git metadata for Update-SD-Trainer.bat..."
+    if (Test-Path $tempGitCloneDir) {
+        Remove-Item $tempGitCloneDir -Recurse -Force
+    }
+    $branch = (& git -C $ProjectRoot branch --show-current 2>$null | Select-Object -First 1)
+    if (-not $branch) { $branch = "main" }
+    $remote = (& git -C $ProjectRoot remote get-url origin 2>$null | Select-Object -First 1)
+    if (-not $remote) { $remote = "https://github.com/wochenlong/lora-scripts-next.git" }
+
+    & git clone --depth=1 --single-branch --branch $branch $remote $tempGitCloneDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "failed to clone shallow git metadata from $remote"
+    }
+    $dstGit = Join-Path $Destination "SD-Trainer\.git"
+    if (Test-Path $dstGit) {
+        Remove-Item $dstGit -Recurse -Force
+    }
+    Copy-Item (Join-Path $tempGitCloneDir ".git") $dstGit -Recurse -Force
+    Remove-Item $tempGitCloneDir -Recurse -Force
+
+    if (-not (Test-Path (Join-Path $dstGit "HEAD"))) {
+        throw "embedded SD-Trainer\.git is missing HEAD"
+    }
+}
 
 # ==== Step 1: Python Embeddable ====
 
@@ -73,30 +128,80 @@ $sitePackages = Join-Path $pythonDir "Lib\site-packages"
 New-Item -ItemType Directory -Path $sitePackages -Force | Out-Null
 
 # tkinter for GUI folder/file picker (embeddable Python omits it by default)
+function Test-TkinterSourceRoot {
+    param([string]$Root)
+    if (-not $Root -or -not (Test-Path $Root)) { return $false }
+    $libTk = Join-Path $Root "Lib\tkinter"
+    if (-not (Test-Path $libTk)) { $libTk = Join-Path $Root "lib\tkinter" }
+    $tcl = Join-Path $Root "tcl"
+    $pyd = Join-Path $Root "DLLs\_tkinter.pyd"
+    return (Test-Path $libTk) -and (Test-Path $tcl) -and (Test-Path $pyd)
+}
+
+function Get-TkinterSourceCandidates {
+    param([string]$ExpectedVersion = "3.10")
+    $roots = [System.Collections.Generic.List[string]]::new()
+
+    if ($TkinterSourceRoot -and (Test-Path $TkinterSourceRoot)) {
+        $roots.Add($TkinterSourceRoot.TrimEnd('\'))
+    }
+    if ($env:SD_TRAINER_TKINTER_SOURCE -and (Test-Path $env:SD_TRAINER_TKINTER_SOURCE)) {
+        $roots.Add($env:SD_TRAINER_TKINTER_SOURCE.TrimEnd('\'))
+    }
+
+    # Official CPython first — avoid conda/mambaforge (often missing tcl/)
+    foreach ($fixed in @(
+        "C:\Program Files\Python310",
+        "C:\Program Files (x86)\Python310"
+    )) {
+        if (Test-Path $fixed) { $roots.Add($fixed) }
+    }
+
+    foreach ($exe in @(
+        "C:\Program Files\Python310\python.exe",
+        "C:\Program Files (x86)\Python310\python.exe"
+    )) {
+        if (-not (Test-Path $exe)) { continue }
+        try {
+            $out = (& $exe -c "import sys; print(sys.base_prefix)" 2>$null | Select-Object -First 1)
+            if ($out) { $roots.Add($out.Trim()) }
+        } catch { }
+    }
+
+    try {
+        $pyList = & py -0p 2>&1
+        foreach ($line in $pyList) {
+            if ($line -notmatch "3\.10") { continue }
+            if ($line -notmatch "([A-Za-z]:\\[^\s]+\.exe)\s*$") { continue }
+            $exe = $Matches[1].Trim()
+            if ($exe -match "mambaforge|miniconda|anaconda|conda", "IgnoreCase") { continue }
+            $out = (& $exe -c "import sys; print(sys.base_prefix)" 2>$null | Select-Object -First 1)
+            if ($out) { $roots.Add($out.Trim()) }
+        }
+    } catch { }
+
+    return $roots | Select-Object -Unique
+}
+
 function Install-EmbeddedTkinter {
     param(
         [string]$EmbedDir,
         [string]$ExpectedVersion = "3.10"
     )
     $fullRoot = $null
-    $candidates = @(
-        { & py "-$ExpectedVersion" -c "import sys; print(sys.base_prefix)" },
-        { & "C:\Program Files\Python310\python.exe" -c "import sys; print(sys.base_prefix)" }
-    )
-    foreach ($candidate in $candidates) {
-        try {
-            $out = (& $candidate 2>$null | Select-Object -First 1)
-            if ($out -and (Test-Path $out.Trim())) {
-                $fullRoot = $out.Trim()
-                break
-            }
-        } catch {
-            continue
+    foreach ($candidate in (Get-TkinterSourceCandidates -ExpectedVersion $ExpectedVersion)) {
+        if (Test-TkinterSourceRoot $candidate) {
+            $fullRoot = $candidate
+            break
         }
     }
     if (-not $fullRoot) {
-        Write-Host "  WARNING: No full Python $ExpectedVersion found; tkinter not bundled (folder picker disabled)" -ForegroundColor Yellow
-        return
+        Write-Host "  ERROR: No CPython $ExpectedVersion with tcl/ + tkinter found." -ForegroundColor Red
+        Write-Host "         Install https://www.python.org/downloads/release/python-31011/ (Windows x64)," -ForegroundColor Red
+        Write-Host "         or pass -TkinterSourceRoot 'C:\Program Files\Python310'," -ForegroundColor Red
+        Write-Host "         or set env SD_TRAINER_TKINTER_SOURCE to a full Python root." -ForegroundColor Red
+        Write-Host "         Do NOT use conda/mambaforge — folder picker will break." -ForegroundColor Red
+        throw "tkinter source not found"
     }
     $libTk = Join-Path $fullRoot "Lib\tkinter"
     if (-not (Test-Path $libTk)) {
@@ -128,7 +233,9 @@ function Install-EmbeddedTkinter {
     if ($LASTEXITCODE -eq 0 -and ($check -match "ok")) {
         Write-Host "  tkinter bundled from $fullRoot" -ForegroundColor Green
     } else {
-        Write-Host "  WARNING: tkinter copy failed verification: $check" -ForegroundColor Yellow
+        Write-Host "  ERROR: tkinter verification failed after copy from $fullRoot" -ForegroundColor Red
+        Write-Host "         $check" -ForegroundColor Red
+        throw "tkinter bundle verification failed"
     }
 }
 
@@ -154,8 +261,7 @@ if (-not (Test-Path $getPipPath)) {
 Write-Host ""
 Write-Host "[2/6] Copying project files..." -ForegroundColor Cyan
 
-Push-Location $ProjectRoot
-Pop-Location
+Initialize-DatasetTagEditor
 
 $copyDirs = @(
     @{ Src = "assets";  Dst = "assets" },
@@ -217,6 +323,7 @@ foreach ($file in $copyFiles) {
         Copy-Item $src -Destination (Join-Path $sdtDir $file)
     }
 }
+Clone-SDTrainerGitMetadata -Destination $portableDir
 Write-Host "  Copied root files"
 Write-Host "  Done" -ForegroundColor Green
 
@@ -288,8 +395,9 @@ if (Test-Path $repoRunGui) {
 $updateDir = Join-Path $portableDir "update"
 New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
 
-$updateBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ncd /d `"%~dp0..\SD-Trainer`"`r`n"
-$updateBat += "echo Updating SD-Trainer...`r`ngit pull`r`necho Done.`r`npause`r`n"
+$updateBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`n"
+$updateBat += "call `"%~dp0..\Update-SD-Trainer.bat`" %*`r`n"
+$updateBat += "exit /b %errorlevel%`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_sd_trainer.bat"),
     $updateBat,
@@ -366,7 +474,7 @@ $readme += "  sd-models/       - Put your models here`r`n"
 $readme += "  output/          - Training output`r`n"
 $readme += "  logs/            - Logs`r`n`r`n"
 $readme += "Update:`r`n"
-$readme += "  update\update_sd_trainer.bat       - Update project code`r`n"
+$readme += "  update\update_sd_trainer.bat       - Shortcut to Update-SD-Trainer.bat`r`n"
 $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`n"
 $readme += "Requirements:`r`n"
 $readme += "  - Windows 10/11 64-bit`r`n"

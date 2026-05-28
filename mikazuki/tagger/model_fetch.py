@@ -193,9 +193,6 @@ def use_download_endpoint(endpoint: str | None) -> Iterator[None]:
     try:
         if endpoint_value:
             os.environ["HF_ENDPOINT"] = endpoint_value
-        else:
-            if "HF_ENDPOINT" in os.environ:
-                del os.environ["HF_ENDPOINT"]
         yield
     finally:
         if previous is None:
