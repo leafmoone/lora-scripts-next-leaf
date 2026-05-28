@@ -31,7 +31,7 @@
   <img src="assets/readme/screenshot-webui.png" alt="Next Trainer GUI" width="920" />
 </p>
 
-<p align="center"><sub>全新 UI — 左侧栏导航，中栏模型 & 参数表单，右栏实时配置预览</sub></p>
+<p align="center"><sub>首页传送门 — 训练、监控与新手上路快捷入口</sub></p>
 
 ---
 
@@ -82,6 +82,18 @@ bash install_flash_attn.sh
 | SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
 | SD 1.5 / SDXL 全量微调 | Dreambooth / SDXL finetune | 侧栏 **全量微调 → Stable Diffusion** |
 | Flux | LoRA | xformers / SDPA |
+
+<p align="center">
+  <img src="assets/readme/screenshot-anima-lora.png" alt="Anima LoRA 训练界面" width="920" />
+</p>
+
+<p align="center"><sub>Anima LoRA — 侧栏导航、中栏模型与数据集表单、右栏配置预览</sub></p>
+
+<p align="center">
+  <img src="assets/readme/screenshot-anima-finetune.png" alt="Anima 全量微调界面" width="920" />
+</p>
+
+<p align="center"><sub>Anima 全量微调 — 侧栏「全量微调 → Anima Finetune」，更新完整 DiT 权重</sub></p>
 
 ---
 

@@ -31,7 +31,7 @@
   <img src="assets/readme/screenshot-webui.png" alt="Next Trainer GUI" width="920" />
 </p>
 
-<p align="center"><sub>New UI — sidebar navigation, model & parameter form in the center, real-time config preview on the right</sub></p>
+<p align="center"><sub>Home portal — quick links to training, monitor, and onboarding</sub></p>
 
 ---
 
@@ -80,6 +80,18 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 | SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
 | SD 1.5 / SDXL Finetune | Dreambooth / SDXL finetune | Sidebar **全量微调 → Stable Diffusion** |
 | Flux | LoRA | xformers / SDPA |
+
+<p align="center">
+  <img src="assets/readme/screenshot-anima-lora.png" alt="Anima LoRA training UI" width="920" />
+</p>
+
+<p align="center"><sub>Anima LoRA — sidebar, model &amp; dataset form, config preview on the right</sub></p>
+
+<p align="center">
+  <img src="assets/readme/screenshot-anima-finetune.png" alt="Anima full finetune UI" width="920" />
+</p>
+
+<p align="center"><sub>Anima Finetune — full DiT weights under <b>全量微调</b> in the sidebar</sub></p>
 
 ---
 
