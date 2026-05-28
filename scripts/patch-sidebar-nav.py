@@ -15,7 +15,8 @@ OLD_SIDEBAR_JSON = (
     '[{"text":"\\u65b0\\u624b\\uff08SD1.5\\uff09","link":"/lora/basic.md"},'
     '{"text":"\\u4e13\\u5bb6","link":"/lora/master.md"},'
     '{"text":"Flux","link":"/lora/flux.md"},'
-    '{"text":"Anima","link":"/lora/sd3.md"},'
+    '{"text":"Anima LoRA","link":"/lora/sd3.md"},'
+    '{"text":"Anima 全量","link":"/lora/anima-finetune.md"},'
     '{"text":"\\u5de5\\u5177","link":"/lora/tools.md"},'
     '{"text":"\\u53c2\\u6570\\u8be6\\u89e3","link":"/lora/params.md"}]},'
     '{"text":"Dreambooth \\u8bad\\u7ec3","link":"/dreambooth/index.md"},'
@@ -50,10 +51,12 @@ NEW_SIDEBAR_JSON = (
     '[{"text":"Next Trainer","link":"/"},'
     '{"text":"训练","children":['
     '{"text":"LoRA 训练","link":"/lora/index.md","collapsible":false,"children":['
-    '{"text":"Anima","link":"/lora/sd3.md"},'
+    '{"text":"Anima LoRA","link":"/lora/sd3.md"},'
     '{"text":"Flux","link":"/lora/flux.md"},'
     '{"text":"Stable Diffusion","link":"/lora/master.md"}]},'
-    '{"text":"Dreambooth 训练","link":"/dreambooth/index.md"}]},'
+    '{"text":"\\u5168\\u91cf\\u5fae\\u8c03","link":"/lora/anima-finetune.md","collapsible":false,"children":['
+    '{"text":"Anima Finetune","link":"/lora/anima-finetune.md"},'
+    '{"text":"Stable Diffusion","link":"/dreambooth/index.md"}]}]},'
     '{"text":"工具与调试","children":['
     '{"text":"Tensorboard","link":"/tensorboard.md"},'
     '{"text":"数据集打标","link":"/tagger.md"},'
@@ -109,14 +112,15 @@ def build_sidebar_html(rel_path: str) -> str:
         return href == web_md or href.replace(".md", ".html") == web
 
     lora_heading_active = active("/lora/index.md")
+    finetune_heading_active = active("/dreambooth/index.md") or active("/lora/anima-finetune.md")
     train_expanded = (
         lora_heading_active
+        or finetune_heading_active
         or active("/lora/sd3.md")
         or active("/lora/flux.md")
         or active("/lora/master.md")
         or active("/lora/basic.md")
         or active("/lora/sdxl.md")
-        or active("/dreambooth/index.md")
     )
     # LoRA 子项仅由 app.js 导航在客户端渲染；SSR 不要再写 <ul>，否则会重复一份
     lora_block = item_heading(
@@ -128,10 +132,10 @@ def build_sidebar_html(rel_path: str) -> str:
         + "<!--[-->"
         + lora_block
         + item_heading(
-            "/dreambooth/index.md",
-            "Dreambooth 训练",
-            "Dreambooth 训练",
-            active("/dreambooth/index.md"),
+            "/lora/anima-finetune.md",
+            "全量微调",
+            "全量微调",
+            finetune_heading_active,
         )
         + "<!--]--></ul></li>"
     )
