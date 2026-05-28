@@ -5,8 +5,8 @@
 <h1 align="center">Next Trainer</h1>
 
 <p align="center">
-  <b>Windows 一键 LoRA 训练工具</b> — 支持 <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  解压即用，无需配环境，12 GB 显存即可稳定训练 Anima LoRA。<br/>
+  <b>Windows 一键 LoRA / 全量微调训练工具</b> — 支持 <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
+  解压即用，无需配环境。Anima LoRA 约 12GB 显存即可起步；<b>Anima 全量微调建议 24GB 级显存</b>。<br/>
   <sub>基于 <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>，秋叶系 GUI 体验。</sub>
 </p>
 
@@ -75,10 +75,12 @@ bash install_flash_attn.sh
 
 ## 支持什么
 
-| 模型 | 网络类型 | 注意力后端 |
-|------|----------|------------|
-| **Anima** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA |
-| SD 1.5 / SDXL | LoRA · LoHa · LoKr | xformers / SDPA |
+| 模式 | 模型 / 脚本 | 说明 |
+|------|-------------|------|
+| **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · 约 12GB 显存起 |
+| **Anima 全量微调** | 完整 DiT（`anima_train.py`） | 侧栏 **全量微调 → Anima Finetune** · **约 24GB 显存**（4090 档） |
+| SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
+| SD 1.5 / SDXL 全量微调 | Dreambooth / SDXL finetune | 侧栏 **全量微调 → Stable Diffusion** |
 | Flux | LoRA | xformers / SDPA |
 
 ---
@@ -108,7 +110,9 @@ bash install_flash_attn.sh
 ---
 
 <details>
-<summary><b>显存参考（Anima LoRA, 1024 分辨率, RTX 4090 实测）</b></summary>
+<summary><b>显存参考（Anima，1024 分辨率，RTX 4090 实测）</b></summary>
+
+**Anima LoRA**
 
 | 显存 | 配置 | 备注 |
 |------|------|------|
@@ -118,6 +122,12 @@ bash install_flash_attn.sh
 | ≥ 10 GB | 梯度检查点 + `blocks_to_swap=16` | 速度略降 |
 | ≥ 8 GB | 梯度检查点 + swap 24 + 缓存 TE + LoKr | 极限 |
 
+**Anima 全量微调**（更新完整 DiT 权重 — 请用 WebUI **Anima Finetune**，不是 LoRA 页）
+
+| 显存 | 配置 | 备注 |
+|------|------|------|
+| ≥ 24 GB | 默认 + latents/TE 缓存 | 实测专用显存约 **23–24 GB**；建议 4090 及以上 |
+
 </details>
 
 <details>
@@ -126,6 +136,8 @@ bash install_flash_attn.sh
 | 主题 | 链接 |
 |------|------|
 | Anima LoRA 训练指南 | [docs/anima-training.md](docs/anima-training.md) |
+| Anima 后端（LoRA + 全量微调） | [docs/anima-backend.md](docs/anima-backend.md) |
+| Anima 全量微调示例 TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | 训练监控 & SSE 接口 | [docs/train-monitor.md](docs/train-monitor.md) |
 | Docker 部署 | [docs/docker.md](docs/docker.md) |
@@ -226,6 +238,8 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 
 | 日期 | 版本 |
 |------|------|
+| 2026-05-28 | **v2.6.0** — **Anima 全量微调** WebUI（`anima-finetune`）、`anima_train.py` 封装、全量微调导航、监控类型修正；约 24GB 显存参考 |
+| 2026-05-27 | **v2.5.3** — 便携包依赖健康检查、侧栏版本号 ([#54](https://github.com/wochenlong/lora-scripts-next/issues/54)) |
 | 2026-05-21 | **v2.5.0** — UI 焕新：侧栏导航重构、首页传送门、训练监控仪表盘新增 GPU 指标；CSS 去重清理 |
 | 2026-05-21 | **v2.4.0** — 训练稳定性：环境隔离、NaN 过滤、采样保护、attn_mode 降级、路径规范化；整合包 tkinter 修复 |
 | 2026-05-20 | **v2.3.0** — 训练监控升级：TensorBoard 同源曲线、参数速查、日志同步 |

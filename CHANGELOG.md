@@ -4,6 +4,27 @@
 
 ---
 
+## v2.6.0 — 2026-05-28
+
+### Anima 全量微调（Finetune）
+
+- **训练入口**：WebUI 侧栏「全量微调 → Anima Finetune」（`/lora/anima-finetune.html`），`model_train_type: anima-finetune` 路由至 `scripts/dev/anima_train.py`（上游 `anima_train.py`）。
+- **Schema 与适配**：新增 `mikazuki/schema/anima-finetune.ts`；`adapt_anima_config(finetune=True)` 剥离 LoRA 网络字段；默认学习率 `1e-5`。
+- **导航与首页**：「全量微调」分组（Anima Finetune 在 Stable Diffusion / Dreambooth 之前）；首页 portal、新手上路引导同步。
+- **训练监控**：识别 `anima_train.py` 时显示 **Anima Finetune**（不再误标为 Anima LoRA）。
+- **文档与示例**：`docs/anima-backend.md`、`docs/examples/anima-full-finetune.toml`；单元测试覆盖路由、wrapper、adapter、监控类型推断。
+
+### 前端（dist）
+
+- 修复 SPA 页面组件 `i0` 映射缺失导致的右栏 **404 Not Found**。
+- Anima Finetune 页右栏标语与说明文案（进阶玩家、充足样本与高显存）。
+
+### 实测参考
+
+- RTX 4090 24GB、1024 分辨率：全量微调专用显存约 **23–24 GB**（与 LoRA 的 12 GB 档不同，需单独规划显存）。
+
+---
+
 ## v2.5.3 — 2026-05-27
 
 ### 整合包热修复（[#54](https://github.com/wochenlong/lora-scripts-next/issues/54)）

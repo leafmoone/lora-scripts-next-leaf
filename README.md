@@ -5,8 +5,8 @@
 <h1 align="center">Next Trainer</h1>
 
 <p align="center">
-  <b>One-click LoRA training GUI for Windows</b> — supports <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  Extract and run. No environment setup needed. 12 GB VRAM is enough for Anima LoRA.<br/>
+  <b>One-click LoRA &amp; full finetune training GUI for Windows</b> — supports <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
+  Extract and run. No environment setup needed. ~12 GB VRAM for Anima LoRA; <b>Anima full finetune needs ~24 GB</b>.<br/>
   <sub>Powered by <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>, Akegarasu-style GUI.</sub>
 </p>
 
@@ -73,10 +73,12 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 
 ## What's Supported
 
-| Model | Network Types | Attention Backend |
-|-------|---------------|-------------------|
-| **Anima** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA |
-| SD 1.5 / SDXL | LoRA · LoHa · LoKr | xformers / SDPA |
+| Mode | Model / script | Notes |
+|------|----------------|-------|
+| **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · from ~12 GB VRAM |
+| **Anima Finetune** | Full DiT (`anima_train.py`) | Sidebar **全量微调 → Anima Finetune** · **~24 GB VRAM** (4090-class) |
+| SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
+| SD 1.5 / SDXL Finetune | Dreambooth / SDXL finetune | Sidebar **全量微调 → Stable Diffusion** |
 | Flux | LoRA | xformers / SDPA |
 
 ---
@@ -106,7 +108,9 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 ---
 
 <details>
-<summary><b>VRAM Reference (Anima LoRA, 1024 resolution, RTX 4090 benchmarked)</b></summary>
+<summary><b>VRAM Reference (Anima, 1024 resolution, RTX 4090 benchmarked)</b></summary>
+
+**Anima LoRA**
 
 | VRAM | Configuration | Notes |
 |------|---------------|-------|
@@ -116,6 +120,12 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 | ≥ 10 GB | Gradient checkpointing + `blocks_to_swap=16` | Slightly slower |
 | ≥ 8 GB | Gradient checkpointing + swap 24 + cache TE + LoKr | Tight |
 
+**Anima full finetune** (updates full DiT weights — use **Anima Finetune** in the WebUI, not LoRA)
+
+| VRAM | Configuration | Notes |
+|------|---------------|-------|
+| ≥ 24 GB | Default + latents/TE cache | **~23–24 GB dedicated VRAM** in practice; 4090-class recommended |
+
 </details>
 
 <details>
@@ -124,6 +134,8 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 | Topic | Link |
 |-------|------|
 | Anima LoRA Training Guide | [docs/anima-training.md](docs/anima-training.md) |
+| Anima backend (LoRA + full finetune) | [docs/anima-backend.md](docs/anima-backend.md) |
+| Anima full finetune example TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | Train Monitor & SSE API | [docs/train-monitor.md](docs/train-monitor.md) |
 | Docker Deployment | [docs/docker.md](docs/docker.md) |
@@ -136,6 +148,8 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 
 | Date | Version |
 |------|---------|
+| 2026-05-28 | **v2.6.0** — **Anima full finetune** WebUI (`anima-finetune`), `anima_train.py` wrapper, 全量微调 nav, train monitor label fix; ~24 GB VRAM reference |
+| 2026-05-27 | **v2.5.3** — Portable dependency health check, sidebar version chip ([#54](https://github.com/wochenlong/lora-scripts-next/issues/54)) |
 | 2026-05-21 | **v2.5.0** — UI refresh: new sidebar navigation, home portal page, training monitor dashboard with GPU metrics; CSS cleanup |
 | 2026-05-21 | **v2.4.0** — Training stability: env isolation, NaN filter, sample guard, attn_mode fallback, path normalization; Portable tkinter fix |
 | 2026-05-20 | **v2.3.0** — Train Monitor: TensorBoard-backed curves, parameter checks, log sync |
