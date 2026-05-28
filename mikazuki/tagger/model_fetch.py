@@ -172,6 +172,33 @@ def ensure_interrogator_assets(model_key: str, interrogator: "Interrogator") -> 
     return True
 
 
-def apply_hf_mirror_from_env() -> None:
-    if not os.environ.get("HF_ENDPOINT"):
-        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+ALLOWED_DOWNLOAD_ENDPOINTS = {
+    "",
+    "https://hf-mirror.com",
+    "https://modelscope.cn",
+}
+
+
+def normalize_download_endpoint(endpoint: str | None) -> str:
+    value = (endpoint or "").strip().rstrip("/")
+    if value not in ALLOWED_DOWNLOAD_ENDPOINTS:
+        return ""
+    return value
+
+
+@contextmanager
+def use_download_endpoint(endpoint: str | None) -> Iterator[None]:
+    endpoint_value = normalize_download_endpoint(endpoint)
+    previous = os.environ.get("HF_ENDPOINT")
+    try:
+        if endpoint_value:
+            os.environ["HF_ENDPOINT"] = endpoint_value
+        else:
+            if "HF_ENDPOINT" in os.environ:
+                del os.environ["HF_ENDPOINT"]
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("HF_ENDPOINT", None)
+        else:
+            os.environ["HF_ENDPOINT"] = previous

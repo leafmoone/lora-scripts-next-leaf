@@ -4,6 +4,7 @@ from typing import List, Optional, Union, Dict, Any
 
 class TaggerPrefetchRequest(BaseModel):
     interrogator_model: str = Field(default="wd14-convnextv2-v2")
+    download_endpoint: str = Field(default="")
 
 
 class TaggerInterrogateRequest(BaseModel):
@@ -29,6 +30,7 @@ class TaggerInterrogateRequest(BaseModel):
     batch_input_recursive: bool = False
     batch_output_action_on_conflict: str = "ignore"
     replace_underscore: bool = True
+    download_endpoint: str = Field(default="")
     replace_underscore_excludes: str = Field(
         default="0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||"
     )

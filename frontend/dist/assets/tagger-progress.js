@@ -167,6 +167,12 @@
     return "";
   }
 
+  function readNativeSelectValue(item) {
+    const select = item.querySelector("select");
+    if (!select) return "";
+    return String(select.value || "").trim();
+  }
+
   function mapConflictLabel(text) {
     if (text.indexOf("忽略") >= 0 || text === "ignore") return "ignore";
     if (text.indexOf("覆盖") >= 0 || text.indexOf("复制") >= 0 || text === "copy") return "copy";
@@ -184,6 +190,7 @@
       add_rating_tag: false,
       add_model_tag: false,
       additional_tags: "",
+      download_endpoint: "",
       exclude_tags: "",
       escape_tag: true,
       batch_input_recursive: false,
@@ -222,6 +229,8 @@
         if (v !== null) payload.add_model_tag = v;
       } else if (key === "additional_tags" || blob.indexOf("附加提示词") >= 0) {
         payload.additional_tags = readInputValue(item);
+      } else if (key === "download_endpoint" || blob.indexOf("模型下载加速源") >= 0) {
+        payload.download_endpoint = readRadioSelectValue(item) || readNativeSelectValue(item);
       } else if (key === "replace_underscore" || blob.indexOf("空格代替下划线") >= 0) {
         const v = readSwitchValue(item);
         if (v !== null) payload.replace_underscore = v;
@@ -493,7 +502,11 @@
     const tBar = dock.querySelector("[data-tagging-bar]");
     const dPct = downloadPct(download);
     const tPct = pct(tagging.current, tagging.total);
-    if (dBar) dBar.style.width = dPct + "%";
+    if (dBar) {
+      const isIndeterminateDownload = phase === "downloading" && dPct <= 0;
+      dBar.classList.toggle("is-indeterminate", isIndeterminateDownload);
+      dBar.style.width = (isIndeterminateDownload ? 100 : dPct) + "%";
+    }
     if (tBar) tBar.style.width = tPct + "%";
     dock.style.setProperty("--sd-tagger-progress", String(phase === "downloading" ? dPct : tPct));
 
@@ -506,14 +519,11 @@
     if (msg) msg.textContent = formatStatusMessage(data);
 
     dock.querySelector('[data-block="download"]')?.classList.toggle("is-active", phase === "downloading");
-    dock.querySelector('[data-block="tagging"]')?.classList.toggle(
-      "is-active",
-      phase === "tagging" || phase === "done" || phase === "pending"
-    );
+    dock.querySelector('[data-block="tagging"]')?.classList.toggle("is-active", phase === "tagging" || phase === "done" || phase === "pending");
 
     const meters = dock.querySelector("[data-meters]");
     if (meters) {
-      meters.classList.toggle("is-visible", busy || phase === "done" || phase === "error");
+      meters.classList.toggle("is-visible", busy);
       meters.classList.toggle("is-compact", phase === "done");
     }
 
@@ -599,10 +609,14 @@
     if (link) link.classList.add("is-loading");
 
     try {
+      const endpoint = collectTaggerForm().download_endpoint || "";
       const res = await fetch("/api/tagger/prefetch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interrogator_model: getInterrogatorModel() }),
+        body: JSON.stringify({
+          interrogator_model: getInterrogatorModel(),
+          download_endpoint: endpoint,
+        }),
       });
       const json = await res.json();
       if (json.status === "success") {

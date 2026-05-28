@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from mikazuki.tagger.interrogator import available_interrogators, on_interrogate
 from mikazuki.tagger.model_fetch import (
-    apply_hf_mirror_from_env,
     download_interrogator_assets,
     ensure_interrogator_assets,
     interrogator_assets_ready,
+    use_download_endpoint,
 )
 from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
@@ -23,11 +23,11 @@ def run_prefetch_job(req) -> None:
         return
 
     try:
-        apply_hf_mirror_from_env()
-        if interrogator_assets_ready(interrogator):
-            tagger_progress.finish_download_success(f"模型 {model_key} 已在本地")
-            return
-        download_interrogator_assets(model_key, interrogator, continue_to_tagging=False)
+        with use_download_endpoint(getattr(req, "download_endpoint", "")):
+            if interrogator_assets_ready(interrogator):
+                tagger_progress.finish_download_success(f"模型 {model_key} 已在本地")
+                return
+            download_interrogator_assets(model_key, interrogator, continue_to_tagging=False)
     except TaggerCancelled:
         tagger_progress.finish_cancelled()
     except Exception as exc:  # noqa: BLE001 — surface to WebUI
@@ -55,9 +55,9 @@ def run_interrogate_job(req) -> None:
         return
 
     try:
-        apply_hf_mirror_from_env()
-        if needs_download:
-            ensure_interrogator_assets(model_key, interrogator)
+        with use_download_endpoint(getattr(req, "download_endpoint", "")):
+            if needs_download:
+                ensure_interrogator_assets(model_key, interrogator)
 
         tagger_progress.check_cancelled()
 

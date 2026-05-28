@@ -1,6 +1,7 @@
 Schema.intersect([
     Schema.object({
         interrogator_model: Schema.union(["cl_tagger_1_01", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-convnextv2-v2", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3"]).default("wd14-convnextv2-v2").description("Tagger 模型"),
+        download_endpoint: Schema.union(["默认", "https://hf-mirror.com", "https://modelscope.cn"]).default("默认").description("模型下载加速源（国内网络建议启用）"),
         path: Schema.string().role('filepicker', { type: "folder" }).required().description("图片文件夹路径"),
         threshold: Schema.number().role("slider").min(0).max(1).step(0.01).default(0.35).description("阈值"),
         character_threshold: Schema.number().role("slider").min(0).max(1).step(0.01).default(0.6).description("角色名称识别阈值（仅 cl_tagger 生效）"),

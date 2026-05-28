@@ -850,9 +850,17 @@ html.dark .example-container > .right-container section .params-section pre {
   display: flex;
   flex-direction: column;
   margin-top: auto;
-  padding: 0.625rem 1.125rem 0.85rem;
-  border-top: 1px solid var(--c-border, #ebeef5);
-  background: var(--c-bg-mute, #fafafa);
+  padding: 0.85rem 1.125rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--el-color-primary) 12%, var(--c-border, #ebeef5));
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-color-primary) 6%, var(--c-bg-mute, #fafafa)) 0%,
+    var(--c-bg-mute, #fafafa) 42%
+  );
+  box-shadow:
+    0 -6px 24px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
   --sd-tagger-progress: 0;
 }
 
@@ -909,11 +917,6 @@ html.dark .example-container > .right-container section .params-section pre {
 .example-container > .right-container .sd-tagger-dock__phase[data-phase="pending"] {
   background: var(--sd-primary-muted);
   color: var(--el-color-primary);
-}
-
-.example-container > .right-container .sd-tagger-dock--pending .sd-tagger-dock__meters,
-.example-container > .right-container .sd-tagger-dock--downloading .sd-tagger-dock__meters {
-  display: flex;
 }
 
 .example-container > .right-container .sd-tagger-dock--downloading .sd-tagger-dock__meter[data-block="tagging"] {
@@ -979,14 +982,36 @@ html.dark .example-container > .right-container section .params-section pre {
 }
 
 .example-container > .right-container .sd-tagger-dock__meters {
-  display: none;
+  display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin-top: 0.25rem;
+  gap: 0.55rem;
+  margin-top: 0;
+  padding: 0 0.65rem;
+  border-radius: 12px;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  overflow: hidden;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--c-bg, #fff) 72%, transparent);
+  border: 1px solid transparent;
+  transition:
+    max-height 0.28s ease,
+    opacity 0.22s ease,
+    margin-top 0.22s ease,
+    padding 0.22s ease,
+    border-color 0.22s ease,
+    transform 0.22s ease;
 }
 
 .example-container > .right-container .sd-tagger-dock__meters.is-visible {
-  display: flex;
+  max-height: 180px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.65rem 0.6rem;
+  pointer-events: auto;
+  border-color: color-mix(in srgb, var(--el-color-primary) 10%, var(--c-border, #ebeef5));
 }
 
 .example-container > .right-container .sd-tagger-dock__meters.is-compact .sd-tagger-dock__meter-head {
@@ -999,15 +1024,23 @@ html.dark .example-container > .right-container section .params-section pre {
 }
 
 .example-container > .right-container .sd-tagger-dock__meter {
-  opacity: 0.5;
+  opacity: 0.92;
 }
 
 .example-container > .right-container .sd-tagger-dock__meter.is-active {
   opacity: 1;
 }
 
-.example-container > .right-container .sd-tagger-dock__meter[data-block="download"]:not(.is-active) {
+.example-container > .right-container .sd-tagger-dock__meter[data-block="download"] {
   display: none;
+}
+
+.example-container > .right-container .sd-tagger-dock--downloading .sd-tagger-dock__meter[data-block="download"] {
+  display: block;
+}
+
+.example-container > .right-container .sd-tagger-dock__meter[data-block="tagging"] {
+  display: block;
 }
 
 .example-container > .right-container .sd-tagger-dock__meter-head {
@@ -1031,29 +1064,97 @@ html.dark .example-container > .right-container section .params-section pre {
 }
 
 .example-container > .right-container .sd-tagger-dock__track {
-  height: 4px;
+  height: 8px;
   border-radius: var(--sd-radius-pill, 999px);
-  background: color-mix(in srgb, var(--c-border, #dcdfe6) 55%, #fff);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--c-border, #dcdfe6) 70%, #fff) 0%,
+    color-mix(in srgb, var(--el-color-primary) 18%, #fff) 50%,
+    color-mix(in srgb, var(--c-border, #dcdfe6) 70%, #fff) 100%
+  );
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .example-container > .right-container .sd-tagger-dock__fill {
   height: 100%;
   width: 0%;
+  min-width: 0;
   border-radius: inherit;
-  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+
+.example-container > .right-container .sd-tagger-dock__fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  pointer-events: none;
 }
 
 .example-container > .right-container .sd-tagger-dock__fill--download {
-  background: color-mix(in srgb, var(--el-color-primary) 55%, #fff);
+  background: linear-gradient(
+    90deg,
+    #7ec8ff 0%,
+    var(--el-color-primary, #646cff) 52%,
+    #7c6cf0 100%
+  );
+  box-shadow: 0 0 14px color-mix(in srgb, var(--el-color-primary) 38%, transparent);
+}
+
+.example-container > .right-container .sd-tagger-dock__fill--download.is-indeterminate {
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.28) 42%,
+      rgba(255, 255, 255, 0.58) 50%,
+      rgba(255, 255, 255, 0.28) 58%,
+      transparent 100%
+    ),
+    linear-gradient(
+      90deg,
+      #7ec8ff 0%,
+      var(--el-color-primary, #646cff) 52%,
+      #7c6cf0 100%
+    );
+  background-size: 210% 100%, 100% 100%;
+  animation: sd-tagger-indeterminate-slide 1.05s linear infinite;
 }
 
 .example-container > .right-container .sd-tagger-dock__fill--tagging {
-  background: var(--el-color-primary);
+  background: linear-gradient(
+    90deg,
+    #a5b4fc 0%,
+    var(--el-color-primary, #646cff) 48%,
+    #a855f7 100%
+  );
+  box-shadow: 0 0 14px color-mix(in srgb, var(--el-color-primary) 42%, transparent);
 }
 
-.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__fill--tagging {
-  background: color-mix(in srgb, var(--el-color-primary) 75%, #fff);
+.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__fill--tagging,
+.example-container > .right-container .sd-tagger-dock--done .sd-tagger-dock__fill--download {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--el-color-primary) 65%, #fff) 0%,
+    var(--el-color-primary, #646cff) 100%
+  );
+  box-shadow: none;
+}
+
+@keyframes sd-tagger-indeterminate-slide {
+  from {
+    background-position: 165% 0, 0 0;
+  }
+  to {
+    background-position: -45% 0, 0 0;
+  }
 }
 
 .example-container > .right-container .sd-tagger-dock__link {
@@ -1092,15 +1193,17 @@ html.dark .example-container > .right-container section .params-section pre {
   background: color-mix(in srgb, #c45656 14%, transparent);
 }
 
+
+
 .example-container > .right-container .sd-tagger-dock__buttons {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  align-self: center;
-  gap: 0.45rem;
-  width: min(10rem, 100%);
-  margin: 0.6rem 0 0;
+  align-self: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0.75rem 0 0;
   padding: 0;
   border-top: none;
 }
@@ -1110,39 +1213,55 @@ html.dark .example-container > .right-container section .params-section pre {
   margin: 0;
   width: 100%;
   min-width: 0;
-  height: 32px;
-  padding: 0 0.9rem;
-  border-radius: var(--sd-radius-md, 8px);
-  font-size: 0.78125rem;
-  font-weight: 500;
+  height: 40px;
+  padding: 0 1rem;
+  border-radius: 14px;
+  font-size: 0.8125rem;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.1s ease;
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.12s ease,
+    filter 0.2s ease;
 }
 
 /* 与训练页 .color-btn.el-button--primary 同款：浅紫底 + 紫边紫字 */
 .example-container > .right-container .sd-tagger-dock__start {
   flex: none;
-  border: 1px solid var(--el-color-primary);
-  background: var(--sd-primary-muted);
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 72%, #fff);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-color-primary) 14%, #fff) 0%,
+    var(--sd-primary-muted, #f4f0ff) 100%
+  );
   color: var(--el-color-primary);
-  font-weight: 600;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  font-weight: 650;
+  box-shadow:
+    0 2px 10px color-mix(in srgb, var(--el-color-primary) 24%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .example-container > .right-container .sd-tagger-dock__start:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--el-color-primary) 18%, #fff);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-color-primary) 22%, #fff) 0%,
+    color-mix(in srgb, var(--el-color-primary) 10%, var(--sd-primary-muted)) 100%
+  );
   border-color: var(--el-color-primary);
   color: var(--el-color-primary);
+  box-shadow:
+    0 4px 14px color-mix(in srgb, var(--el-color-primary) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transform: translateY(-1px);
 }
 
 .example-container > .right-container .sd-tagger-dock__start:active:not(:disabled) {
-  background: color-mix(in srgb, var(--el-color-primary) 22%, var(--c-bg-light, #f3f4f5));
+  transform: translateY(0);
+  background: color-mix(in srgb, var(--el-color-primary) 24%, var(--c-bg-light, #f3f4f5));
 }
 
 .example-container > .right-container .sd-tagger-dock__start:disabled,
@@ -1165,23 +1284,49 @@ html.dark .example-container > .right-container section .params-section pre {
 
 .example-container > .right-container .sd-tagger-dock__reset {
   flex: none;
-  border: 1px solid color-mix(in srgb, var(--c-border, #dcdfe6) 90%, var(--el-color-primary));
-  background: var(--c-bg, #fff);
+  border: 1px solid color-mix(in srgb, var(--c-border, #dcdfe6) 88%, var(--el-color-primary));
+  background: linear-gradient(180deg, #fff 0%, color-mix(in srgb, var(--c-bg-light, #f9fafb) 100%, #f5f6f8) 100%);
   color: var(--c-text-lighter, #606266);
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-weight: 550;
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .example-container > .right-container .sd-tagger-dock__reset:hover:not(:disabled) {
-  border-color: var(--el-color-primary-light-5, #b3d8ff);
+  border-color: color-mix(in srgb, var(--el-color-primary) 45%, var(--c-border));
   color: var(--el-color-primary);
   background: var(--sd-primary-muted);
+  transform: translateY(-1px);
 }
 
 html.dark .example-container > .right-container .sd-tagger-dock {
-  background: var(--c-bg-mute, #252529);
-  border-top-color: var(--c-border);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-color-primary) 10%, var(--c-bg-mute, #252529)) 0%,
+    var(--c-bg-mute, #252529) 48%
+  );
+  border-top-color: color-mix(in srgb, var(--el-color-primary) 18%, var(--c-border));
+  box-shadow:
+    0 -8px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
+
+html.dark .example-container > .right-container .sd-tagger-dock__meters {
+  background: color-mix(in srgb, var(--c-bg, #1e1e22) 55%, transparent);
+  border-color: color-mix(in srgb, var(--el-color-primary) 16%, var(--c-border));
+}
+
+html.dark .example-container > .right-container .sd-tagger-dock__track {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--c-border) 80%, #000) 0%,
+    color-mix(in srgb, var(--el-color-primary) 22%, #1a1a22) 50%,
+    color-mix(in srgb, var(--c-border) 80%, #000) 100%
+  );
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
 
 html.dark .example-container > .right-container .sd-tagger-dock--done {
   background: var(--c-bg-mute, #252529);

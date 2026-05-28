@@ -12,6 +12,7 @@ BUILD_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() or "0"
 ASSETS = DIST / "assets"
 TAGGER_HTML = DIST / "tagger.html"
 TAGGER_VUE_JS = ASSETS / "tagger.html.0daaef4e.js"
+TAGGER_PROGRESS_JS = ASSETS / "tagger-progress.js"
 POLISH_CSS = ASSETS / "sd-trainer-ui-polish.css"
 STYLE_CSS = ASSETS / "style.874872ce.css"
 MARKER = "sd-tagger-dock"
@@ -64,8 +65,24 @@ def strip_legacy_status_html(html: str) -> str:
 
 def patch_tagger_html() -> None:
     html = strip_legacy_status_html(TAGGER_HTML.read_text(encoding="utf-8"))
-    tagger_src = f'/assets/tagger-progress.js?v={BUILD_VERSION}'
-    if tagger_src not in html:
+    cache_key = int(TAGGER_PROGRESS_JS.stat().st_mtime)
+    tagger_src = f'/assets/tagger-progress.js?v={BUILD_VERSION}-{cache_key}'
+    style_cache_key = int(STYLE_CSS.stat().st_mtime)
+    style_src = f'/assets/style.874872ce.css?v={BUILD_VERSION}-{style_cache_key}'
+    html = re.sub(
+        r'href="/assets/style\.874872ce\.css(?:\?v=[^"]+)?"',
+        f'href="{style_src}"',
+        html,
+        count=1,
+    )
+    if re.search(r'<script src="/assets/tagger-progress\.js\?v=[^"]+" defer></script>', html):
+        html = re.sub(
+            r'<script src="/assets/tagger-progress\.js\?v=[^"]+" defer></script>',
+            f'<script src="{tagger_src}" defer></script>',
+            html,
+            count=1,
+        )
+    else:
         html = html.replace(
             '<script type="module" src="/assets/app.',
             f'<script src="{tagger_src}" defer></script>\n    <script type="module" src="/assets/app.',
