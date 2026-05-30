@@ -443,7 +443,10 @@ Write-Host "  Created install_xformers.bat"
 # Root-level utility bat files
 $templateDir = Join-Path $PSScriptRoot "templates"
 foreach ($bat in @("Update-SD-Trainer.bat", "Download-Anima-Model.bat")) {
-    $src = Join-Path $templateDir $bat
+    $src = Join-Path $ProjectRoot $bat
+    if (-not (Test-Path $src)) {
+        $src = Join-Path $templateDir $bat
+    }
     if (Test-Path $src) {
         Copy-Item $src -Destination (Join-Path $portableDir $bat)
         Write-Host "  Created $bat"
