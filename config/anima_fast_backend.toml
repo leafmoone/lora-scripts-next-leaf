@@ -1,0 +1,19 @@
+[backend]
+extension_root = "extensions/anima_lora"
+source_dir = "extensions/anima_lora/source"
+venv_python = "extensions/anima_lora/.venv/Scripts/python.exe"
+external_root = "../anima_lora"
+external_python = "../anima_lora/.venv/Scripts/python.exe"
+source_commit = "87819818975e08167cda8a6f615776e46e889f80"
+preflight_level = "full"
+allow_unsupported = false
+
+[paths]
+output_dir = "output/anima_fast"
+logging_dir = "logs/anima_fast"
+cache_dir = ".cache/anima_fast"
+
+[features]
+# LORA_ENABLE_ANIMA_FAST=0 disables install/train (maintainer kill switch). Default: visible UI.
+enabled_env = "LORA_ENABLE_ANIMA_FAST"
+dev_mode_env = "LORA_ANIMA_FAST_DEV_MODE"

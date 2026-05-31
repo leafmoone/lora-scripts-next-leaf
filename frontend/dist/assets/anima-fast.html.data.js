@@ -1,0 +1,1 @@
+const e=JSON.parse("{\"key\": \"v-anima-fast\", \"path\": \"/lora/anima-fast.html\", \"title\": \"Anima LoRA · Fast 模式\", \"lang\": \"en-US\", \"frontmatter\": {\"example\": true, \"trainType\": \"anima-lora-fast\"}, \"excerpt\": \"\", \"headers\": [], \"filePathRelative\": \"lora/anima-fast.md\"}");export{e as data};

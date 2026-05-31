@@ -78,6 +78,7 @@ bash install_flash_attn.sh
 | 模式 | 模型 / 脚本 | 说明 |
 |------|-------------|------|
 | **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · 约 12GB 显存起 |
+| **Anima LoRA Fast** | 仅 LoRA（进阶插件） | 可选 [anima_lora](https://github.com/sorryhyun/anima_lora) 运行时 · 建议 16GB+ · 见 [`docs/anima-fast.md`](docs/anima-fast.md) |
 | **Anima 全量微调** | 完整 DiT（`anima_train.py`） | 侧栏 **全量微调 → Anima Finetune** · **约 24GB 显存**（4090 档） |
 | SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
 | SD 1.5 / SDXL 全量微调 | Dreambooth / SDXL finetune | 侧栏 **全量微调 → Stable Diffusion** |
@@ -88,6 +89,12 @@ bash install_flash_attn.sh
 </p>
 
 <p align="center"><sub>Anima LoRA — 侧栏导航、中栏模型与数据集表单、右栏配置预览</sub></p>
+
+<p align="center">
+  <img src="assets/readme/screenshot-anima-fast.png?v=20260528" alt="Anima LoRA Fast 模式界面" width="920" />
+</p>
+
+<p align="center"><sub>Anima LoRA Fast — 侧栏「标准模式 / Fast 模式」；页内安装插件后再开训</sub></p>
 
 <p align="center">
   <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima 全量微调界面" width="920" />
@@ -148,6 +155,8 @@ bash install_flash_attn.sh
 | 主题 | 链接 |
 |------|------|
 | Anima LoRA 训练指南 | [docs/anima-training.md](docs/anima-training.md) |
+| **Anima Fast 模式（进阶插件）** | [docs/anima-fast.md](docs/anima-fast.md) |
+| 开源归属与 NOTICE | [NOTICE.md](NOTICE.md) |
 | Anima 后端（LoRA + 全量微调） | [docs/anima-backend.md](docs/anima-backend.md) |
 | Anima 全量微调示例 TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
