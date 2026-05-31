@@ -4,7 +4,9 @@ param(
     [string]$PythonVer   = "3.10.11",
     [string]$TkinterSourceRoot = "",
     [switch]$Clean,
-    [switch]$Skip7z
+    [switch]$Skip7z,
+    [switch]$SkipTaggerPrefetch,
+    [string]$TaggerCacheSource = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -85,6 +87,54 @@ function Clone-SDTrainerGitMetadata {
     if (-not (Test-Path (Join-Path $dstGit "HEAD"))) {
         throw "embedded SD-Trainer\.git is missing HEAD"
     }
+}
+
+function Resolve-TaggerCacheSource {
+    param(
+        [string]$Explicit,
+        [string]$BuildDirectory
+    )
+    if ($Explicit -and (Test-Path $Explicit)) {
+        return (Resolve-Path $Explicit).Path
+    }
+    $modelDirName = "models--SmilingWolf--wd-v1-4-convnextv2-tagger-v2"
+    $candidates = @()
+    foreach ($dir in Get-ChildItem $BuildDirectory -Directory -ErrorAction SilentlyContinue) {
+        if ($dir.Name -notlike "SD-Trainer*") { continue }
+        $hubModel = Join-Path $dir.FullName "huggingface\hub\$modelDirName"
+        if (Test-Path $hubModel) {
+            $candidates += $dir.FullName
+        }
+    }
+    if ($candidates.Count -eq 0) { return $null }
+    return ($candidates | Sort-Object { $_ } -Descending | Select-Object -First 1)
+}
+
+function Copy-TaggerCacheFromSource {
+    param(
+        [string]$SourceRoot,
+        [string]$DestinationPortable
+    )
+    $modelDirName = "models--SmilingWolf--wd-v1-4-convnextv2-tagger-v2"
+    $copied = $false
+
+    $srcHubModel = Join-Path $SourceRoot "huggingface\hub\$modelDirName"
+    $dstHub = Join-Path $DestinationPortable "huggingface\hub"
+    if (Test-Path $srcHubModel) {
+        New-Item -ItemType Directory -Path $dstHub -Force | Out-Null
+        $null = robocopy $srcHubModel (Join-Path $dstHub $modelDirName) /E /NFL /NDL /NJH /NJS /NC /NS
+        if ($LASTEXITCODE -le 7) { $copied = $true }
+    }
+
+    $srcWd14 = Join-Path $SourceRoot "tagger-models\wd14"
+    $dstWd14 = Join-Path $DestinationPortable "tagger-models\wd14"
+    if (Test-Path $srcWd14) {
+        New-Item -ItemType Directory -Path $dstWd14 -Force | Out-Null
+        $null = robocopy $srcWd14 $dstWd14 /E /NFL /NDL /NJH /NJS /NC /NS
+        if ($LASTEXITCODE -le 7) { $copied = $true }
+    }
+
+    return $copied
 }
 
 # ==== Step 1: Python Embeddable ====
@@ -275,6 +325,7 @@ $copyDirs = @(
 
 $copyFiles = @(
     "gui.py",
+    "run_gui.bat",
     "requirements.txt",
     "setup_environment.py",
     "VERSION",
@@ -339,36 +390,78 @@ New-Item -ItemType Directory -Path $taggerModelsDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $portableDir "tagger-models\wd14") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $portableDir "tagger-models\vlm") -Force | Out-Null
 $prefetchScript = Join-Path $sdtDir "scripts\prefetch_default_tagger.py"
+$taggerCacheSrc = Resolve-TaggerCacheSource -Explicit $TaggerCacheSource -BuildDirectory $buildDir
+if ($taggerCacheSrc) {
+    Write-Host "  Seeding tagger cache from: $taggerCacheSrc"
+    if (-not (Copy-TaggerCacheFromSource -SourceRoot $taggerCacheSrc -DestinationPortable $portableDir)) {
+        Write-Host "  WARNING: tagger cache source had no usable hub/tagger-models data" -ForegroundColor Yellow
+    }
+}
 
-if (-not (Test-Path $prefetchScript)) {
-    Write-Host "  WARNING: prefetch script missing, skip" -ForegroundColor Yellow
-} elseif (-not (Get-Command python -ErrorAction SilentlyContinue) -and -not (Test-Path $pythonExe)) {
-    Write-Host "  WARNING: no Python for tagger prefetch; tagger will download on first tag run" -ForegroundColor Yellow
+if ($SkipTaggerPrefetch) {
+    Write-Host "  Skipping tagger prefetch (-SkipTaggerPrefetch)" -ForegroundColor Yellow
+} elseif (-not (Test-Path $prefetchScript)) {
+    throw "prefetch script missing: $prefetchScript"
 } else {
     $env:HF_HOME = $hfHome
     $env:MIKAZUKI_TAGGER_MODELS_DIR = $taggerModelsDir
-    # pip writes progress to stderr; with $ErrorActionPreference Stop that aborts the build.
+    if (-not $env:HF_ENDPOINT) { $env:HF_ENDPOINT = "https://hf-mirror.com" }
+
+    $prefetchPython = $null
+    if (Test-Path $pythonExe) {
+        $prefetchPython = $pythonExe
+    } elseif (Test-Path (Join-Path $ProjectRoot "venv\Scripts\python.exe")) {
+        $prefetchPython = (Join-Path $ProjectRoot "venv\Scripts\python.exe")
+    } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+        $prefetchPython = (Get-Command python).Source
+    }
+
+    if (-not $prefetchPython) {
+        throw "No Python available for tagger prefetch (need embed python, venv, or PATH python)"
+    }
+
+    Write-Host "  Prefetch Python: $prefetchPython"
+
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $prefetchExit = 1
-    if (Get-Command python -ErrorAction SilentlyContinue) {
-        & python -m pip install -q huggingface_hub 2>&1 | Out-Null
-        & python $prefetchScript --hf-home $hfHome --tagger-models-dir $taggerModelsDir --if-missing
-        $prefetchExit = $LASTEXITCODE
-    } elseif (Test-Path $pythonExe) {
+    if ($prefetchPython -eq $pythonExe) {
         if (Test-Path $getPipPath) {
             Write-Host "  Bootstrapping pip in embedded Python..."
             & $pythonExe $getPipPath --no-warn-script-location 2>&1 | Out-Null
         }
-        & $pythonExe -s -m pip install -q huggingface_hub 2>&1 | Out-Null
-        & $pythonExe -s $prefetchScript --hf-home $hfHome --tagger-models-dir $taggerModelsDir --if-missing
-        $prefetchExit = $LASTEXITCODE
-    }
-    $ErrorActionPreference = $prevEap
-    if ($prefetchExit -ne 0) {
-        Write-Host "  WARNING: tagger prefetch failed; 7z may ship without offline tagger" -ForegroundColor Yellow
+        & $prefetchPython -s -m pip install -q huggingface_hub requests 2>&1 | Out-Null
+        & $prefetchPython -s $prefetchScript --hf-home $hfHome --tagger-models-dir $taggerModelsDir --if-missing
     } else {
-        Write-Host "  Cached under huggingface/hub/ and tagger-models/" -ForegroundColor Green
+        & $prefetchPython -m pip install -q huggingface_hub requests 2>&1 | Out-Null
+        & $prefetchPython $prefetchScript --hf-home $hfHome --tagger-models-dir $taggerModelsDir --if-missing
+    }
+    $prefetchExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+
+    if ($prefetchExit -ne 0) {
+        throw "tagger prefetch failed (exit $prefetchExit). Check HF network or retry with HF_ENDPOINT=https://hf-mirror.com"
+    }
+    Write-Host "  Cached under tagger-models/ (portable canonical path)" -ForegroundColor Green
+
+    $localTaggerDir = Join-Path $portableDir "tagger-models\wd14\wd14-convnextv2-v2"
+    $required = @("model.onnx", "selected_tags.csv")
+    foreach ($name in $required) {
+        if (-not (Test-Path (Join-Path $localTaggerDir $name))) {
+            throw "Default tagger missing in tagger-models after prefetch: $localTaggerDir\$name"
+        }
+    }
+
+    # Portable offline tagging resolves MIKAZUKI_TAGGER_MODELS_DIR first; drop HF hub duplicate.
+    $hubModel = Join-Path $portableDir "huggingface\hub\models--SmilingWolf--wd-v1-4-convnextv2-tagger-v2"
+    if (Test-Path $hubModel) {
+        Remove-Item $hubModel -Recurse -Force
+        Write-Host "  Removed HF hub duplicate (tagger-models is canonical)" -ForegroundColor Green
+    }
+
+    $embedSitePackages = Join-Path $pythonDir "Lib\site-packages"
+    if (Test-Path $embedSitePackages) {
+        Get-ChildItem $embedSitePackages -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "  Cleared build-time pip packages from python_embeded" -ForegroundColor Green
     }
 }
 
@@ -409,6 +502,15 @@ $updateBat += "exit /b %errorlevel%`r`n"
     (New-Object System.Text.UTF8Encoding $false)
 )
 
+$updateReleaseBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`n"
+$updateReleaseBat += "call `"%~dp0..\Update-SD-Trainer-Release.bat`" %*`r`n"
+$updateReleaseBat += "exit /b %errorlevel%`r`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $updateDir "update_from_release.bat"),
+    $updateReleaseBat,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
 $updateDepsBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ncd /d `"%~dp0..`"`r`n"
 $updateDepsBat += "echo Updating Python dependencies...`r`n"
 $updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu128`r`n"
@@ -442,7 +544,7 @@ Write-Host "  Created install_xformers.bat"
 
 # Root-level utility bat files
 $templateDir = Join-Path $PSScriptRoot "templates"
-foreach ($bat in @("Update-SD-Trainer.bat", "Download-Anima-Model.bat")) {
+foreach ($bat in @("Update-SD-Trainer.bat", "Update-SD-Trainer-Release.bat", "Download-Anima-Model.bat")) {
     $src = Join-Path $ProjectRoot $bat
     if (-not (Test-Path $src)) {
         $src = Join-Path $templateDir $bat
@@ -485,7 +587,10 @@ $readme += "  output/          - Training output`r`n"
 $readme += "  logs/            - Logs`r`n`r`n"
 $readme += "  tagger-models/   - Local tagger models`r`n`r`n"
 $readme += "Update:`r`n"
+$readme += "  Update-SD-Trainer.bat                - Git update (recommended if .git exists)`r`n"
+$readme += "  Update-SD-Trainer-Release.bat      - Download latest Release 7z and merge`r`n"
 $readme += "  update\update_sd_trainer.bat       - Shortcut to Update-SD-Trainer.bat`r`n"
+$readme += "  update\update_from_release.bat     - Shortcut to Update-SD-Trainer-Release.bat`r`n"
 $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`n"
 $readme += "Requirements:`r`n"
 $readme += "  - Windows 10/11 64-bit`r`n"

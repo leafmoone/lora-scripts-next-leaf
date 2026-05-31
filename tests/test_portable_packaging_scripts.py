@@ -55,3 +55,18 @@ def test_portable_builder_bundles_visible_tagger_models_directory():
     assert "tagger-models\\vlm" in script
     assert "--tagger-models-dir" in script
     assert "MIKAZUKI_TAGGER_MODELS_DIR" in launcher
+
+
+def test_portable_builder_bundles_dual_update_scripts():
+    script = (ROOT / "build-scripts" / "build_portable.ps1").read_text(
+        encoding="utf-8"
+    )
+    release_ps1 = (
+        ROOT / "scripts" / "portable" / "update_from_release.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "Update-SD-Trainer-Release.bat" in script
+    assert "update_from_release.bat" in script
+    assert "SD-Trainer-v*.7z" in release_ps1 or "SD-Trainer-v" in release_ps1
+    assert "extensions" in release_ps1
+    assert "config\\autosave" in release_ps1

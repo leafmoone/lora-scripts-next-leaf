@@ -20,6 +20,7 @@
   run_gui.bat
   run_gui_portable.bat
   Update-SD-Trainer.bat
+  Update-SD-Trainer-Release.bat
   Download-Anima-Model.bat
   install_xformers.bat
   python_embeded/
@@ -61,6 +62,8 @@ Anima LoRA **Fast 模式**使用可选插件 [`sorryhyun/anima_lora`](https://gi
 
 主 venv（`python_embeded`）仍负责标准 Kohya Anima LoRA / Finetune；Fast 训练**不**占用主 venv。
 
+**打标模型（v2.7.0+ 整合包）**：离线 WD 默认模型预置在 **`tagger-models/wd14/wd14-convnextv2-v2/`**（`MIKAZUKI_TAGGER_MODELS_DIR`），构建时不再把同体积 ONNX 重复打进 `huggingface/hub/`。用户训练用 HF 缓存仍走根目录 `huggingface/`。
+
 ## 子模块策略
 
 当前唯一子模块是：
@@ -99,7 +102,46 @@ sd-trainer-log.txt
 
 其中 `config/` 整体按用户目录处理。后续如果需要发布默认配置，应放在 `assets/defaults/` 或其他只读模板目录，启动时仅在目标不存在时复制到 `config/`，不能覆盖用户已有文件。
 
+## 双更新路径（Git + Release）
+
+整合包提供两种互补的更新方式：
+
+| 方式 | 入口 | 适用场景 |
+|------|------|----------|
+| **Git 更新**（原有） | `Update-SD-Trainer.bat`、`update\update_sd_trainer.bat` | 7z 内含 `SD-Trainer/.git`；网络可访问 Git；日常增量更新 |
+| **Release 更新**（新增） | `Update-SD-Trainer-Release.bat`、`update\update_from_release.bat` | 无 `.git` 的旧包；Git fetch 全部失败；希望与 GitHub Release 7z 完全对齐 |
+
+Release 更新实现：`SD-Trainer/scripts/portable/update_from_release.ps1`
+
+1. 通过 GitHub API 获取最新 `SD-Trainer-v*.7z` 资产
+2. 下载到 `update/.cache/`（含 ghfast / ghproxy 镜像回退）
+3. 7-Zip 解压到临时目录
+4. `robocopy` 合并 `SD-Trainer/`，排除用户数据目录
+5. 从 Release 包刷新根目录启动脚本与 `update/` 快捷方式
+
+**Release 合并时保留**（不覆盖）：
+
+```text
+sd-models/  output/  logs/  huggingface/  tagger-models/
+SD-Trainer/extensions/          # Anima Fast 插件（若已安装）
+SD-Trainer/config/autosave/
+SD-Trainer/output/  SD-Trainer/logs/
+SD-Trainer/.cache/
+```
+
+大版本升级后若 WebUI 启动失败，提示用户运行 `update\update_dependencies.bat`。
+
+打包前验收：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  .\SD-Trainer\scripts\portable\verify_portable_updaters.ps1 `
+  -PortableRoot .\build\SD-Trainer-Portable
+```
+
 ## 更新脚本流程
+
+### Git 更新（`Update-SD-Trainer.bat`）
 
 `Update-SD-Trainer.bat` 推荐流程：
 
@@ -107,7 +149,7 @@ sd-trainer-log.txt
 1. 定位 <PortableRoot>/SD-Trainer
 2. 如果不存在 SD-Trainer/.git：
    - 说明旧版发布包不能 git pull
-   - 引导下载最新 Release
+   - 引导使用 `Update-SD-Trainer-Release.bat` 或下载最新 Release
    - 不显示"更新完成"
 3. 检查 git 是否可用
 4. 提示用户先关闭 WebUI
@@ -195,14 +237,16 @@ fast-forward update failed
 
 发布前至少验证：
 
-- 纯旧 7z、无 `.git`：更新脚本给出下载新版提示并失败退出。
-- 新 7z、有 `.git`：更新脚本能拉取 `origin/main`。
-- **国内无代理网络**：直连失败后自动通过镜像成功拉取。
-- 工作区有用户数据：`sd-models/`、`output/`、`logs/`、`config/` 更新后不丢失。
-- 工作区有本地改动：更新脚本能 stash 或给出明确提示。
-- `dataset-tag-editor` 子模块更新失败：只 warning，不阻断主更新。
-- 更新后根目录 `run_gui.bat` 被刷新。
-- 更新后仍能启动 WebUI。
+- 运行 `scripts/portable/verify_portable_updaters.ps1 -PortableRoot <构建输出>` 全部 PASS
+- 纯旧 7z、无 `.git`：`Update-SD-Trainer.bat` 引导 Release 更新并失败退出；`Update-SD-Trainer-Release.bat` 可 `-DryRun` 探测 API
+- 新 7z、有 `.git`：`Update-SD-Trainer.bat` 能拉取 `origin/main`
+- **Release 更新**：下载 + 合并后 `VERSION` 更新，`sd-models/`、`extensions/anima_lora/`（若存在）未丢失
+- **国内无代理网络**：Git 直连失败后自动通过镜像成功拉取；Release 下载镜像回退可用
+- 工作区有用户数据：`sd-models/`、`output/`、`logs/`、`config/` 更新后不丢失
+- 工作区有本地改动：Git 更新脚本能 stash 或给出明确提示
+- `dataset-tag-editor` 子模块更新失败：只 warning，不阻断主更新
+- 更新后根目录 `run_gui.bat`、`Update-SD-Trainer-Release.bat` 被刷新
+- 更新后仍能启动 WebUI
 
 ## 后续清理
 

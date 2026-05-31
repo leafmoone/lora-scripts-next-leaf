@@ -64,7 +64,7 @@ Agent 内部操作说明（Token、Release、本机路径等）：`doc/local/AGE
 |------|------|
 | `scripts/portable/` | 整合包启动 |
 | `scripts/autodl/` | 云 GPU 运维 |
-| `scripts/cli/` | 旧式 CLI 训练 |
+| `scripts/cli/` | 命令行训练；**Anima Fast** 安装与 TOML 训练见 `install_anima_fast.*` / `train_anima_fast_by_toml.*` |
 | `legacy/` | 打标 / notebook 等上游工具 |
 | `doc/local/` | 本地交接与 Issue 草稿（不上传 GitHub）；`AGENT_INTERNAL.md` 放此处 |
 | `docs/team/` | 协作约定、[backlog 总表](team/backlog-priorities.md)、优先级草案、风险备忘录（维护者，不上主页） |

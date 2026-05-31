@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import json
+import sys
 from datetime import datetime, timezone
 
 
@@ -25,7 +26,9 @@ class ExtensionLayout:
 
     @property
     def venv_python(self) -> Path:
-        return self.root / ".venv" / "Scripts" / "python.exe"
+        if sys.platform == "win32":
+            return self.root / ".venv" / "Scripts" / "python.exe"
+        return self.root / ".venv" / "bin" / "python"
 
     @property
     def install_state(self) -> Path:

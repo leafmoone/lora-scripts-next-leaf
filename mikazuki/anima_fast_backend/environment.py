@@ -218,10 +218,14 @@ def _uv_command() -> str:
 def _find_base_python(plan: EnvironmentInstallPlan) -> Path:
     if plan.base_python.is_file():
         return plan.base_python
-    candidates = sorted(plan.python_install_dir.glob("cpython-3.13.*-windows-*/python.exe"), reverse=True)
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate.resolve()
+    patterns = ["cpython-3.13.*-windows-*/python.exe"]
+    if sys.platform != "win32":
+        patterns = ["cpython-3.13.*-linux*/bin/python3", "cpython-3.13.*-linux*/bin/python"]
+    for pattern in patterns:
+        candidates = sorted(plan.python_install_dir.glob(pattern), reverse=True)
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate.resolve()
     return plan.base_python
 
 

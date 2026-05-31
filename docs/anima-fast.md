@@ -95,6 +95,27 @@ extensions\anima_lora\.venv\Scripts\python.exe extensions\anima_lora\source\trai
 
 ---
 
+## 纯命令行（不打开 WebUI）
+
+适合手写 TOML、全程 CLI 的进阶用户。脚本在 **`scripts/cli/`**（不占用整合包根目录）：
+
+| 步骤 | Windows | Linux |
+|------|---------|-------|
+| 安装 Fast 插件 | `scripts\cli\install_anima_fast.bat` | `bash scripts/cli/install_anima_fast.sh` |
+| TOML 训练 | `scripts\cli\train_anima_fast_by_toml.bat <config.toml>` | `bash scripts/cli/train_anima_fast_by_toml.sh <config.toml>` |
+
+```powershell
+# 查看安装计划（不下载）
+scripts\cli\install_anima_fast.bat --dry-run
+
+# 安装完成后（与页内「开启插件」等价）
+scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast.toml
+```
+
+要求：**`uv` 在 PATH 中**、NVIDIA GPU、稳定网络。无本地 `anima_lora` 克隆时会自动克隆到 `.cache/anima_fast/upstream/`（commit 默认读 `config/anima_fast_backend.toml` 的 `source_commit`）。已有克隆可设 `ANIMA_LORA_ROOT` 或 `--source-root`。
+
+---
+
 ## 适用场景
 
 | | 标准模式 | Fast 模式（插件） |

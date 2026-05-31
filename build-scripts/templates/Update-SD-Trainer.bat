@@ -28,15 +28,20 @@ if not exist ".git\" (
     echo updated with git pull.
     echo 发布版 7z 整合包不包含 .git 信息，因此不能通过 git pull 原地更新。
     echo.
-    echo Please download the latest Release package, then keep/copy your data:
-    echo 请下载最新 Release 整合包，并保留/拷贝你的数据：
+    echo Try Update-SD-Trainer-Release.bat instead ^(downloads latest 7z^):
+    echo 可改用 Update-SD-Trainer-Release.bat ^(下载 Release 并原地合并^)：
+    echo   %PORTABLE_ROOT%Update-SD-Trainer-Release.bat
+    echo.
+    echo Or download the latest Release package manually, then keep/copy your data:
+    echo 或手动下载最新 Release 整合包，并保留/拷贝你的数据：
     echo   - sd-models\
     echo   - output\
     echo   - logs\
+    echo   - SD-Trainer\extensions\  ^(Anima Fast plugin, if installed^)
     echo   - config\autosave\  ^(if needed / 如需保留历史配置^)
     echo.
-    echo If you want git-based updates, clone the repository as source instead.
-    echo 如需使用 git 更新，请改用源码 clone 方式安装。
+    echo If you want git-based updates, use a package built with .git metadata.
+    echo 如需使用 git 更新，请使用带 .git 元数据的新版整合包。
     pause
     exit /b 1
 )
@@ -121,10 +126,12 @@ if %FETCH_OK% equ 0 (
     echo     如果你使用代理，请配置 git:
     echo       git config --global http.proxy http://127.0.0.1:PORT
     echo       git config --global https.proxy http://127.0.0.1:PORT
-    echo  3. Download latest Release manually / 手动下载最新整合包:
+    echo  3. Try Update-SD-Trainer-Release.bat / 尝试 Release 原地更新:
+    echo     %PORTABLE_ROOT%Update-SD-Trainer-Release.bat
+    echo  4. Or download latest Release manually / 或手动下载最新整合包:
     echo     https://github.com/wochenlong/lora-scripts-next/releases
-    echo  4. Keep your data: sd-models\, output\, logs\, config\
-    echo     保留你的数据后替换整合包
+    echo  5. Keep your data: sd-models\, output\, logs\, extensions\
+    echo     保留你的数据后替换或合并整合包
     echo.
     pause
     exit /b 1
