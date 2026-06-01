@@ -108,6 +108,7 @@
     const version = (await fetchVersion()) || versionFromScriptTag();
     if (!version) return;
     ensureChip(version);
+    setupMobileNav();
 
     let tries = 0;
     const retry = setInterval(function () {
@@ -117,6 +118,47 @@
 
     window.addEventListener("resize", scheduleReposition);
     window.addEventListener("scroll", scheduleReposition, true);
+  }
+
+  function setupMobileNav() {
+    const root = document.querySelector(".theme-container.no-navbar");
+    if (!root || document.querySelector(".sd-mobile-nav-toggle")) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sd-mobile-nav-toggle";
+    btn.setAttribute("aria-label", "打开导航菜单");
+    btn.setAttribute("aria-expanded", "false");
+    btn.textContent = "\u2630";
+    document.body.appendChild(btn);
+
+    const mask = root.querySelector(".sidebar-mask");
+
+    function closeNav() {
+      root.classList.remove("sidebar-open");
+      btn.setAttribute("aria-expanded", "false");
+      btn.setAttribute("aria-label", "打开导航菜单");
+    }
+
+    btn.addEventListener("click", function () {
+      if (root.classList.contains("sidebar-open")) {
+        closeNav();
+        return;
+      }
+      root.classList.add("sidebar-open");
+      btn.setAttribute("aria-expanded", "true");
+      btn.setAttribute("aria-label", "关闭导航菜单");
+    });
+
+    if (mask) {
+      mask.addEventListener("click", closeNav);
+    }
+
+    window.addEventListener("resize", function () {
+      if (window.innerWidth > 959) {
+        closeNav();
+      }
+    });
   }
 
   if (document.readyState === "loading") {
