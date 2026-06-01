@@ -5,7 +5,9 @@ import sys
 import webbrowser
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
+_VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
 
 from mikazuki.app.models import APIResponse
 from mikazuki.anima_fast_backend.launcher import build_launch_spec
@@ -18,6 +20,91 @@ from mikazuki.portable_utils import train_env_overrides
 
 def _truthy_env(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _loads_train_toml(text: str) -> Optional[dict]:
+    for loader_name in ("toml", "tomllib"):
+        try:
+            loader = __import__(loader_name)
+        except ModuleNotFoundError:
+            continue
+        try:
+            data = loader.loads(text)
+        except (ValueError, TypeError):
+            return None
+        return data if isinstance(data, dict) else None
+    return None
+
+
+def normalize_mixed_precision(value: Any) -> Optional[str]:
+    """Return accelerate-compatible mixed_precision or None when unset/invalid."""
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if not normalized or normalized in {"none", "null"}:
+        return None
+    if normalized in _VALID_ACCELERATE_MIXED_PRECISION:
+        return normalized
+    return None
+
+
+def read_mixed_precision_from_train_toml(toml_path: str) -> Optional[str]:
+    path = Path(toml_path)
+    if not path.is_file():
+        return None
+    try:
+        data = _loads_train_toml(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    if not data:
+        return None
+    return normalize_mixed_precision(data.get("mixed_precision"))
+
+
+def build_accelerate_train_command(
+    *,
+    trainer_file: str,
+    toml_path: str,
+    cpu_threads: int = 2,
+    gpu_ids: Optional[list] = None,
+) -> tuple[list[str], dict[str, str], Optional[str]]:
+    """Build accelerate launch argv and env for sd-scripts training."""
+    launch_opts = [
+        "--num_cpu_threads_per_process",
+        str(cpu_threads),
+        "--quiet",
+    ]
+    mixed_precision = read_mixed_precision_from_train_toml(toml_path)
+    if mixed_precision:
+        launch_opts.extend(["--mixed_precision", mixed_precision])
+
+    args = [
+        sys.executable,
+        "-m",
+        "accelerate.commands.launch",
+        *launch_opts,
+        trainer_file,
+        "--config_file",
+        toml_path,
+    ]
+
+    customize_env = os.environ.copy()
+    customize_env.update(train_env_overrides())
+    customize_env["ACCELERATE_DISABLE_RICH"] = "1"
+    customize_env["PYTHONUNBUFFERED"] = "1"
+    customize_env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::UserWarning"
+    customize_env["PYTHONNOUSERSITE"] = "1"
+
+    if gpu_ids:
+        customize_env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
+        if len(gpu_ids) > 1:
+            multi_gpu_args = ["--multi_gpu", "--num_processes", str(len(gpu_ids))]
+            if sys.platform == "win32":
+                customize_env["USE_LIBUV"] = "0"
+                multi_gpu_args = ["--rdzv_backend", "c10d", *multi_gpu_args]
+            args[3:3] = multi_gpu_args
+
+    return args, customize_env, mixed_precision
 
 
 def build_train_log_urls(task_id: str) -> dict:
@@ -66,30 +153,30 @@ def run_train(toml_path: str,
               gpu_ids: Optional[list] = None,
               cpu_threads: Optional[int] = 2):
     log.info(f"Training started with config file / 训练开始，使用配置文件: {toml_path}")
-    args = [
-        sys.executable, "-m", "accelerate.commands.launch",  # use -m to avoid python script executable error
-        "--num_cpu_threads_per_process", str(cpu_threads),  # cpu threads
-        "--quiet",  # silence accelerate error message
-        trainer_file,
-        "--config_file", toml_path,
-    ]
+    args, customize_env, mixed_precision = build_accelerate_train_command(
+        trainer_file=trainer_file,
+        toml_path=toml_path,
+        cpu_threads=cpu_threads or 2,
+        gpu_ids=gpu_ids,
+    )
 
-    customize_env = os.environ.copy()
-    customize_env.update(train_env_overrides())
-    customize_env["ACCELERATE_DISABLE_RICH"] = "1"
-    customize_env["PYTHONUNBUFFERED"] = "1"
-    customize_env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::UserWarning"
-    customize_env["PYTHONNOUSERSITE"] = "1"
+    if mixed_precision:
+        log.info(
+            "Accelerate launch mixed_precision=%s (from TOML); sd-scripts reads the same key "
+            "from --config_file. / Accelerate 与训练脚本均使用 mixed_precision=%s",
+            mixed_precision,
+            mixed_precision,
+        )
+    else:
+        log.warning(
+            "No mixed_precision in %s; accelerate launch may default to 'no'. "
+            "Set mixed_precision in the GUI (bf16/fp16). / 配置中未设置 mixed_precision，"
+            "Accelerate 可能默认为 no",
+            toml_path,
+        )
 
     if gpu_ids:
-        customize_env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
         log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
-
-        if len(gpu_ids) > 1:
-            args[3:3] = ["--multi_gpu", "--num_processes", str(len(gpu_ids))]
-            if sys.platform == "win32":
-                customize_env["USE_LIBUV"] = "0"
-                args[3:3] = ["--rdzv_backend", "c10d"]
 
     if not (task := tm.create_task(args, customize_env)):
         return APIResponse(status="error", message="Failed to create task / 无法创建训练任务")
