@@ -57,3 +57,15 @@ The referenced repository is licensed under the **MIT License** (Copyright (c) 2
 T-LoRA introduces dynamic rank adjustment based on diffusion timesteps and orthogonal initialization. Local files `networks/tlora.py` and `networks/tlora_anima.py` are adapted from the original implementation with modifications for Anima model integration within the sd-scripts training pipeline.
 
 **Paper**: Nikita Balagansky, Daniil Gavrilov. *T-LoRA: Timestep-Dependent Low-Rank Adaptation for Diffusion Models*. 2025.
+
+### EmoSens Optimizer
+
+The EmoSens optimizer is adapted from:
+
+- `muooon/EmoSens`: https://github.com/muooon/EmoSens
+
+Licensed under the **Apache License 2.0** (Copyright (c) muooon).
+
+EmoSens is an emotion-driven optimizer that generates autonomous learning rates via the emoPulse mechanism, analyzing loss fluctuations through multi-scale EMA. The implementation is in `vendor/sd-scripts/library/optimizers/emosens.py`.
+
+**Citation**: muooon. "emo series Optimizers: An emotion-driven optimizer that feels loss and navigates accordingly." DOI: 10.57967/hf/7738. https://github.com/muooon/EmoSens
