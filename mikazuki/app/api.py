@@ -48,6 +48,7 @@ from mikazuki.anima_fast_backend.preflight import run_preflight
 from mikazuki.anima_fast_backend.preview import apply_anima_fast_preview
 from mikazuki.anima_fast_backend.preprocess import prepare_anima_fast_dataset, user_left_resized_empty
 from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
+from mikazuki.anima_fast_backend.source_root import InstallSourceError, resolve_install_source_root
 from mikazuki.app.config import app_config
 from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
@@ -629,11 +630,21 @@ async def anima_lora_plugin_install(request: Request):
     if not feature_enabled():
         return _anima_fast_disabled_response()
     payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
-    source_root = Path(payload.get("source_root") or os.environ.get("ANIMA_LORA_ROOT") or (Path.cwd().parent / "anima_lora"))
     runtime = _anima_fast_runtime()
     source_commit = str(payload.get("source_commit") or runtime.source_commit or "").strip() or None
     dry_run = payload.get("dry_run", True) is not False
-    layout = default_layout(Path.cwd())
+    project_root = Path.cwd()
+    explicit = payload.get("source_root") or os.environ.get("ANIMA_LORA_ROOT")
+    try:
+        source_root = resolve_install_source_root(
+            project_root,
+            Path(explicit) if explicit else None,
+            source_commit,
+            allow_clone=False,
+        )
+    except InstallSourceError as exc:
+        return APIResponseFail(message=str(exc))
+    layout = default_layout(project_root)
     plan = build_install_plan(source_root, layout, dry_run=dry_run, source_commit=source_commit)
     data = {"plan": plan.as_dict()}
     if dry_run:

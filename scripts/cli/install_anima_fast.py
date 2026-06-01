@@ -5,11 +5,8 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import subprocess
 import sys
 from pathlib import Path
-
-UPSTREAM_REPO = "https://github.com/sorryhyun/anima_lora.git"
 
 
 def ensure_project_import_path(project_root: Path) -> None:
@@ -32,59 +29,19 @@ def find_project_root(start: Path | None = None) -> Path:
     )
 
 
-def _has_train_py(path: Path) -> bool:
-    return path.is_dir() and (path / "train.py").is_file()
-
-
-def ensure_upstream_clone(project_root: Path, target: Path, commit: str | None) -> Path:
-    target = target.resolve()
-    if _has_train_py(target):
-        if commit:
-            subprocess.run(["git", "-C", str(target), "fetch", "origin", commit, "--depth", "1"], check=False)
-            subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
-        return target
-
-    if target.exists() and any(target.iterdir()):
-        raise SystemExit(f"Upstream cache exists but is not a valid anima_lora checkout: {target}")
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    clone_cmd = ["git", "clone", "--depth", "1", UPSTREAM_REPO, str(target)]
-    if commit:
-        clone_cmd = ["git", "clone", UPSTREAM_REPO, str(target)]
-    print(f"[clone] {' '.join(clone_cmd)}")
-    subprocess.run(clone_cmd, check=True)
-    if commit:
-        subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
-    if not _has_train_py(target):
-        raise SystemExit(f"Cloned upstream missing train.py: {target}")
-    return target
-
-
 def resolve_source_root(project_root: Path, explicit: Path | None, source_commit: str | None) -> Path:
-    if explicit is not None:
-        explicit = explicit.resolve()
-        if not _has_train_py(explicit):
-            raise SystemExit(f"--source-root missing train.py: {explicit}")
-        return explicit
+    from mikazuki.anima_fast_backend.source_root import InstallSourceError, resolve_install_source_root
 
-    env_root = os.environ.get("ANIMA_LORA_ROOT", "").strip()
-    if env_root and _has_train_py(Path(env_root)):
-        return Path(env_root).resolve()
-
-    from mikazuki.anima_fast_backend.settings import discover_runtime
-
-    runtime = discover_runtime(lora_next_root=project_root)
-    candidate = runtime.anima_root
-    installed_source = (project_root / "extensions" / "anima_lora" / "source").resolve()
-    if candidate and _has_train_py(candidate) and candidate.resolve() != installed_source:
-        return candidate.resolve()
-
-    sibling = (project_root.parent / "anima_lora").resolve()
-    if _has_train_py(sibling):
-        return sibling
-
-    cache_root = project_root / ".cache" / "anima_fast" / "upstream"
-    return ensure_upstream_clone(project_root, cache_root, source_commit or runtime.source_commit)
+    try:
+        return resolve_install_source_root(
+            project_root,
+            explicit,
+            source_commit,
+            allow_clone=True,
+            log=print,
+        )
+    except InstallSourceError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:

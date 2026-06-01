@@ -104,11 +104,23 @@
     resizeTimer = setTimeout(positionChip, 80);
   }
 
+  function loadAnimaFastInstall() {
+    if (window.__ANIMA_FAST_INSTALL_GUARD__) return;
+    const existing = document.querySelector('script[src*="anima-fast-install.js"]');
+    if (existing) return;
+    const version = versionFromScriptTag() || "2.7.0";
+    const script = document.createElement("script");
+    script.src = "/assets/anima-fast-install.js?v=" + encodeURIComponent(version);
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   async function boot() {
     const version = (await fetchVersion()) || versionFromScriptTag();
     if (!version) return;
     ensureChip(version);
     setupMobileNav();
+    loadAnimaFastInstall();
 
     let tries = 0;
     const retry = setInterval(function () {
