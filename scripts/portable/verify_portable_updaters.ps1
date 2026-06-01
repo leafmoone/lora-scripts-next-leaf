@@ -48,6 +48,14 @@ if (Test-Path $ps1) {
     } else {
         $failures += "[FAIL] update_from_release.ps1 missing user-data exclusions"
     }
+    if ($content -match '/XO') {
+        $failures += "[FAIL] update_from_release.ps1 must not use /XO (breaks same-version republish)"
+    } else {
+        Write-Host '[OK] update_from_release.ps1 no /XO (same-version republish safe)'
+    }
+    if ($content -notmatch '/IS') {
+        $failures += "[FAIL] update_from_release.ps1 missing /IS force sync"
+    }
 }
 
 if (-not $SkipReleaseApi) {
