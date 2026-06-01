@@ -313,11 +313,46 @@ document.getElementById("tbLossControls").addEventListener("click", function(eve
   if (latestStatus) renderLossChart(latestStatus.metrics || {}, latestStatus);
 });
 
+function buildLogLossSeries(metrics) {
+  const raw = (metrics && metrics.loss_points) || [];
+  if (!raw.length) return [];
+  const points = raw.map(function(point) {
+    return { step: Number(point.step) || 0, value: Number(point.loss) };
+  }).filter(function(point) {
+    return Number.isFinite(point.step) && Number.isFinite(point.value);
+  });
+  if (!points.length) return [];
+  const values = points.map(function(point) { return point.value; });
+  return [{
+    tag: "avr_loss (log)",
+    name: "avr_loss from training log",
+    points: points,
+    latest: values[values.length - 1],
+    min: Math.min.apply(null, values),
+    max: Math.max.apply(null, values),
+    run: "stdout parse"
+  }];
+}
+
+function pickPrimaryLossSeries(series) {
+  const preferred = ["loss/average", "loss/current", "loss", "loss/epoch_average", "loss/epoch"];
+  for (let i = 0; i < preferred.length; i += 1) {
+    const match = series.find(function(item) { return item.tag === preferred[i]; });
+    if (match) return match;
+  }
+  return series[0];
+}
+
 function renderLossChart(metrics, status) {
   latestStatus = status;
   const summary = document.getElementById("lossSummary");
   const area = document.getElementById("tensorboardLossArea");
-  const series = (status && status.tensorboard_loss) || [];
+  let series = (status && status.tensorboard_loss) || [];
+  let usingLogFallback = false;
+  if (!series.length) {
+    series = buildLogLossSeries(metrics);
+    usingLogFallback = series.length > 0;
+  }
   const fallbackLoss = metrics && metrics.loss ? metrics.loss : "-";
 
   if (!series.length) {
@@ -333,10 +368,13 @@ function renderLossChart(metrics, status) {
     return;
   }
 
-  const latestAverage = series.find(function(item) { return item.tag === "loss/average"; }) || series[0];
-  summary.innerHTML = '<span>TensorBoard Loss：<strong>' + escapeHtml(fmtLoss(latestAverage.latest)) + '</strong></span>' +
+  const latestAverage = pickPrimaryLossSeries(series);
+  summary.innerHTML = '<span>' + (usingLogFallback ? "日志 Loss" : "TensorBoard Loss") + '：<strong>' +
+    escapeHtml(fmtLoss(latestAverage.latest)) + '</strong></span>' +
     '<span class="pill">' + escapeHtml(latestAverage.tag) + '</span>' +
-    '<span class="muted">真实 scalar 曲线，和 TensorBoard 同源</span>';
+    '<span class="muted">' + (usingLogFallback
+      ? "由训练日志解析的 avr_loss 曲线"
+      : "真实 scalar 曲线，和 TensorBoard 同源") + '</span>';
 
   area.className = "tb-loss-grid";
   const hasLearningRate = series.some(function(item) { return /^lr\//.test(item.tag); });

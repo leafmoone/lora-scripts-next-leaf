@@ -48,7 +48,20 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 PROGRESS_STALL_SECONDS = 120
 GPU_IDLE_MEMORY_MB = 512
 TASK_PROGRESS_STATE: dict[str, dict[str, float | int]] = {}
-TENSORBOARD_SCALAR_TAGS = ("loss/average", "loss/current", "loss/epoch_average", "lr/unet")
+TENSORBOARD_SCALAR_TAGS = (
+    "loss/average",
+    "loss/current",
+    "loss/epoch_average",
+    "loss",
+    "loss/epoch",
+    "lr/unet",
+    "lr/base",
+    "lr/self_attn",
+    "lr/cross_attn",
+    "lr/mlp",
+    "lr/mod",
+    "lr/llm_adapter",
+)
 TENSORBOARD_LOSS_LIMIT = 10000
 
 STRONG_ERROR_PATTERNS = [

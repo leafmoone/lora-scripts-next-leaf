@@ -186,6 +186,54 @@ class TrainMonitorStatusTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stdout.strip(), "True")
 
+    def test_parse_log_anima_finetune_extracts_loss_points(self):
+        lines = [
+            "steps:  10%|██        | 50/500 [01:23<12:34, avr_loss=0.0823]",
+            "steps:  20%|████      | 100/500 [02:46<11:04, avr_loss=0.0712]",
+        ]
+        metrics = server.parse_log(lines)
+        self.assertEqual(metrics["loss"], "0.0712")
+        self.assertGreaterEqual(len(metrics["loss_points"]), 2)
+        self.assertEqual(metrics["loss_points"][0]["step"], 50)
+
+    def test_tensorboard_scalar_tags_include_anima_finetune_loss(self):
+        self.assertIn("loss", server.TENSORBOARD_SCALAR_TAGS)
+        self.assertIn("loss/epoch", server.TENSORBOARD_SCALAR_TAGS)
+
+    def test_collect_status_exposes_log_loss_points_without_tensorboard(self):
+        log_lines = [
+            "accelerate launch scripts/dev/anima_train.py --config_file config/autosave/foo.toml",
+            "steps:  10%|██        | 10/100 [00:10<01:30, avr_loss=0.1234]",
+        ]
+
+        def fetch_gui_side_effect(path: str):
+            if path == "/train/tasks":
+                return (
+                    {"status": "success", "data": {"tasks": [{"id": "t1", "status": "RUNNING"}]}},
+                    "http://gui/api/train/tasks",
+                )
+            if path.startswith("/train/log/tail/"):
+                return (
+                    {"status": "success", "data": {"lines": log_lines, "done": False}},
+                    "http://gui/api/train/log/tail/t1",
+                )
+            raise AssertionError(f"unexpected path: {path}")
+
+        with mock.patch.object(server, "newest_preview_images", return_value=[]), \
+                mock.patch.object(server, "_training_output_dir", return_value=None), \
+                mock.patch.object(server, "latest_training_config", return_value={"model_train_type": "anima-finetune"}), \
+                mock.patch.object(server, "build_model_outputs", return_value={}), \
+                mock.patch.object(server, "_extract_train_params", return_value=[]), \
+                mock.patch.object(server, "tensorboard_loss_scalars", return_value=[]), \
+                mock.patch.object(server, "gpu_info", return_value={}), \
+                mock.patch.object(server, "gpu_memory_used_mb", return_value=None), \
+                mock.patch.object(server, "fetch_gui_json", side_effect=fetch_gui_side_effect):
+            status = server.collect_status()
+
+        self.assertEqual(status["model_type"], "Anima Finetune")
+        self.assertGreaterEqual(len(status["metrics"]["loss_points"]), 1)
+        self.assertEqual(status["tensorboard_loss"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
