@@ -84,6 +84,75 @@ def is_promopt_like(s):
     return False
 
 
+def normalize_sample_prompt_text(text: str) -> str:
+    """Collapse user-entered prompt fields to a single Kohya prompt line."""
+    if text is None:
+        return ""
+    return re.sub(r"\s+", " ", str(text).replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")).strip()
+
+
+def build_sample_prompt_line(
+    positive: str,
+    negative: str,
+    *,
+    width: int = 512,
+    height: int = 512,
+    cfg: float = 7.0,
+    steps: int = 24,
+    seed: int = 2333,
+    sampler: str | None = None,
+) -> str:
+    positive = normalize_sample_prompt_text(positive)
+    negative = normalize_sample_prompt_text(negative)
+    line = (
+        f"{positive} --n {negative} --w {width} --h {height} "
+        f"--l {cfg} --s {steps} --d {seed}"
+    )
+    if sampler:
+        line += f" --ss {normalize_sample_prompt_text(sampler)}"
+    return line
+
+
+def is_broken_multiline_sample_prompt(lines: list[str]) -> bool:
+    if len(lines) < 2:
+        return False
+    first = lines[0]
+    if any(token in first for token in (" --n", " --w", " --h", " --l", " --s", " --d")):
+        return False
+    rest = " ".join(lines[1:])
+    lowered = rest.lower()
+    return lowered.startswith("--n") or lowered.startswith("n ") or " --n" in lowered
+
+
+def normalize_sample_prompt_file_content(content: str) -> str:
+    lines = [
+        line.strip()
+        for line in content.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not lines:
+        return ""
+    if len(lines) == 1:
+        return normalize_sample_prompt_text(lines[0])
+    if is_broken_multiline_sample_prompt(lines):
+        return normalize_sample_prompt_text(" ".join(lines))
+    return "\n".join(normalize_sample_prompt_text(line) for line in lines)
+
+
+def normalize_sample_prompt_file(path: str) -> str:
+    prompt_path = os.path.abspath(path)
+    if not os.path.isfile(prompt_path):
+        return ""
+    with open(prompt_path, "r", encoding="utf-8") as handle:
+        original = handle.read()
+    normalized = normalize_sample_prompt_file_content(original)
+    if normalized != original.strip() and "\n" not in normalized:
+        with open(prompt_path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(normalized + "\n")
+        log.info(f"Normalized sample prompt file to single line: {prompt_path}")
+    return normalized
+
+
 def match_model_type_legacy(sig_content: bytes):
     if b"model.diffusion_model.double_blocks" in sig_content or b"double_blocks.0.img_attn.norm.query_norm.scale" in sig_content:
         return ModelType.FLUX
