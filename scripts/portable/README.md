@@ -31,6 +31,8 @@
 
 ## 更新脚本版本（排障）
 
+> 约定与历史变迁：[Discussion #73](https://github.com/wochenlong/lora-scripts-next/discussions/73)
+
 - `SD-Trainer/scripts/portable/UPDATER_VERSION`：更新器逻辑版本（改 `Update-*.bat` / `update_from_release.ps1` 时递增）
 - 运行 Git / Release 更新时，终端会打印 **当前 VERSION / PORTABLE_BUILD**、**线上 main / 最新 Release**、**本地与线上更新脚本版本**
 - **Bootstrap**：每次更新前先从 GitHub `main` 同步最新更新脚本（`bootstrap_portable_updaters.ps1`），再执行实际更新；极旧包会先 curl 引导脚本
