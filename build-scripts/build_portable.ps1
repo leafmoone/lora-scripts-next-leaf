@@ -562,13 +562,16 @@ Write-Host "  Created install_xformers.bat"
 
 # Root-level utility bat files
 $templateDir = Join-Path $PSScriptRoot "templates"
+$portableTemplateDir = Join-Path $sdtDir "scripts\portable\templates"
+New-Item -ItemType Directory -Path $portableTemplateDir -Force | Out-Null
 foreach ($bat in @("Update-SD-Trainer.bat", "Update-SD-Trainer-Release.bat", "Download-Anima-Model.bat")) {
-    $src = Join-Path $ProjectRoot $bat
+    $src = Join-Path $templateDir $bat
     if (-not (Test-Path $src)) {
-        $src = Join-Path $templateDir $bat
+        $src = Join-Path $ProjectRoot $bat
     }
     if (Test-Path $src) {
         Copy-Item $src -Destination (Join-Path $portableDir $bat)
+        Copy-Item $src -Destination (Join-Path $portableTemplateDir $bat)
         Write-Host "  Created $bat"
     }
 }

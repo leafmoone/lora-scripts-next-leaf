@@ -37,6 +37,18 @@ if (Test-Path $gitHead) {
     $failures += "[FAIL] SD-Trainer\.git\HEAD missing (git update will not work)"
 }
 
+$gitUpdater = Join-Path $PortableRoot "Update-SD-Trainer.bat"
+if (Test-Path $gitUpdater) {
+    $bat = Get-Content $gitUpdater -Raw
+    if ($bat -match 'Pulling latest code') {
+        $failures += "[FAIL] Update-SD-Trainer.bat is legacy (git pull without .git check); replace from Release or scripts\portable\templates"
+    } elseif ($bat -notmatch 'not exist "\.git\\"') {
+        $failures += "[FAIL] Update-SD-Trainer.bat missing .git pre-check"
+    } else {
+        Write-Host '[OK] Update-SD-Trainer.bat is current (not legacy pull-only)'
+    }
+}
+
 $ps1 = Join-Path $PortableRoot "SD-Trainer\scripts\portable\update_from_release.ps1"
 if (Test-Path $ps1) {
     $content = Get-Content $ps1 -Raw

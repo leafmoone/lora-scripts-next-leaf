@@ -203,6 +203,18 @@ if ($LASTEXITCODE -ge 8) {
     throw "robocopy failed with exit code $LASTEXITCODE"
 }
 
+$stagingGit = Join-Path $stagingTrainer ".git"
+$destGit = Join-Path $TrainerDir ".git"
+if (Test-Path $stagingGit) {
+    if (Test-Path $destGit) {
+        Remove-Item $destGit -Recurse -Force
+    }
+    Copy-Item $stagingGit $destGit -Recurse -Force
+    Write-Step "Synced SD-Trainer\.git from Release package"
+} else {
+    Write-Step "WARNING: Release package missing SD-Trainer\.git (Git update will not work)"
+}
+
 Write-Step ""
 Write-Step "Refreshing root launchers / 刷新根目录启动脚本..."
 $rootFiles = @(

@@ -36,6 +36,7 @@
 - 新增 **`SD-Trainer/PORTABLE_BUILD`**（git short SHA + `built_at` + version），便于对比是否已同步最新构建。
 - Release 更新后写入 **`config/.portable_release_sync.json`**（Release 资产 id / 更新时间）。
 - 修复 **`update_from_release.ps1`** PowerShell 字符串解析（尾随 `\`、方括号等导致脚本后半段未执行）。
+- Release 合并后**显式同步** `SD-Trainer/.git`；打包时写入 `scripts/portable/templates/Update-*.bat`，避免根目录仍为 v2.5 时代「仅 `git pull`、无 `.git` 检查仍显示完成」的旧脚本。
 
 #### Bug 修复（本重发包相对初版 7z 新增）
 

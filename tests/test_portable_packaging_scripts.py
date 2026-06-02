@@ -90,3 +90,12 @@ def test_portable_builder_writes_portable_build_metadata():
 
     assert "Write-PortableBuildMetadata" in script
     assert "PORTABLE_BUILD" in script
+    assert "scripts\\portable\\templates" in script
+
+
+def test_portable_git_updater_is_not_legacy_pull_only():
+    bat = (ROOT / "build-scripts" / "templates" / "Update-SD-Trainer.bat").read_text(
+        encoding="utf-8"
+    )
+    assert "Pulling latest code" not in bat
+    assert 'not exist ".git\\"' in bat

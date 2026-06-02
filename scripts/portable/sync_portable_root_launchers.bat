@@ -20,14 +20,16 @@ if exist "%SRC_PORTABLE%" (
     echo  Updated: %PORTABLE_ROOT%run_gui_portable.bat
 )
 
-set "SRC_UPDATE=%PORTABLE_ROOT%SD-Trainer\build-scripts\templates\Update-SD-Trainer.bat"
+set "SRC_UPDATE=%PORTABLE_ROOT%SD-Trainer\scripts\portable\templates\Update-SD-Trainer.bat"
+if not exist "%SRC_UPDATE%" set "SRC_UPDATE=%PORTABLE_ROOT%SD-Trainer\build-scripts\templates\Update-SD-Trainer.bat"
 if not exist "%SRC_UPDATE%" set "SRC_UPDATE=%PORTABLE_ROOT%Update-SD-Trainer.bat"
 if exist "%SRC_UPDATE%" (
     copy /Y "%SRC_UPDATE%" "%PORTABLE_ROOT%Update-SD-Trainer.bat" >nul
     echo  Updated: %PORTABLE_ROOT%Update-SD-Trainer.bat
 )
 
-set "SRC_UPDATE_REL=%PORTABLE_ROOT%SD-Trainer\build-scripts\templates\Update-SD-Trainer-Release.bat"
+set "SRC_UPDATE_REL=%PORTABLE_ROOT%SD-Trainer\scripts\portable\templates\Update-SD-Trainer-Release.bat"
+if not exist "%SRC_UPDATE_REL%" set "SRC_UPDATE_REL=%PORTABLE_ROOT%SD-Trainer\build-scripts\templates\Update-SD-Trainer-Release.bat"
 if not exist "%SRC_UPDATE_REL%" set "SRC_UPDATE_REL=%PORTABLE_ROOT%Update-SD-Trainer-Release.bat"
 if exist "%SRC_UPDATE_REL%" (
     copy /Y "%SRC_UPDATE_REL%" "%PORTABLE_ROOT%Update-SD-Trainer-Release.bat" >nul
