@@ -70,3 +70,23 @@ def test_portable_builder_bundles_dual_update_scripts():
     assert "SD-Trainer-v*.7z" in release_ps1 or "SD-Trainer-v" in release_ps1
     assert "extensions" in release_ps1
     assert "config\\autosave" in release_ps1
+
+
+def test_release_updater_forces_overwrite_for_same_version_republish():
+    release_ps1 = (
+        ROOT / "scripts" / "portable" / "update_from_release.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "/XO" not in release_ps1
+    assert "/IS" in release_ps1
+    assert "portable_release_sync" in release_ps1
+    assert "PORTABLE_BUILD" in release_ps1
+
+
+def test_portable_builder_writes_portable_build_metadata():
+    script = (ROOT / "build-scripts" / "build_portable.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Write-PortableBuildMetadata" in script
+    assert "PORTABLE_BUILD" in script

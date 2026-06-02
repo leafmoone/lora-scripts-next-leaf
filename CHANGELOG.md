@@ -26,6 +26,36 @@
 
 - `LORA_ENABLE_ANIMA_FAST=1`（默认开启 Fast 入口；设为 `0` 可隐藏侧栏与 API）。
 
+### v2.7.0 整合包热更新 — 2026-06-01
+
+> 同 tag **v2.7.0** 重发 7z（`PORTABLE_BUILD` **`18e15cc`**，约 **381.6 MB**）。初版 Release 7z 为 `7841f19` 前后构建，不含下列修复。
+
+#### 整合包 / 更新器
+
+- **同 VERSION 重发无法更新**：Release 合并去掉 `robocopy /XO`，改用 `/IS /IT`，确保重发 7z 能覆盖本地较新的文件时间戳。
+- 新增 **`SD-Trainer/PORTABLE_BUILD`**（git short SHA + `built_at` + version），便于对比是否已同步最新构建。
+- Release 更新后写入 **`config/.portable_release_sync.json`**（Release 资产 id / 更新时间）。
+- 修复 **`update_from_release.ps1`** PowerShell 字符串解析（尾随 `\`、方括号等导致脚本后半段未执行）。
+
+#### Bug 修复（本重发包相对初版 7z 新增）
+
+- **#66** Anima Fast：SPA 进入 Fast 页侧栏「开启插件」、安装报 `Anima source root does not exist`、CLI 安装后一直「检查中」；统一 `source_root` / 安装前 clone 逻辑。
+- **#71** SDXL LoRA 使用 State resume 报 `KeyError: 'step'`；将 accelerate resume step fallback port 到 `scripts/stable/`。
+- **#70** 训练页移动端布局堆叠与导航折叠按钮。
+- **#69** 预览图 multiline sample prompt 文件合并修复。
+- **#68** Anima Finetune 训练监控 Loss 曲线显示。
+- **训练**：`mixed_precision` 从 TOML 正确转发到 accelerate launch。
+
+#### 升级指引
+
+| 场景 | 操作 |
+|------|------|
+| 已装 **初版 v2.7.0 整合包** | **`Update-SD-Trainer-Release.bat`**（推荐）或 **`Update-SD-Trainer.bat`**（Git 快进；有本地差异时会自动 stash） |
+| 从 v2.5.x / v2.6.x | 保留 `sd-models/`、`output/`、`logs/`、`SD-Trainer/extensions/`，解压新版或 Release 更新 |
+| 无 `.git` 的旧包 | 必须用 **Release 更新** 或下载本 7z |
+
+更新后确认 **`SD-Trainer/PORTABLE_BUILD`** 第一行为 **`18e15cc`**。
+
 ---
 
 ## v2.6.0 — 2026-05-28

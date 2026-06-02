@@ -519,6 +519,11 @@ def start_install_task(
 
         try:
             log("[start] Anima Fast plugin installation")
+            from .source_root import ensure_install_source_ready
+
+            plan.source_root = ensure_install_source_ready(
+                plan.project_root, plan.source_root, plan.source_commit, log=log
+            )
             result = install_environment(plan, log)
             task.metadata["audit"] = result.as_dict()
             task.finish_log_only(0 if result.ok else 1, None if result.ok else "; ".join(result.errors))

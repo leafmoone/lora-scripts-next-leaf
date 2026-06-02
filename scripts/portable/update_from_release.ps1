@@ -39,6 +39,37 @@ function Invoke-Download([string]$Url, [string]$Destination) {
     }
 }
 
+function Get-ReleaseSyncState([string]$TrainerDir) {
+    $path = Join-Path $TrainerDir "config\.portable_release_sync.json"
+    if (-not (Test-Path $path)) { return $null }
+    try {
+        return Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Set-ReleaseSyncState([string]$TrainerDir, [object]$Asset) {
+    $path = Join-Path $TrainerDir "config\.portable_release_sync.json"
+    $dir = Split-Path $path -Parent
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $payload = @{
+        asset_id = "$($Asset.id)"
+        asset_name = "$($Asset.name)"
+        asset_updated_at = "$($Asset.updated_at)"
+        synced_at = (Get-Date).ToUniversalTime().ToString("o")
+    }
+    $payload | ConvertTo-Json | Set-Content $path -Encoding UTF8
+}
+
+function Read-PortableBuild([string]$TrainerDir) {
+    $path = Join-Path $TrainerDir "PORTABLE_BUILD"
+    if (-not (Test-Path $path)) { return "" }
+    return ((Get-Content $path -TotalCount 1 -ErrorAction SilentlyContinue) -join "").Trim()
+}
+
 function Get-ReleaseAsset {
     param(
         [string]$Repository,
@@ -77,16 +108,30 @@ $versionFile = Join-Path $TrainerDir "VERSION"
 if (Test-Path $versionFile) {
     $currentVersion = (Get-Content $versionFile -TotalCount 1).Trim()
 }
+$currentBuild = Read-PortableBuild $TrainerDir
+$releaseTag = $asset.name -replace '\.7z$','' -replace '^SD-Trainer-v','v'
+$syncState = Get-ReleaseSyncState $TrainerDir
 
-Write-Step "Release tag / 发布标签: $($asset.name -replace '\.7z$','' -replace '^SD-Trainer-v','v')"
+Write-Step "Release tag / 发布标签: $releaseTag"
 Write-Step "Current VERSION / 当前版本: $(if ($currentVersion) { $currentVersion } else { '(unknown)' })"
+if ($currentBuild) {
+    Write-Step "Current PORTABLE_BUILD / 当前构建: $currentBuild"
+}
+Write-Step "Release asset updated / 资产更新时间: $($asset.updated_at)"
+if ($syncState -and $syncState.asset_id -eq ([string]$asset.id) -and $syncState.asset_updated_at -eq ([string]$asset.updated_at)) {
+    Write-Step 'Release asset unchanged since last sync - will re-download and merge anyway.'
+}
 Write-Step "Asset URL: $($asset.browser_download_url)"
 
 if ($DryRun) {
     $sevenZip = Resolve-SevenZip
-    Write-Step "[DryRun] 7-Zip: $(if ($sevenZip) { $sevenZip } else { 'NOT FOUND' })"
-    Write-Step "[DryRun] OK — release metadata reachable."
-    exit 0
+    if ($sevenZip) {
+        Write-Step "DryRun: 7-Zip found at $sevenZip"
+    } else {
+        Write-Step "DryRun: 7-Zip NOT FOUND"
+    }
+    Write-Step "DryRun: release metadata reachable."
+    return
 }
 
 $sevenZip = Resolve-SevenZip
@@ -149,7 +194,7 @@ Write-Step "Merging SD-Trainer / 合并项目文件（保留用户数据）..."
 $robocopyArgs = @(
     $stagingTrainer,
     $TrainerDir,
-    "/E", "/XO", "/R:2", "/W:2", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS",
+    "/E", "/IS", "/IT", "/R:2", "/W:2", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS",
     "/XD", "extensions", ".cache", "__pycache__", "node_modules", ".vscode", ".cursor",
     "/XD", "config\autosave", "output", "logs"
 )
@@ -186,6 +231,8 @@ $newVersion = ""
 if (Test-Path (Join-Path $stagingTrainer "VERSION")) {
     $newVersion = (Get-Content (Join-Path $stagingTrainer "VERSION") -TotalCount 1).Trim()
 }
+$newBuild = Read-PortableBuild $stagingTrainer
+Set-ReleaseSyncState -TrainerDir $TrainerDir -Asset $asset
 
 Write-Step ""
 Write-Step "========================================"
@@ -194,14 +241,22 @@ Write-Step "========================================"
 if ($newVersion) {
     Write-Step "  New VERSION / 新版本: $newVersion"
 }
+if ($newBuild) {
+    Write-Step "  New PORTABLE_BUILD / 新构建: $newBuild"
+}
+if ($newVersion -and $currentVersion -and $newVersion -eq $currentVersion -and $newBuild -and $newBuild -ne $currentBuild) {
+    Write-Step ""
+    Write-Step "Same VERSION but newer build synced (hotfix republish)."
+    Write-Step 'Same VERSION hotfix republish synced.'
+}
 Write-Step ""
-Write-Step "Preserved / 已保留:"
-Write-Step "  sd-models\  output\  logs\  huggingface\  tagger-models\"
-Write-Step "  SD-Trainer\extensions\  (Anima Fast plugin, if installed)"
+Write-Step 'Preserved / user data kept:'
+Write-Step '  sd-models\  output\  logs\  huggingface\  tagger-models\'
+Write-Step '  SD-Trainer\extensions\  (Anima Fast plugin, if installed)'
 Write-Step ""
-if ($newVersion -and $currentVersion -and $newVersion -ne $currentVersion) {
-    Write-Step "If WebUI fails to start, run update\update_dependencies.bat"
-    Write-Step "WebUI startup failed? Run update\update_dependencies.bat to sync deps."
+if ($newVersion -and $currentVersion -and ($newVersion -ne $currentVersion -or ($newBuild -and $newBuild -ne $currentBuild))) {
+    Write-Step 'If WebUI fails to start, run update\update_dependencies.bat'
+    Write-Step 'WebUI startup failed? Run update\update_dependencies.bat to sync deps.'
 }
 
 exit 0

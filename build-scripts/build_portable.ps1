@@ -89,6 +89,23 @@ function Clone-SDTrainerGitMetadata {
     }
 }
 
+function Write-PortableBuildMetadata {
+    param(
+        [string]$TrainerDir,
+        [string]$Version
+    )
+    $sha = (& git -C $ProjectRoot rev-parse --short HEAD 2>$null | Select-Object -First 1)
+    if ($sha) { $sha = $sha.Trim() } else { $sha = "unknown" }
+    $utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $path = Join-Path $TrainerDir "PORTABLE_BUILD"
+    @(
+        $sha
+        "built_at=$utc"
+        "version=$Version"
+    ) | Set-Content $path -Encoding UTF8
+    Write-Host "  Wrote PORTABLE_BUILD ($sha)"
+}
+
 function Resolve-TaggerCacheSource {
     param(
         [string]$Explicit,
@@ -375,6 +392,7 @@ foreach ($file in $copyFiles) {
     }
 }
 Clone-SDTrainerGitMetadata -Destination $portableDir
+Write-PortableBuildMetadata -TrainerDir $sdtDir -Version $Version
 Write-Host "  Copied root files"
 Write-Host "  Done" -ForegroundColor Green
 

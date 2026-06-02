@@ -6,6 +6,7 @@ import os
 import random
 
 from .adapter import AdapterError, is_empty
+from mikazuki.utils.train_utils import build_sample_prompt_line as build_kohya_sample_prompt_line
 
 DEFAULT_SAMPLE_POSITIVE = (
     "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looki"
@@ -78,13 +79,16 @@ def build_sample_prompt_line(config: dict) -> str:
     steps = config.get("sample_steps", 40)
     sampler = str(config.get("sample_sampler") or "euler").strip()
 
-    line = (
-        f"{positive} --n {negative} --w {width} --h {height} "
-        f"--l {cfg} --s {steps} --d {seed}"
+    return build_kohya_sample_prompt_line(
+        positive,
+        negative,
+        width=width,
+        height=height,
+        cfg=cfg,
+        steps=steps,
+        seed=seed,
+        sampler=sampler,
     )
-    if sampler:
-        line += f" --ss {sampler}"
-    return line
 
 
 def apply_anima_fast_preview(config: dict, autosave_dir: str, run_id: str) -> list[str]:

@@ -259,8 +259,19 @@ echo.
 if exist "VERSION" (
     set /p CURRENT_VER=<VERSION
     echo   Current version / 当前版本: !CURRENT_VER!
-    echo.
 )
+for /f "tokens=*" %%h in ('git rev-parse --short HEAD 2^>nul') do set "GIT_HEAD=%%h"
+if defined GIT_HEAD (
+    echo   Git commit / 提交: !GIT_HEAD!
+)
+if exist "PORTABLE_BUILD" (
+    set /p PORTABLE_BUILD=<PORTABLE_BUILD
+    echo   PORTABLE_BUILD / 构建标识: !PORTABLE_BUILD!
+)
+echo.
+echo   Same VERSION hotfix republish? Use Update-SD-Trainer-Release.bat
+echo   同 VERSION 重发修复包请用 Update-SD-Trainer-Release.bat
+echo.
 
 pause
 exit /b 0

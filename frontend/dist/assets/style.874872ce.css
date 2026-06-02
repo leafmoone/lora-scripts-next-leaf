@@ -79,6 +79,102 @@
   }
 }
 
+/* ----- Mobile / narrow: stack training columns, release sidebar gutter ----- */
+@media (max-width: 959px) {
+  .theme-container.no-navbar {
+    --sidebar-width: 0px;
+  }
+
+  .theme-container.no-navbar .example-container {
+    padding-left: 0;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .theme-container.no-navbar .example-container > .schema-container,
+  .theme-container.no-navbar .example-container > .right-container {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .theme-container.no-navbar .example-container > .right-container {
+    flex: 0 0 auto;
+    border-left: none;
+    border-top: 1px solid var(--c-border, #e4e7ed);
+  }
+
+  .theme-container.no-navbar .example-container .schema-container form {
+    padding: 1.25rem 1rem;
+  }
+
+  .theme-container.no-navbar .example-container > .right-container section .params-section .el-scrollbar__wrap {
+    max-height: min(40vh, 320px) !important;
+  }
+
+  .theme-container.no-navbar .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(18.5rem, 88vw);
+    height: 100vh;
+    z-index: 11;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
+
+  .theme-container.no-navbar.sidebar-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.12);
+  }
+
+  .theme-container.no-navbar.sidebar-open .sidebar-mask {
+    display: block;
+    z-index: 10;
+  }
+}
+
+.sd-mobile-nav-toggle {
+  display: none;
+}
+
+@media (max-width: 959px) {
+  .theme-container.no-navbar .sd-mobile-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0.65rem;
+    left: 0.65rem;
+    z-index: 12;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid var(--c-border, #e4e7ed);
+    border-radius: var(--sd-radius-md, 10px);
+    background: color-mix(in srgb, var(--c-bg-mute, #fff) 92%, transparent);
+    color: var(--c-text, #303133);
+    font-size: 1.25rem;
+    line-height: 1;
+    box-shadow: var(--sd-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+    cursor: pointer;
+  }
+
+  .theme-container.no-navbar.sidebar-open .sd-mobile-nav-toggle {
+    left: min(calc(18.5rem + 0.5rem), calc(88vw + 0.5rem));
+  }
+}
+
+html.dark .theme-container.no-navbar .sd-mobile-nav-toggle {
+  background: color-mix(in srgb, var(--c-bg-mute, #252529) 92%, transparent);
+  border-color: var(--c-border, #3d444d);
+  color: var(--c-text, #e8eaed);
+}
+
 /* ----- Sidebar：三级信息层级（分组 > 入口 > 子页） ----- */
 .sidebar .sidebar-item {
   border-radius: var(--sd-radius-md);
