@@ -24,6 +24,9 @@
     更新日志: "Changelog",
     终端: "Terminal",
     训练终端: "Training Terminal",
+    全部: "All",
+    部署: "Deploy",
+    系统: "System",
     训练监控: "Train Monitor",
     "自动端口 · 实时日志": "Auto port · Live logs",
     "DiT · 主推": "DiT · Recommended",
@@ -66,8 +69,10 @@
   let terminalTrainEs = null;
   let terminalInstallTaskId = "";
   let terminalTrainTaskId = "";
-  const terminalLogStore = { install: [], train: [] };
+  const terminalLogStore = { items: [] };
   const terminalMetricStore = { epoch: "--", speed: "--" };
+  let terminalFilter = "all";
+  let terminalHintInstallTaskId = "";
 
   function normalize(text) {
     return (text || "").replace(/\s+/g, " ").trim();
@@ -233,19 +238,20 @@
   color: #4f46e5;
   background: rgba(79, 70, 229, 0.12);
 }
-#${TERMINAL_PANEL_ID} .sd-terminal-tabs {
+#${TERMINAL_PANEL_ID} .sd-terminal-filters {
   display: flex;
   gap: 8px;
 }
-#${TERMINAL_PANEL_ID} .sd-terminal-tab {
+#${TERMINAL_PANEL_ID} .sd-filter-chip {
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: 999px;
+  padding: 4px 10px;
   cursor: pointer;
   background: #fff;
   color: #475569;
+  font-size: 12px;
 }
-#${TERMINAL_PANEL_ID} .sd-terminal-tab.active {
+#${TERMINAL_PANEL_ID} .sd-filter-chip.active {
   border-color: #6366f1;
   color: #3730a3;
   background: #eef2ff;
@@ -304,12 +310,6 @@
   font-size: 12px;
   margin-bottom: 6px;
 }
-#${TERMINAL_PANEL_ID} .sd-terminal-pane {
-  display: none;
-}
-#${TERMINAL_PANEL_ID} .sd-terminal-pane.active {
-  display: block;
-}
 #${TERMINAL_PANEL_ID} .sd-terminal-shell {
   border: 1px solid #1f2937;
   border-radius: 12px;
@@ -343,8 +343,8 @@
 }
 #${TERMINAL_PANEL_ID} .sd-terminal-log {
   margin: 0;
-  min-height: 360px;
-  max-height: 58vh;
+  min-height: 420px;
+  max-height: 62vh;
   overflow: auto;
   padding: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -358,6 +358,10 @@
 }
 #${TERMINAL_PANEL_ID} .sd-log-line + .sd-log-line {
   margin-top: 2px;
+}
+#${TERMINAL_PANEL_ID} .sd-log-prefix {
+  color: #94a3b8;
+  margin-right: 6px;
 }
 #${TERMINAL_PANEL_ID} .sd-log-level-success { color: #4ade80; }
 #${TERMINAL_PANEL_ID} .sd-log-level-warn { color: #facc15; }
@@ -409,9 +413,11 @@
     <span class="sd-terminal-title-sub">Workspace</span>
     <span class="sd-terminal-meta" data-terminal-global-status>空闲</span>
   </div>
-  <div class="sd-terminal-tabs">
-    <button class="sd-terminal-tab active" data-terminal-tab="install">环境部署</button>
-    <button class="sd-terminal-tab" data-terminal-tab="train">训练日志</button>
+  <div class="sd-terminal-filters">
+    <button class="sd-filter-chip active" data-terminal-filter="all">全部</button>
+    <button class="sd-filter-chip" data-terminal-filter="train">训练</button>
+    <button class="sd-filter-chip" data-terminal-filter="deploy">部署</button>
+    <button class="sd-filter-chip" data-terminal-filter="system">系统</button>
   </div>
 </div>
 <div class="sd-terminal-body">
@@ -425,34 +431,28 @@
     <div class="sd-summary-item"><b>当前模型</b><code data-terminal-summary="model">--</code></div>
     <div class="sd-summary-item"><b>训练配置</b><code data-terminal-summary="config">--</code></div>
   </div>
-  <div class="sd-terminal-pane active" data-terminal-pane="install">
-    <div class="sd-terminal-actions">
-      <button type="button" data-terminal-export="install">导出日志</button>
-      <button type="button" data-terminal-clear="install">清空</button>
-    </div>
-    <div class="sd-terminal-meta" data-terminal-install-meta>等待安装任务...</div>
-    <div class="sd-terminal-shell">
-      <div class="sd-shell-bar"><div class="sd-shell-dots"><span></span><span></span><span></span></div><span class="sd-shell-title">anima-fast-install.log</span></div>
-      <div class="sd-terminal-log" data-terminal-log="install"></div>
-    </div>
+  <div class="sd-terminal-actions">
+    <button type="button" data-terminal-export>导出日志</button>
+    <button type="button" data-terminal-clear>清空</button>
   </div>
-  <div class="sd-terminal-pane" data-terminal-pane="train">
-    <div class="sd-terminal-actions">
-      <button type="button" data-terminal-export="train">导出日志</button>
-      <button type="button" data-terminal-clear="train">清空</button>
-    </div>
-    <div class="sd-terminal-meta" data-terminal-train-meta>等待训练任务...</div>
-    <div class="sd-terminal-shell">
-      <div class="sd-shell-bar"><div class="sd-shell-dots"><span></span><span></span><span></span></div><span class="sd-shell-title">train.log</span></div>
-      <div class="sd-terminal-log" data-terminal-log="train"></div>
-    </div>
+  <div class="sd-terminal-meta" data-terminal-install-meta>部署任务：等待中...</div>
+  <div class="sd-terminal-meta" data-terminal-train-meta>训练任务：等待中...</div>
+  <div class="sd-terminal-shell">
+    <div class="sd-shell-bar"><div class="sd-shell-dots"><span></span><span></span><span></span></div><span class="sd-shell-title">unified-train-console.log</span></div>
+    <div class="sd-terminal-log" data-terminal-log="unified"></div>
   </div>
 </div>`;
       host.appendChild(panel);
     }
+    if (!terminalHintInstallTaskId) {
+      const params = new URLSearchParams(location.search || "");
+      if (params.get("focus") === "deploy") {
+        terminalFilter = "deploy";
+      }
+      terminalHintInstallTaskId = params.get("task_id") || params.get("source_task") || "";
+    }
     bindTerminalPanelEvents();
-    renderTerminalLog("install");
-    renderTerminalLog("train");
+    renderTerminalLog();
     if (!terminalPollTimer) {
       refreshTerminalPanel();
       terminalPollTimer = setInterval(refreshTerminalPanel, 2000);
@@ -487,36 +487,46 @@
     }
   }
 
-  function renderTerminalLog(kind) {
-    const box = document.querySelector(`[data-terminal-log="${kind}"]`);
+  function sourceLabel(source) {
+    if (source === "train") return "训练";
+    if (source === "deploy") return "部署";
+    return "系统";
+  }
+
+  function sourceAllowed(source) {
+    if (terminalFilter === "all") return true;
+    return source === terminalFilter;
+  }
+
+  function renderTerminalLog() {
+    const box = document.querySelector(`[data-terminal-log="unified"]`);
     if (!box) return;
-    const lines = terminalLogStore[kind] || [];
-    if (lines.length === 0) {
+    const items = (terminalLogStore.items || []).filter((item) => sourceAllowed(item.source));
+    if (items.length === 0) {
       box.innerHTML = `<div class="sd-log-empty">暂无日志，等待任务启动...</div>`;
       return;
     }
-    const html = lines
-      .map((line) => {
-        const level = classifyLogLevel(line);
-        return `<div class="sd-log-line sd-log-level-${level}">${escapeHtml(line)}</div>`;
+    const html = items
+      .map((item) => {
+        const level = classifyLogLevel(item.text);
+        return `<div class="sd-log-line sd-log-level-${level}"><span class="sd-log-prefix">[${sourceLabel(item.source)}]</span>${escapeHtml(item.text)}</div>`;
       })
       .join("");
     box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
   }
 
-  function appendTerminalLog(kind, text) {
+  function appendTerminalLog(source, text) {
     if (!text) return;
     const lines = String(text).split(/\r?\n/).filter(Boolean);
-    if (!terminalLogStore[kind]) terminalLogStore[kind] = [];
     lines.forEach((line) => {
-      terminalLogStore[kind].push(line);
-      if (kind === "train") updateMetricFromLine(line);
+      terminalLogStore.items.push({ source, text: line });
+      if (source === "train") updateMetricFromLine(line);
     });
-    if (terminalLogStore[kind].length > 2400) {
-      terminalLogStore[kind] = terminalLogStore[kind].slice(-2000);
+    if (terminalLogStore.items.length > 2800) {
+      terminalLogStore.items = terminalLogStore.items.slice(-2200);
     }
-    renderTerminalLog(kind);
+    renderTerminalLog();
   }
 
   function setTerminalMeta(kind, text) {
@@ -532,51 +542,50 @@
     return j && j.data ? j.data : {};
   }
 
-  async function fillLogTail(taskId, kind) {
+  async function fillLogTail(taskId, source) {
     try {
       const data = await fetchJson(`/api/train/log/tail/${encodeURIComponent(taskId)}?limit=160`);
-      terminalLogStore[kind] = [];
-      (data.lines || []).forEach((line) => appendTerminalLog(kind, line));
+      (data.lines || []).forEach((line) => appendTerminalLog(source, line));
     } catch (_) {
-      appendTerminalLog(kind, "[warn] 无法读取历史日志");
+      appendTerminalLog("system", "[warn] 无法读取历史日志");
     }
   }
 
-  async function connectTerminalStream(kind, taskId, installAlias) {
+  async function connectTerminalStream(source, taskId, installAlias) {
     if (!taskId) return;
-    if (kind === "install" && terminalInstallTaskId === taskId && terminalInstallEs) return;
-    if (kind === "train" && terminalTrainTaskId === taskId && terminalTrainEs) return;
+    if (source === "deploy" && terminalInstallTaskId === taskId && terminalInstallEs) return;
+    if (source === "train" && terminalTrainTaskId === taskId && terminalTrainEs) return;
 
     const streamUrl = installAlias
       ? `/api/plugins/anima-lora/install/log/stream/${encodeURIComponent(taskId)}`
       : `/api/train/log/stream/${encodeURIComponent(taskId)}`;
-    await fillLogTail(taskId, kind);
+    await fillLogTail(taskId, source);
 
     if (!window.EventSource) {
-      appendTerminalLog(kind, "[warn] 当前浏览器不支持实时日志流");
+      appendTerminalLog("system", "[warn] 当前浏览器不支持实时日志流");
       return;
     }
-    if (kind === "install" && terminalInstallEs) terminalInstallEs.close();
-    if (kind === "train" && terminalTrainEs) terminalTrainEs.close();
+    if (source === "deploy" && terminalInstallEs) terminalInstallEs.close();
+    if (source === "train" && terminalTrainEs) terminalTrainEs.close();
 
     const es = new EventSource(streamUrl);
     es.onmessage = function (e) {
       try {
         const payload = JSON.parse(e.data);
-        if (payload.text) appendTerminalLog(kind, payload.text);
-        if (payload.done) appendTerminalLog(kind, "[done] 任务日志流结束");
+        if (payload.text) appendTerminalLog(source, payload.text);
+        if (payload.done) appendTerminalLog("system", `[done] ${source === "deploy" ? "部署" : "训练"}日志流结束`);
       } catch (_) {
-        appendTerminalLog(kind, e.data);
+        appendTerminalLog(source, e.data);
       }
     };
     es.onerror = function () {
-      appendTerminalLog(kind, "[warn] 日志流断开");
+      appendTerminalLog("system", `[warn] ${source === "deploy" ? "部署" : "训练"}日志流断开`);
       es.close();
-      if (kind === "install") terminalInstallEs = null;
-      if (kind === "train") terminalTrainEs = null;
+      if (source === "deploy") terminalInstallEs = null;
+      if (source === "train") terminalTrainEs = null;
     };
 
-    if (kind === "install") {
+    if (source === "deploy") {
       terminalInstallTaskId = taskId;
       terminalInstallEs = es;
     } else {
@@ -629,14 +638,16 @@
     setSummary("config", config || "--");
   }
 
-  function exportTerminalLog(kind) {
-    const lines = terminalLogStore[kind] || [];
+  function exportTerminalLog() {
+    const lines = (terminalLogStore.items || [])
+      .filter((item) => sourceAllowed(item.source))
+      .map((item) => `[${sourceLabel(item.source)}] ${item.text}`);
     const content = lines.join("\n");
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a");
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     a.href = URL.createObjectURL(blob);
-    a.download = `${kind === "install" ? "anima-install" : "train"}-${stamp}.log`;
+    a.download = `terminal-${terminalFilter}-${stamp}.log`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
@@ -676,26 +687,27 @@
         global.textContent = g;
       }
 
-      if (installTask) {
-        setTerminalMeta("install", `task=${installTask.id} · ${installTask.status}`);
-        connectTerminalStream("install", installTask.id, true);
-      } else if (plugin && plugin.facts && plugin.facts.task_id) {
-        const taskId = plugin.facts.task_id;
-        setTerminalMeta("install", `task=${taskId} · ${plugin.state || "unknown"}`);
-        connectTerminalStream("install", taskId, true);
+      const installTaskId =
+        (installTask && installTask.id) ||
+        (plugin && plugin.facts && plugin.facts.task_id) ||
+        terminalHintInstallTaskId;
+      if (installTaskId) {
+        const statusText = installTask ? installTask.status : plugin.state || "unknown";
+        setTerminalMeta("install", `部署任务：task=${installTaskId} · ${statusText}`);
+        connectTerminalStream("deploy", installTaskId, true);
       } else {
-        setTerminalMeta("install", `插件状态：${plugin.state || "unknown"}`);
+        setTerminalMeta("install", `部署任务：插件状态 ${plugin.state || "unknown"}`);
       }
 
       if (latestTrain) {
-        setTerminalMeta("train", `task=${latestTrain.id} · ${latestTrain.status}`);
+        setTerminalMeta("train", `训练任务：task=${latestTrain.id} · ${latestTrain.status}`);
         connectTerminalStream("train", latestTrain.id, false);
       } else {
-        setTerminalMeta("train", "等待训练任务...");
+        setTerminalMeta("train", "训练任务：等待中...");
       }
       updateTerminalOverview(plugin, latestTrain);
     } catch (err) {
-      appendTerminalLog("install", `[error] 终端状态刷新失败: ${err}`);
+      appendTerminalLog("system", `[error] 终端状态刷新失败: ${err}`);
     }
   }
 
@@ -704,28 +716,28 @@
     if (!panel || panel.dataset.bound === "1") return;
     panel.dataset.bound = "1";
     panel.addEventListener("click", function (ev) {
-      const tab = ev.target.closest("[data-terminal-tab]");
-      if (tab) {
-        const name = tab.getAttribute("data-terminal-tab");
-        panel.querySelectorAll("[data-terminal-tab]").forEach((b) => {
-          b.classList.toggle("active", b === tab);
+      const chip = ev.target.closest("[data-terminal-filter]");
+      if (chip) {
+        terminalFilter = chip.getAttribute("data-terminal-filter") || "all";
+        panel.querySelectorAll("[data-terminal-filter]").forEach((b) => {
+          b.classList.toggle("active", b === chip);
         });
-        panel.querySelectorAll("[data-terminal-pane]").forEach((p) => {
-          p.classList.toggle("active", p.getAttribute("data-terminal-pane") === name);
-        });
+        renderTerminalLog();
         return;
       }
       const clearBtn = ev.target.closest("[data-terminal-clear]");
       if (clearBtn) {
-        const kind = clearBtn.getAttribute("data-terminal-clear");
-        terminalLogStore[kind] = [];
-        renderTerminalLog(kind);
+        if (terminalFilter === "all") {
+          terminalLogStore.items = [];
+        } else {
+          terminalLogStore.items = terminalLogStore.items.filter((item) => item.source !== terminalFilter);
+        }
+        renderTerminalLog();
         return;
       }
       const exportBtn = ev.target.closest("[data-terminal-export]");
       if (exportBtn) {
-        const kind = exportBtn.getAttribute("data-terminal-export");
-        exportTerminalLog(kind);
+        exportTerminalLog();
       }
     });
   }
