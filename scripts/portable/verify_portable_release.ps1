@@ -57,6 +57,8 @@ $requiredRoot = @(
     "python_embeded\python.exe",
     "SD-Trainer\gui.py",
     "SD-Trainer\VERSION",
+    "SD-Trainer\scripts\portable\UPDATER_VERSION",
+    "SD-Trainer\scripts\portable\templates\Update-SD-Trainer.bat",
     "sd-models",
     "output",
     "logs",

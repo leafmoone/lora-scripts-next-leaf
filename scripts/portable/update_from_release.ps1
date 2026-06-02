@@ -70,6 +70,38 @@ function Read-PortableBuild([string]$TrainerDir) {
     return ((Get-Content $path -TotalCount 1 -ErrorAction SilentlyContinue) -join "").Trim()
 }
 
+function Get-UpdaterScriptVersion([string]$TrainerDir) {
+    $path = Join-Path $TrainerDir "scripts\portable\UPDATER_VERSION"
+    if (-not (Test-Path $path)) { return "unknown" }
+    return ((Get-Content $path -TotalCount 1 -ErrorAction SilentlyContinue) -join "").Trim()
+}
+
+function Write-VersionBanner(
+    [string]$TrainerDir,
+    [string]$UpdaterVersion,
+    [string]$ScriptPath,
+    [string]$CurrentVersion,
+    [string]$CurrentBuild,
+    [string]$GitCommit = ""
+) {
+    Write-Step "--- Package status / 当前整合包 ---"
+    Write-Step ("  VERSION: " + $(if ($CurrentVersion) { $CurrentVersion } else { "(missing)" }))
+    if ($CurrentBuild) {
+        Write-Step "  PORTABLE_BUILD: $CurrentBuild"
+    }
+    if ($GitCommit) {
+        Write-Step "  Git commit: $GitCommit"
+    } elseif (Test-Path (Join-Path $TrainerDir ".git\HEAD")) {
+        Write-Step "  Git commit: (present)"
+    } else {
+        Write-Step "  Git commit: (no .git / 无 git 仓库)"
+    }
+    Write-Step "--- Updater / 更新脚本 ---"
+    Write-Step "  Release updater script version / Release更新脚本版本: $UpdaterVersion"
+    Write-Step "  Updater file / 脚本路径: $ScriptPath"
+    Write-Step ""
+}
+
 function Get-ReleaseAsset {
     param(
         [string]$Repository,
@@ -109,14 +141,15 @@ if (Test-Path $versionFile) {
     $currentVersion = (Get-Content $versionFile -TotalCount 1).Trim()
 }
 $currentBuild = Read-PortableBuild $TrainerDir
+$updaterVersion = Get-UpdaterScriptVersion $TrainerDir
+$scriptPath = $MyInvocation.MyCommand.Path
+Write-VersionBanner -TrainerDir $TrainerDir -UpdaterVersion $updaterVersion -ScriptPath $scriptPath -CurrentVersion $currentVersion -CurrentBuild $currentBuild
+
 $releaseTag = $asset.name -replace '\.7z$','' -replace '^SD-Trainer-v','v'
 $syncState = Get-ReleaseSyncState $TrainerDir
 
+Write-Step "--- Target Release / 目标 Release ---"
 Write-Step "Release tag / 发布标签: $releaseTag"
-Write-Step "Current VERSION / 当前版本: $(if ($currentVersion) { $currentVersion } else { '(unknown)' })"
-if ($currentBuild) {
-    Write-Step "Current PORTABLE_BUILD / 当前构建: $currentBuild"
-}
 Write-Step "Release asset updated / 资产更新时间: $($asset.updated_at)"
 if ($syncState -and $syncState.asset_id -eq ([string]$asset.id) -and $syncState.asset_updated_at -eq ([string]$asset.updated_at)) {
     Write-Step 'Release asset unchanged since last sync - will re-download and merge anyway.'
@@ -250,11 +283,18 @@ Write-Step ""
 Write-Step "========================================"
 Write-Step "  Done / 更新完成"
 Write-Step "========================================"
+Write-Step "  Updater script version / 更新脚本版本: $updaterVersion"
 if ($newVersion) {
     Write-Step "  New VERSION / 新版本: $newVersion"
 }
 if ($newBuild) {
     Write-Step "  New PORTABLE_BUILD / 新构建: $newBuild"
+}
+if ($currentVersion -and $newVersion -and $currentVersion -ne $newVersion) {
+    Write-Step "  VERSION changed / 版本变化: $currentVersion -> $newVersion"
+}
+if ($currentBuild -and $newBuild -and $currentBuild -ne $newBuild) {
+    Write-Step "  PORTABLE_BUILD changed / 构建变化: $currentBuild -> $newBuild"
 }
 if ($newVersion -and $currentVersion -and $newVersion -eq $currentVersion -and $newBuild -and $newBuild -ne $currentBuild) {
     Write-Step ""

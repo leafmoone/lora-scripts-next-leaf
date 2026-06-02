@@ -29,6 +29,12 @@
 | **SD-Trainer 为 git 仓库** | 运行根目录 `Update-SD-Trainer.bat` 或 `update\update_sd_trainer.bat`，然后可选运行 `SD-Trainer\scripts\portable\sync_portable_root_launchers.bat` 刷新根目录 `run_gui.bat` |
 | **仅解压 7z、无 git** | 下载新版 7z，保留 `sd-models`/`output`/`logs`，替换 `SD-Trainer` 与根目录 bat（或整包覆盖后拷回数据） |
 
+## 更新脚本版本（排障）
+
+- `SD-Trainer/scripts/portable/UPDATER_VERSION`：更新器逻辑版本（改 `Update-*.bat` / `update_from_release.ps1` 时递增）
+- 运行 Git / Release 更新时，终端会打印 **当前 `VERSION` / `PORTABLE_BUILD` / git commit** 与 **更新脚本版本**
+- 整合包：`SD-Trainer/PORTABLE_BUILD` 第一行为构建时 git short SHA
+
 ## 与源码安装的区别
 
 | | 整合包 | 源码 |

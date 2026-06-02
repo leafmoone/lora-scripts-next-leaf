@@ -29,6 +29,7 @@ Test-FileExists "Update-SD-Trainer-Release.bat" "Release updater" | Out-Null
 Test-FileExists "update\update_sd_trainer.bat" "update_sd_trainer shortcut" | Out-Null
 Test-FileExists "update\update_from_release.bat" "update_from_release shortcut" | Out-Null
 Test-FileExists "SD-Trainer\scripts\portable\update_from_release.ps1" "update_from_release.ps1" | Out-Null
+Test-FileExists "SD-Trainer\scripts\portable\UPDATER_VERSION" "UPDATER_VERSION" | Out-Null
 
 $gitHead = Join-Path $PortableRoot "SD-Trainer\.git\HEAD"
 if (Test-Path $gitHead) {
@@ -42,8 +43,10 @@ if (Test-Path $gitUpdater) {
     $bat = Get-Content $gitUpdater -Raw
     if ($bat -match 'Pulling latest code') {
         $failures += "[FAIL] Update-SD-Trainer.bat is legacy (git pull without .git check); replace from Release or scripts\portable\templates"
-    } elseif ($bat -notmatch 'not exist "\.git\\"') {
+    } else    if ($bat -notmatch 'not exist "\.git\\"') {
         $failures += "[FAIL] Update-SD-Trainer.bat missing .git pre-check"
+    } elseif ($bat -notmatch 'print_version_info') {
+        $failures += "[FAIL] Update-SD-Trainer.bat missing version banner"
     } else {
         Write-Host '[OK] Update-SD-Trainer.bat is current (not legacy pull-only)'
     }

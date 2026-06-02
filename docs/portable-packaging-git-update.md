@@ -113,6 +113,12 @@ sd-trainer-log.txt
 
 Release 更新实现：`SD-Trainer/scripts/portable/update_from_release.ps1`
 
+**版本标识（排障用，长期约定）**：
+
+- 整合包：`SD-Trainer/VERSION`、`SD-Trainer/PORTABLE_BUILD`（构建 commit）
+- 更新器：`SD-Trainer/scripts/portable/UPDATER_VERSION`（更新脚本逻辑版本；改 bat/ps1 行为时递增）
+- Git / Release 更新开始时打印「当前整合包 + 更新脚本版本」；结束时打印更新后 VERSION / PORTABLE_BUILD 及变化
+
 1. 通过 GitHub API 获取最新 `SD-Trainer-v*.7z` 资产
 2. 下载到 `update/.cache/`（含 ghfast / ghproxy 镜像回退）
 3. 7-Zip 解压到临时目录

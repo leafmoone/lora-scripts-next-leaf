@@ -19,6 +19,12 @@ if not exist "%PROJECT_DIR%\" (
     exit /b 1
 )
 
+set "VER_BEFORE="
+set "BUILD_BEFORE="
+if exist "%PROJECT_DIR%\VERSION" set /p VER_BEFORE=<"%PROJECT_DIR%\VERSION"
+if exist "%PROJECT_DIR%\PORTABLE_BUILD" set /p BUILD_BEFORE=<"%PROJECT_DIR%\PORTABLE_BUILD"
+call :print_version_info
+
 cd /d "%PROJECT_DIR%"
 
 if not exist ".git\" (
@@ -268,6 +274,20 @@ if exist "PORTABLE_BUILD" (
     set /p PORTABLE_BUILD=<PORTABLE_BUILD
     echo   PORTABLE_BUILD / 构建标识: !PORTABLE_BUILD!
 )
+if defined UPDATER_VER (
+    echo   Updater script version / 更新脚本版本: !UPDATER_VER!
+)
+if defined VER_BEFORE if defined CURRENT_VER (
+    if not "!VER_BEFORE!"=="!CURRENT_VER!" (
+        echo   VERSION changed / 版本变化: !VER_BEFORE! -^> !CURRENT_VER!
+    )
+)
+if defined BUILD_BEFORE if exist "PORTABLE_BUILD" (
+    set /p _BUILD_AFTER=<PORTABLE_BUILD
+    if not "!BUILD_BEFORE!"=="!_BUILD_AFTER!" (
+        echo   PORTABLE_BUILD changed / 构建变化: !BUILD_BEFORE! -^> !_BUILD_AFTER!
+    )
+)
 echo.
 echo   Same VERSION hotfix republish? Use Update-SD-Trainer-Release.bat
 echo   同 VERSION 重发修复包请用 Update-SD-Trainer-Release.bat
@@ -275,6 +295,36 @@ echo.
 
 pause
 exit /b 0
+
+:: =============== Subroutine: print_version_info ===============
+:print_version_info
+echo --- Package status / 当前整合包 ---
+if exist "%PROJECT_DIR%\VERSION" (
+    set /p _PKG_VER=<"%PROJECT_DIR%\VERSION"
+    echo   VERSION: !_PKG_VER!
+) else (
+    echo   VERSION: ^(missing^)
+)
+if exist "%PROJECT_DIR%\PORTABLE_BUILD" (
+    set /p _PKG_BUILD=<"%PROJECT_DIR%\PORTABLE_BUILD"
+    echo   PORTABLE_BUILD: !_PKG_BUILD!
+)
+if exist "%PROJECT_DIR%\.git\HEAD" (
+    pushd "%PROJECT_DIR%"
+    for /f "tokens=*" %%h in ('git rev-parse --short HEAD 2^>nul') do echo   Git commit: %%h
+    popd
+) else (
+    echo   Git commit: ^(no .git / 无 git 仓库^)
+)
+set "UPDATER_VER=unknown"
+if exist "%PROJECT_DIR%\scripts\portable\UPDATER_VERSION" (
+    set /p UPDATER_VER=<"%PROJECT_DIR%\scripts\portable\UPDATER_VERSION"
+)
+echo --- Updater / 更新脚本 ---
+echo   Git updater script version / Git更新脚本版本: !UPDATER_VER!
+echo   Updater file / 脚本路径: %~f0
+echo.
+goto :eof
 
 :: =============== Subroutine: try_mirror ===============
 :: Usage: call :try_mirror "label" "name" "url" branch

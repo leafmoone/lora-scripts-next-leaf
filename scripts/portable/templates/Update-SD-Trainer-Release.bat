@@ -28,6 +28,12 @@ if not exist "%PROJECT_DIR%\gui.py" (
     exit /b 1
 )
 
+set "VER_BEFORE="
+set "BUILD_BEFORE="
+if exist "%PROJECT_DIR%\VERSION" set /p VER_BEFORE=<"%PROJECT_DIR%\VERSION"
+if exist "%PROJECT_DIR%\PORTABLE_BUILD" set /p BUILD_BEFORE=<"%PROJECT_DIR%\PORTABLE_BUILD"
+call :print_release_version_info
+
 echo Please close SD-Trainer WebUI before updating.
 echo 请先关闭 WebUI。
 echo.
@@ -69,3 +75,25 @@ if not "%RC%"=="0" (
 echo.
 pause
 exit /b 0
+
+:: =============== Subroutine: print_release_version_info ===============
+:print_release_version_info
+echo --- Package status / 当前整合包 ---
+if defined VER_BEFORE (
+    echo   VERSION: !VER_BEFORE!
+) else (
+    echo   VERSION: ^(missing^)
+)
+if defined BUILD_BEFORE (
+    echo   PORTABLE_BUILD: !BUILD_BEFORE!
+)
+set "UPDATER_VER=unknown"
+if exist "%PROJECT_DIR%\scripts\portable\UPDATER_VERSION" (
+    set /p UPDATER_VER=<"%PROJECT_DIR%\scripts\portable\UPDATER_VERSION"
+)
+echo --- Updater / 更新脚本 ---
+echo   Release updater script version / Release更新脚本版本: !UPDATER_VER!
+echo   Updater file / 脚本路径: %~f0
+echo   PowerShell: %PORTABLE_ROOT%SD-Trainer\scripts\portable\update_from_release.ps1
+echo.
+goto :eof

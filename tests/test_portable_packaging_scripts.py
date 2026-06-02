@@ -99,3 +99,13 @@ def test_portable_git_updater_is_not_legacy_pull_only():
     )
     assert "Pulling latest code" not in bat
     assert 'not exist ".git\\"' in bat
+    assert "print_version_info" in bat
+    assert "UPDATER_VERSION" in bat
+
+
+def test_portable_updater_version_file_exists():
+    version_file = ROOT / "scripts" / "portable" / "UPDATER_VERSION"
+    assert version_file.is_file()
+    text = version_file.read_text(encoding="utf-8").strip()
+    assert text.isdigit()
+    assert int(text) >= 1
