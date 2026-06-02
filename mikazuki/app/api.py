@@ -339,6 +339,28 @@ def _cuda_bf16_supported() -> bool:
         return False
 
 
+def _anima_lokr_training(config: dict) -> bool:
+    lora_type = str(config.get("lora_type", "")).strip().lower()
+    if lora_type == "lokr":
+        return True
+
+    network_module = str(config.get("network_module", "")).strip().lower()
+    if network_module == "networks.lokr":
+        return True
+
+    lycoris_algo = str(config.get("lycoris_algo", "")).strip().lower()
+    if lycoris_algo == "lokr":
+        return True
+
+    if network_module == "lycoris.kohya":
+        for item in config.get("network_args") or []:
+            if not isinstance(item, str):
+                continue
+            if item.strip().lower() == "algo=lokr":
+                return True
+    return False
+
+
 def apply_anima_training_defaults(config: dict, model_train_type: str):
     if model_train_type not in ANIMA_TRAIN_TYPES:
         return
@@ -379,6 +401,19 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
                 "Disabled Anima full half-precision training for optimizer "
                 f"{config.get('optimizer_type')} ({', '.join(disabled)}). "
                 "This keeps trainable LoRA weights in fp32 to reduce loss=nan risk."
+            )
+    elif _anima_lokr_training(config):
+        # LyCORIS LoKr can hit dtype mismatch under mixed precision when adapter
+        # params stay fp32 while activations are bf16/fp16.
+        mixed = str(config.get("mixed_precision", "")).strip().lower()
+        full_key = "full_bf16" if mixed == "bf16" else "full_fp16" if mixed == "fp16" else None
+        if full_key and not config.get(full_key):
+            config[full_key] = True
+            log.info(
+                "Enabled %s for Anima LoKr mixed_precision=%s to keep adapter and "
+                "activation dtypes aligned.",
+                full_key,
+                mixed,
             )
 
     requested_attn = config.get("attn_mode", "")
