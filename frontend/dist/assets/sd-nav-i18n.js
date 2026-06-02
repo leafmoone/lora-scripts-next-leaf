@@ -22,6 +22,8 @@
     "UI 设置": "UI Settings",
     关于: "About",
     更新日志: "Changelog",
+    终端: "Terminal",
+    训练终端: "Training Terminal",
     训练监控: "Train Monitor",
     "自动端口 · 实时日志": "Auto port · Live logs",
     "DiT · 主推": "DiT · Recommended",
@@ -55,6 +57,15 @@
   const EN_TO_ZH = Object.fromEntries(
     Object.entries(ZH_TO_EN).map(([zh, en]) => [en, zh])
   );
+  const TERMINAL_MENU_PATH = "/task.html";
+  const TERMINAL_PANEL_ID = "sd-terminal-panel";
+  const TERMINAL_STYLE_ID = "sd-terminal-style";
+
+  let terminalPollTimer = null;
+  let terminalInstallEs = null;
+  let terminalTrainEs = null;
+  let terminalInstallTaskId = "";
+  let terminalTrainTaskId = "";
 
   function normalize(text) {
     return (text || "").replace(/\s+/g, " ").trim();
@@ -126,11 +137,364 @@
     });
   }
 
+  function isTerminalPage() {
+    return /^\/task(\.html|\.md)?$/i.test(location.pathname || "");
+  }
+
+  function closeTerminalStreams() {
+    if (terminalInstallEs) {
+      terminalInstallEs.close();
+      terminalInstallEs = null;
+    }
+    if (terminalTrainEs) {
+      terminalTrainEs.close();
+      terminalTrainEs = null;
+    }
+  }
+
+  function stopTerminalPolling() {
+    if (terminalPollTimer) {
+      clearInterval(terminalPollTimer);
+      terminalPollTimer = null;
+    }
+  }
+
+  function ensureSidebarTerminalLink() {
+    const sidebar = document.querySelector(".sidebar .sidebar-items");
+    if (!sidebar) return;
+    if (
+      sidebar.querySelector('a[href="/task.html"]') ||
+      sidebar.querySelector('a[href="/task.md"]')
+    ) {
+      return;
+    }
+
+    let othersGroup = null;
+    sidebar.querySelectorAll("li").forEach((li) => {
+      if (othersGroup) return;
+      const heading = li.querySelector(":scope > p.sidebar-item.sidebar-heading");
+      if (!heading) return;
+      const text = normalize(heading.textContent);
+      if (text === "其他" || text === "More") {
+        othersGroup = li.querySelector(":scope > ul.sidebar-item-children");
+      }
+    });
+    if (!othersGroup) return;
+
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = TERMINAL_MENU_PATH;
+    a.className = "sidebar-item";
+    a.setAttribute("aria-label", "终端");
+    a.appendChild(document.createTextNode(" 终端 "));
+    li.appendChild(a);
+    othersGroup.appendChild(li);
+  }
+
+  function ensureTerminalStyle() {
+    if (document.getElementById(TERMINAL_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = TERMINAL_STYLE_ID;
+    style.textContent = `
+#${TERMINAL_PANEL_ID} {
+  margin: 12px 24px;
+  border: 1px solid var(--c-border, #3a3a3a);
+  border-radius: 8px;
+  background: var(--c-bg, #111);
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--c-border, #3a3a3a);
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-tabs {
+  display: flex;
+  gap: 8px;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-tab {
+  border: 1px solid var(--c-border, #666);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  background: transparent;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-tab.active {
+  border-color: #7c8cff;
+  color: #7c8cff;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-body {
+  padding: 10px 12px;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-meta {
+  opacity: 0.8;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-pane {
+  display: none;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-pane.active {
+  display: block;
+}
+#${TERMINAL_PANEL_ID} pre {
+  margin: 0;
+  border: 1px solid var(--c-border, #3a3a3a);
+  border-radius: 6px;
+  background: #0b1220;
+  color: #d8e6ff;
+  min-height: 220px;
+  max-height: 52vh;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.4;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#${TERMINAL_PANEL_ID} .sd-terminal-actions button {
+  border: 1px solid var(--c-border, #666);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  cursor: pointer;
+}
+`;
+    document.head.appendChild(style);
+  }
+
+  function ensureTerminalPanel() {
+    if (!isTerminalPage()) {
+      stopTerminalPolling();
+      closeTerminalStreams();
+      return;
+    }
+    const host = document.querySelector(".theme-default-content > div");
+    if (!host) return;
+    if (!document.getElementById(TERMINAL_PANEL_ID)) {
+      ensureTerminalStyle();
+      const panel = document.createElement("section");
+      panel.id = TERMINAL_PANEL_ID;
+      panel.innerHTML = `
+<div class="sd-terminal-head">
+  <div>
+    <strong>终端</strong>
+    <span class="sd-terminal-meta" data-terminal-global-status>空闲</span>
+  </div>
+  <div class="sd-terminal-tabs">
+    <button class="sd-terminal-tab active" data-terminal-tab="install">环境部署</button>
+    <button class="sd-terminal-tab" data-terminal-tab="train">训练日志</button>
+  </div>
+</div>
+<div class="sd-terminal-body">
+  <div class="sd-terminal-pane active" data-terminal-pane="install">
+    <div class="sd-terminal-actions">
+      <button type="button" data-terminal-copy="install">复制日志</button>
+      <button type="button" data-terminal-clear="install">清空</button>
+    </div>
+    <div class="sd-terminal-meta" data-terminal-install-meta>等待安装任务...</div>
+    <pre data-terminal-log="install"></pre>
+  </div>
+  <div class="sd-terminal-pane" data-terminal-pane="train">
+    <div class="sd-terminal-actions">
+      <button type="button" data-terminal-copy="train">复制日志</button>
+      <button type="button" data-terminal-clear="train">清空</button>
+    </div>
+    <div class="sd-terminal-meta" data-terminal-train-meta>等待训练任务...</div>
+    <pre data-terminal-log="train"></pre>
+  </div>
+</div>`;
+      host.appendChild(panel);
+    }
+    bindTerminalPanelEvents();
+    if (!terminalPollTimer) {
+      refreshTerminalPanel();
+      terminalPollTimer = setInterval(refreshTerminalPanel, 2000);
+    }
+  }
+
+  function appendTerminalLog(kind, text) {
+    const pre = document.querySelector(`[data-terminal-log="${kind}"]`);
+    if (!pre || !text) return;
+    pre.textContent += (pre.textContent ? "\n" : "") + String(text).replace(/\r?\n$/, "");
+    pre.scrollTop = pre.scrollHeight;
+  }
+
+  function setTerminalMeta(kind, text) {
+    const el = document.querySelector(
+      kind === "install" ? "[data-terminal-install-meta]" : "[data-terminal-train-meta]"
+    );
+    if (el) el.textContent = text;
+  }
+
+  async function fetchJson(url) {
+    const r = await fetch(url);
+    const j = await r.json();
+    return j && j.data ? j.data : {};
+  }
+
+  async function fillLogTail(taskId, kind) {
+    try {
+      const data = await fetchJson(`/api/train/log/tail/${encodeURIComponent(taskId)}?limit=160`);
+      const pre = document.querySelector(`[data-terminal-log="${kind}"]`);
+      if (pre) pre.textContent = "";
+      (data.lines || []).forEach((line) => appendTerminalLog(kind, line));
+    } catch (_) {
+      appendTerminalLog(kind, "[warn] 无法读取历史日志");
+    }
+  }
+
+  async function connectTerminalStream(kind, taskId, installAlias) {
+    if (!taskId) return;
+    if (kind === "install" && terminalInstallTaskId === taskId && terminalInstallEs) return;
+    if (kind === "train" && terminalTrainTaskId === taskId && terminalTrainEs) return;
+
+    const streamUrl = installAlias
+      ? `/api/plugins/anima-lora/install/log/stream/${encodeURIComponent(taskId)}`
+      : `/api/train/log/stream/${encodeURIComponent(taskId)}`;
+    await fillLogTail(taskId, kind);
+
+    if (!window.EventSource) {
+      appendTerminalLog(kind, "[warn] 当前浏览器不支持实时日志流");
+      return;
+    }
+    if (kind === "install" && terminalInstallEs) terminalInstallEs.close();
+    if (kind === "train" && terminalTrainEs) terminalTrainEs.close();
+
+    const es = new EventSource(streamUrl);
+    es.onmessage = function (e) {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload.text) appendTerminalLog(kind, payload.text);
+        if (payload.done) appendTerminalLog(kind, "[done] 任务日志流结束");
+      } catch (_) {
+        appendTerminalLog(kind, e.data);
+      }
+    };
+    es.onerror = function () {
+      appendTerminalLog(kind, "[warn] 日志流断开");
+      es.close();
+      if (kind === "install") terminalInstallEs = null;
+      if (kind === "train") terminalTrainEs = null;
+    };
+
+    if (kind === "install") {
+      terminalInstallTaskId = taskId;
+      terminalInstallEs = es;
+    } else {
+      terminalTrainTaskId = taskId;
+      terminalTrainEs = es;
+    }
+  }
+
+  function findLatestTask(tasks, predicate) {
+    const list = Array.isArray(tasks) ? tasks.slice().reverse() : [];
+    return list.find(predicate) || null;
+  }
+
+  async function refreshTerminalPanel() {
+    if (!isTerminalPage()) return;
+    try {
+      const plugin = await fetchJson("/api/plugins/anima-lora/status");
+      const tasksData = await fetchJson("/api/tasks");
+      const tasks = tasksData.tasks || [];
+
+      const installTask = findLatestTask(
+        tasks,
+        (t) => t && t.metadata && t.metadata.kind === "anima_fast_install"
+      );
+      const runningTrain = findLatestTask(
+        tasks,
+        (t) =>
+          t &&
+          (!t.metadata || t.metadata.kind !== "anima_fast_install") &&
+          t.status === "RUNNING"
+      );
+      const latestTrain = runningTrain || findLatestTask(
+        tasks,
+        (t) => t && (!t.metadata || t.metadata.kind !== "anima_fast_install")
+      );
+
+      const global = document.querySelector("[data-terminal-global-status]");
+      if (global) {
+        const g = installTask && installTask.status === "RUNNING"
+          ? "环境部署中"
+          : latestTrain && latestTrain.status === "RUNNING"
+          ? "训练进行中"
+          : plugin.state === "broken"
+          ? "插件需修复"
+          : "空闲";
+        global.textContent = g;
+      }
+
+      if (installTask) {
+        setTerminalMeta("install", `task=${installTask.id} · ${installTask.status}`);
+        connectTerminalStream("install", installTask.id, true);
+      } else if (plugin && plugin.facts && plugin.facts.task_id) {
+        const taskId = plugin.facts.task_id;
+        setTerminalMeta("install", `task=${taskId} · ${plugin.state || "unknown"}`);
+        connectTerminalStream("install", taskId, true);
+      } else {
+        setTerminalMeta("install", `插件状态：${plugin.state || "unknown"}`);
+      }
+
+      if (latestTrain) {
+        setTerminalMeta("train", `task=${latestTrain.id} · ${latestTrain.status}`);
+        connectTerminalStream("train", latestTrain.id, false);
+      } else {
+        setTerminalMeta("train", "等待训练任务...");
+      }
+    } catch (err) {
+      appendTerminalLog("install", `[error] 终端状态刷新失败: ${err}`);
+    }
+  }
+
+  function bindTerminalPanelEvents() {
+    const panel = document.getElementById(TERMINAL_PANEL_ID);
+    if (!panel || panel.dataset.bound === "1") return;
+    panel.dataset.bound = "1";
+    panel.addEventListener("click", function (ev) {
+      const tab = ev.target.closest("[data-terminal-tab]");
+      if (tab) {
+        const name = tab.getAttribute("data-terminal-tab");
+        panel.querySelectorAll("[data-terminal-tab]").forEach((b) => {
+          b.classList.toggle("active", b === tab);
+        });
+        panel.querySelectorAll("[data-terminal-pane]").forEach((p) => {
+          p.classList.toggle("active", p.getAttribute("data-terminal-pane") === name);
+        });
+        return;
+      }
+      const clearBtn = ev.target.closest("[data-terminal-clear]");
+      if (clearBtn) {
+        const kind = clearBtn.getAttribute("data-terminal-clear");
+        const pre = panel.querySelector(`[data-terminal-log="${kind}"]`);
+        if (pre) pre.textContent = "";
+        return;
+      }
+      const copyBtn = ev.target.closest("[data-terminal-copy]");
+      if (copyBtn) {
+        const kind = copyBtn.getAttribute("data-terminal-copy");
+        const pre = panel.querySelector(`[data-terminal-log="${kind}"]`);
+        if (pre && navigator.clipboard) {
+          navigator.clipboard.writeText(pre.textContent || "");
+        }
+      }
+    });
+  }
+
   function applyNavLocale() {
     const english = detectEnglishUI();
     document.documentElement.dataset.sdUiLocale = english ? "en-US" : "zh-CN";
 
     const map = english ? ZH_TO_EN : EN_TO_ZH;
+    ensureSidebarTerminalLink();
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (sidebar) replaceInElement(sidebar, map);
 
@@ -152,6 +516,8 @@
     } else if (tagline && !english) {
       tagline.textContent = "anima-finetune ，一切皆有可能";
     }
+
+    ensureTerminalPanel();
   }
 
   function hookLanguageToggle() {
@@ -181,12 +547,14 @@
       scheduled = null;
       applyNavLocale();
       hookLanguageToggle();
+      ensureTerminalPanel();
     }, 60);
   }
 
   function boot() {
     applyNavLocale();
     hookLanguageToggle();
+    ensureTerminalPanel();
 
     const root = document.querySelector("#app");
     if (root) {
@@ -204,4 +572,8 @@
   } else {
     boot();
   }
+  window.addEventListener("beforeunload", function () {
+    stopTerminalPolling();
+    closeTerminalStreams();
+  });
 })();
