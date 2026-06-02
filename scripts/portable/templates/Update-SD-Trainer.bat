@@ -5,6 +5,21 @@ title Update SD-Trainer
 set "PORTABLE_ROOT=%~dp0"
 set "PROJECT_DIR=%PORTABLE_ROOT%SD-Trainer"
 
+if /I not "%~1"=="--no-bootstrap" (
+    if exist "%PROJECT_DIR%\" (
+        call :ensure_updater_bootstrap
+        call :bootstrap_updater_scripts
+        if errorlevel 10 (
+            echo.
+            echo Relaunching with refreshed updater scripts / 使用最新更新脚本重新执行...
+            echo.
+            call "%~f0" --no-bootstrap %*
+            exit /b !errorlevel!
+        )
+    )
+)
+if /I "%~1"=="--no-bootstrap" shift
+
 echo ========================================
 echo   SD-Trainer Update / 更新项目代码
 echo ========================================
@@ -23,7 +38,12 @@ set "VER_BEFORE="
 set "BUILD_BEFORE="
 if exist "%PROJECT_DIR%\VERSION" set /p VER_BEFORE=<"%PROJECT_DIR%\VERSION"
 if exist "%PROJECT_DIR%\PORTABLE_BUILD" set /p BUILD_BEFORE=<"%PROJECT_DIR%\PORTABLE_BUILD"
-call :print_version_info
+set "STATUS_PS1=%PROJECT_DIR%\scripts\portable\show_portable_update_status.ps1"
+if exist "%STATUS_PS1%" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%STATUS_PS1%" -PortableRoot "%PORTABLE_ROOT%" -UpdaterLabel "Git" -UpdaterFile "%~f0"
+) else (
+    call :print_version_info
+)
 
 cd /d "%PROJECT_DIR%"
 
@@ -295,6 +315,31 @@ echo.
 
 pause
 exit /b 0
+
+:: =============== Subroutine: ensure_updater_bootstrap ===============
+:ensure_updater_bootstrap
+set "BOOTSTRAP_PS1=%PROJECT_DIR%\scripts\portable\bootstrap_portable_updaters.ps1"
+set "COMMON_PS1=%PROJECT_DIR%\scripts\portable\portable_updater_common.ps1"
+if exist "%BOOTSTRAP_PS1%" if exist "%COMMON_PS1%" goto :eof
+where curl >nul 2>&1
+if errorlevel 1 goto :eof
+if not exist "%PROJECT_DIR%\scripts\portable\" mkdir "%PROJECT_DIR%\scripts\portable\"
+echo Bootstrapping updater scripts / 正在拉取更新脚本引导文件...
+curl -fsSL --retry 2 -o "%COMMON_PS1%" "https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/scripts/portable/portable_updater_common.ps1" >nul 2>&1
+if errorlevel 1 curl -fsSL --retry 2 -o "%COMMON_PS1%" "https://ghfast.top/https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/scripts/portable/portable_updater_common.ps1" >nul 2>&1
+curl -fsSL --retry 2 -o "%BOOTSTRAP_PS1%" "https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/scripts/portable/bootstrap_portable_updaters.ps1" >nul 2>&1
+if errorlevel 1 curl -fsSL --retry 2 -o "%BOOTSTRAP_PS1%" "https://ghfast.top/https://raw.githubusercontent.com/wochenlong/lora-scripts-next/main/scripts/portable/bootstrap_portable_updaters.ps1" >nul 2>&1
+goto :eof
+
+:: =============== Subroutine: bootstrap_updater_scripts ===============
+:bootstrap_updater_scripts
+where powershell >nul 2>&1
+if errorlevel 1 exit /b 0
+where curl >nul 2>&1
+if errorlevel 1 exit /b 0
+if not exist "%PROJECT_DIR%\scripts\portable\bootstrap_portable_updaters.ps1" exit /b 0
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%\scripts\portable\bootstrap_portable_updaters.ps1" -PortableRoot "%PORTABLE_ROOT%"
+exit /b %errorlevel%
 
 :: =============== Subroutine: print_version_info ===============
 :print_version_info

@@ -10,6 +10,8 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot "portable_updater_common.ps1")
+
 function Write-Step([string]$Message) {
     Write-Host $Message
 }
@@ -65,41 +67,7 @@ function Set-ReleaseSyncState([string]$TrainerDir, [object]$Asset) {
 }
 
 function Read-PortableBuild([string]$TrainerDir) {
-    $path = Join-Path $TrainerDir "PORTABLE_BUILD"
-    if (-not (Test-Path $path)) { return "" }
-    return ((Get-Content $path -TotalCount 1 -ErrorAction SilentlyContinue) -join "").Trim()
-}
-
-function Get-UpdaterScriptVersion([string]$TrainerDir) {
-    $path = Join-Path $TrainerDir "scripts\portable\UPDATER_VERSION"
-    if (-not (Test-Path $path)) { return "unknown" }
-    return ((Get-Content $path -TotalCount 1 -ErrorAction SilentlyContinue) -join "").Trim()
-}
-
-function Write-VersionBanner(
-    [string]$TrainerDir,
-    [string]$UpdaterVersion,
-    [string]$ScriptPath,
-    [string]$CurrentVersion,
-    [string]$CurrentBuild,
-    [string]$GitCommit = ""
-) {
-    Write-Step "--- Package status / 当前整合包 ---"
-    Write-Step ("  VERSION: " + $(if ($CurrentVersion) { $CurrentVersion } else { "(missing)" }))
-    if ($CurrentBuild) {
-        Write-Step "  PORTABLE_BUILD: $CurrentBuild"
-    }
-    if ($GitCommit) {
-        Write-Step "  Git commit: $GitCommit"
-    } elseif (Test-Path (Join-Path $TrainerDir ".git\HEAD")) {
-        Write-Step "  Git commit: (present)"
-    } else {
-        Write-Step "  Git commit: (no .git / 无 git 仓库)"
-    }
-    Write-Step "--- Updater / 更新脚本 ---"
-    Write-Step "  Release updater script version / Release更新脚本版本: $UpdaterVersion"
-    Write-Step "  Updater file / 脚本路径: $ScriptPath"
-    Write-Step ""
+    Read-LocalPortableBuild $TrainerDir
 }
 
 function Get-ReleaseAsset {
@@ -135,15 +103,11 @@ if (-not (Test-Path (Join-Path $TrainerDir "gui.py"))) {
 
 $repo = "wochenlong/lora-scripts-next"
 $asset = Get-ReleaseAsset -Repository $repo -TagName $Tag -PreferredAssetName $AssetName
-$currentVersion = ""
-$versionFile = Join-Path $TrainerDir "VERSION"
-if (Test-Path $versionFile) {
-    $currentVersion = (Get-Content $versionFile -TotalCount 1).Trim()
-}
+$currentVersion = Read-LocalProductVersion $TrainerDir
 $currentBuild = Read-PortableBuild $TrainerDir
-$updaterVersion = Get-UpdaterScriptVersion $TrainerDir
+$updaterVersion = Read-LocalUpdaterVersion $TrainerDir
 $scriptPath = $MyInvocation.MyCommand.Path
-Write-VersionBanner -TrainerDir $TrainerDir -UpdaterVersion $updaterVersion -ScriptPath $scriptPath -CurrentVersion $currentVersion -CurrentBuild $currentBuild
+Write-PortableUpdateStatusBanner -PortableRoot $PortableRoot -UpdaterLabel "Release (PowerShell)" -UpdaterFile $scriptPath
 
 $releaseTag = $asset.name -replace '\.7z$','' -replace '^SD-Trainer-v','v'
 $syncState = Get-ReleaseSyncState $TrainerDir
