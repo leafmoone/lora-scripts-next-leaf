@@ -75,7 +75,6 @@ Schema.intersect([
                 "AdamW",
                 "AdamW8bit",
                 "Automagic",
-                "EmoSens",
                 "PagedAdamW8bit",
                 "RAdamScheduleFree",
                 "Lion",
