@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 import importlib.metadata
@@ -514,6 +514,8 @@ def start_install_task(
     write_install_state(plan.layout, STATE_INSTALLING, {"plan": plan.as_dict(), "task_id": task_id}, "install task queued")
 
     def runner() -> None:
+        nonlocal plan
+
         def log(line: str) -> None:
             train_log_hub.append_line(task_id, line)
 
@@ -521,9 +523,11 @@ def start_install_task(
             log("[start] Anima Fast plugin installation")
             from .source_root import ensure_install_source_ready
 
-            plan.source_root = ensure_install_source_ready(
+            resolved_source = ensure_install_source_ready(
                 plan.project_root, plan.source_root, plan.source_commit, log=log
             )
+            if resolved_source != plan.source_root:
+                plan = replace(plan, source_root=resolved_source)
             result = install_environment(plan, log)
             task.metadata["audit"] = result.as_dict()
             task.finish_log_only(0 if result.ok else 1, None if result.ok else "; ".join(result.errors))

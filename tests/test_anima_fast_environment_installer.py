@@ -239,6 +239,47 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         for package in ("bitsandbytes==0.49.2", "dadaptation==3.1", "lion-pytorch==0.2.3", "prodigyopt==1.1.2"):
             self.assertIn(package, text)
 
+    def test_start_install_resolves_source_root_on_frozen_plan(self):
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td)
+            source = self._make_source(project)
+            self._make_constraints(project)
+            layout = ExtensionLayout(project / "extensions" / "anima_lora")
+            cache = project / ".cache" / "anima_fast" / "upstream"
+            cache.mkdir(parents=True)
+            (cache / "train.py").write_text("print('cached')\n", encoding="utf-8")
+            captured: dict = {}
+
+            def fake_install(plan, log):
+                captured["source_root"] = plan.source_root
+                from mikazuki.anima_fast_backend.extension_state import write_install_state
+
+                write_install_state(layout, STATE_READY, {"audit": {"ok": True}})
+                return AuditResult(ok=True)
+
+            def fake_ensure(project_root, preferred, commit, log=None):
+                return cache.resolve()
+
+            with mock.patch(
+                "mikazuki.anima_fast_backend.source_root.ensure_install_source_ready",
+                side_effect=fake_ensure,
+            ):
+                with mock.patch(
+                    "mikazuki.anima_fast_backend.environment.install_environment",
+                    side_effect=fake_install,
+                ):
+                    task_id, _ = start_install_task(project, layout, source, dry_run=False)
+                    task = tm.tasks[task_id]
+                    import time
+
+                    deadline = time.time() + 3
+                    while task.status.name not in {"FINISHED", "FAILED"} and time.time() < deadline:
+                        time.sleep(0.02)
+
+            self.assertEqual(task.status.name, "FINISHED")
+            self.assertEqual(task.returncode, 0)
+            self.assertEqual(captured.get("source_root"), cache.resolve())
+
 
 if __name__ == "__main__":
     unittest.main()
