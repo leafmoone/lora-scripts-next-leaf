@@ -46,7 +46,7 @@ if (Test-Path $gitUpdater) {
     $bat = Get-Content $gitUpdater -Raw
     if ($bat -match 'Pulling latest code') {
         $failures += "[FAIL] Update-SD-Trainer.bat is legacy (git pull without .git check); replace from Release or scripts\portable\templates"
-    } else    if ($bat -notmatch 'not exist "\.git\\"') {
+    } elseif ($bat -notmatch 'not exist "\.git\\"') {
         $failures += "[FAIL] Update-SD-Trainer.bat missing .git pre-check"
     } elseif ($bat -notmatch 'bootstrap_updater_scripts') {
         $failures += "[FAIL] Update-SD-Trainer.bat missing updater bootstrap"
