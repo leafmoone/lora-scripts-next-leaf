@@ -68,6 +68,50 @@ def default_layout(root: Path | None = None) -> ExtensionLayout:
     return ExtensionLayout(base / "extensions" / "anima_lora")
 
 
+def _reconcile_stale_install_state(
+    layout: ExtensionLayout,
+    state: str,
+    facts: dict,
+    reason: str,
+) -> tuple[str, dict, str]:
+    """Downgrade stuck installing/auditing when the background install task is gone or finished."""
+    if state not in {STATE_INSTALLING, STATE_AUDITING}:
+        return state, facts, reason
+
+    from mikazuki.tasks import TaskStatus, tm
+
+    task_id = facts.get("task_id")
+    if not task_id:
+        reason = reason or "install interrupted before task was recorded"
+        write_install_state(layout, STATE_BROKEN, facts, reason)
+        return STATE_BROKEN, facts, reason
+
+    task = tm.tasks.get(task_id)
+    if task is None:
+        reason = "install task no longer active; use Repair to retry"
+        write_install_state(layout, STATE_BROKEN, facts, reason)
+        return STATE_BROKEN, facts, reason
+
+    if task.status in {TaskStatus.FINISHED, TaskStatus.FAILED, TaskStatus.TERMINATED}:
+        if task.status == TaskStatus.FINISHED and (task.returncode or 0) == 0:
+            audit = facts.get("audit")
+            if not audit and layout.audit_result.is_file():
+                try:
+                    audit = json.loads(layout.audit_result.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    audit = None
+            if audit and audit.get("ok"):
+                new_facts = {**facts, "audit": audit}
+                write_install_state(layout, STATE_READY, new_facts, "reconciled from completed install task")
+                return STATE_READY, new_facts, "reconciled from completed install task"
+        err = task.metadata.get("error") or reason or "install task ended unsuccessfully"
+        reason = str(err)
+        write_install_state(layout, STATE_BROKEN, facts, reason)
+        return STATE_BROKEN, facts, reason
+
+    return state, facts, reason
+
+
 def write_install_state(layout: ExtensionLayout, state: str, facts: dict | None = None, reason: str = "") -> None:
     layout.root.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -108,7 +152,16 @@ def read_extension_status(layout: ExtensionLayout) -> ExtensionStatus:
             facts,
         )
     if state in {STATE_READY, STATE_INSTALLING, STATE_AUDITING, STATE_UPDATE_AVAILABLE}:
-        return ExtensionStatus(state, str(layout.source), str(layout.venv_python), facts=facts)
+        reason = payload.get("reason", "")
+        if state in {STATE_INSTALLING, STATE_AUDITING}:
+            state, facts, reason = _reconcile_stale_install_state(layout, state, facts, reason)
+        return ExtensionStatus(
+            state,
+            str(layout.source),
+            str(layout.venv_python),
+            reason if state == STATE_BROKEN else "",
+            facts,
+        )
     if state == STATE_BROKEN:
         return ExtensionStatus(STATE_BROKEN, str(layout.source), str(layout.venv_python), payload.get("reason", "marked broken"), facts)
     return ExtensionStatus(STATE_INSTALLED_UNVERIFIED, str(layout.source), str(layout.venv_python), "not verified", facts)

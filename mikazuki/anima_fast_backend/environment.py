@@ -50,6 +50,15 @@ ANIMA_OPTIMIZER_IMPORTS = [
     "optimum.quanto",
 ]
 
+# Constraints pin versions but do not install these; uv must receive explicit targets.
+ANIMA_EXTRA_PIP_TARGETS = ("optimum-quanto>=0.2.0",)
+
+
+def anima_pip_dependency_targets() -> list[str]:
+    targets = [f"{name}=={version}" for name, version in ANIMA_OPTIMIZER_PACKAGES.items()]
+    targets.extend(ANIMA_EXTRA_PIP_TARGETS)
+    return targets
+
 ANIMA_EXPECTED = {
     "python_major_minor": "3.13",
     "exact": {
@@ -272,6 +281,7 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
 
     facts["phase"] = "dependencies"
     write_install_state(plan.layout, STATE_INSTALLING, facts, "installing Anima dependencies")
+    pip_targets = [*anima_pip_dependency_targets(), str(plan.layout.source)]
     _run_streaming(
         [
             uv,
@@ -291,7 +301,7 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
             str(plan.constraints),
             "--overrides",
             str(plan.overrides),
-            str(plan.layout.source),
+            *pip_targets,
         ],
         plan.project_root,
         log,

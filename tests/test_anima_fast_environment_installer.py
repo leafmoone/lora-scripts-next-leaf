@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,7 +8,9 @@ from unittest import mock
 import subprocess
 
 from mikazuki.anima_fast_backend.environment import (
+    ANIMA_OPTIMIZER_PACKAGES,
     AuditResult,
+    anima_pip_dependency_targets,
     audit_environment,
     build_environment_install_plan,
     install_environment,
@@ -16,12 +19,14 @@ from mikazuki.anima_fast_backend.environment import (
 )
 from mikazuki.anima_fast_backend.extension_state import (
     STATE_BROKEN,
+    STATE_INSTALLING,
     STATE_INSTALLED_UNVERIFIED,
     STATE_READY,
     ExtensionLayout,
     read_extension_status,
+    write_install_state,
 )
-from mikazuki.tasks import tm
+from mikazuki.tasks import Task, tm
 
 
 class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
@@ -238,6 +243,82 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         text = constraints.read_text(encoding="utf-8")
         for package in ("bitsandbytes==0.49.2", "dadaptation==3.1", "lion-pytorch==0.2.3", "prodigyopt==1.1.2"):
             self.assertIn(package, text)
+
+    def test_anima_pip_dependency_targets_include_optimizer_and_quanto(self):
+        targets = anima_pip_dependency_targets()
+        for name, version in ANIMA_OPTIMIZER_PACKAGES.items():
+            self.assertIn(f"{name}=={version}", targets)
+        self.assertIn("optimum-quanto>=0.2.0", targets)
+
+    def test_install_environment_pip_install_includes_explicit_optimizer_targets(self):
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td)
+            source = self._make_source(project)
+            self._make_constraints(project)
+            layout = ExtensionLayout(project / "extensions" / "anima_lora")
+            plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            pip_commands: list[list[str]] = []
+
+            def fake_run(command, cwd, log, env=None, retries=0):
+                if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
+                    plan.venv_python.parent.mkdir(parents=True)
+                    plan.venv_python.write_text("", encoding="utf-8")
+                if len(command) >= 3 and command[1:3] == ["python", "install"]:
+                    discovered_python.parent.mkdir(parents=True)
+                    discovered_python.write_text("", encoding="utf-8")
+                if len(command) >= 3 and command[1:3] == ["pip", "install"]:
+                    pip_commands.append(list(command))
+
+            with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.anima_fast_backend.environment.copy_source_snapshot"), \
+                mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
+                mock.patch(
+                    "mikazuki.anima_fast_backend.environment.audit_environment",
+                    return_value=AuditResult(ok=True),
+                ):
+                install_environment(plan, lambda _line: None)
+
+        self.assertEqual(len(pip_commands), 1)
+        pip_cmd = pip_commands[0]
+        self.assertIn("bitsandbytes==0.49.2", pip_cmd)
+        self.assertIn("dadaptation==3.1", pip_cmd)
+        self.assertIn("optimum-quanto>=0.2.0", pip_cmd)
+        self.assertEqual(pip_cmd[-1], str(layout.source))
+
+    def test_stale_installing_without_task_marks_broken(self):
+        with tempfile.TemporaryDirectory() as td:
+            layout = ExtensionLayout(Path(td) / "extensions" / "anima_lora")
+            layout.source.mkdir(parents=True)
+            layout.train_py.write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+            write_install_state(layout, STATE_INSTALLING, {"task_id": "missing-anima-install-task"})
+
+            status = read_extension_status(layout)
+
+        self.assertEqual(status.state, STATE_BROKEN)
+        self.assertIn("no longer active", status.reason)
+
+    def test_stale_installing_reconciles_ready_when_task_finished_and_audit_ok(self):
+        task_id = "anima-install-reconcile-test"
+        with tempfile.TemporaryDirectory() as td:
+            layout = ExtensionLayout(Path(td) / "extensions" / "anima_lora")
+            layout.source.mkdir(parents=True)
+            layout.train_py.write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+            audit = {"ok": True, "errors": [], "warnings": [], "facts": {}}
+            layout.audit_result.write_text(json.dumps(audit), encoding="utf-8")
+            write_install_state(layout, STATE_INSTALLING, {"task_id": task_id})
+            task = Task(task_id, ["noop"])
+            task.finish_log_only(0)
+            tm.add_task(task_id, task)
+
+            status = read_extension_status(layout)
+
+        self.assertEqual(status.state, STATE_READY)
+        self.assertTrue(status.facts.get("audit", {}).get("ok"))
 
     def test_start_install_resolves_source_root_on_frozen_plan(self):
         with tempfile.TemporaryDirectory() as td:
