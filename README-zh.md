@@ -24,6 +24,9 @@
 <p align="center">
   <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>致谢 & 许可</b></a>
 </p>
+<p align="center">
+  <a href="https://github.com/wochenlong/lora-scripts-next/tree/anima-edit"><b>实验分支：Anima Edit</b></a>
+</p>
 
 ---
 
@@ -82,6 +85,7 @@ bash install_flash_attn.sh
 | 模式 | 模型 / 脚本 | 说明 |
 |------|-------------|------|
 | **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · 约 12GB 显存起 |
+| **Anima Edit** | 图像编辑 LoRA（实验） | 目前在 [`anima-edit`](https://github.com/wochenlong/lora-scripts-next/tree/anima-edit) 分支独立维护 |
 | **Anima LoRA Fast** | 仅 LoRA（进阶插件） | 可选 [anima_lora](https://github.com/sorryhyun/anima_lora) 运行时 · 建议 16GB+ · 见 [`docs/anima-fast.md`](docs/anima-fast.md) |
 | **Anima 全量微调** | 完整 DiT（`anima_train.py`） | 侧栏 **全量微调 → Anima Finetune** · **约 24GB 显存**（4090 档） |
 | SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |

@@ -24,6 +24,9 @@
 <p align="center">
   <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>Credits</b></a>
 </p>
+<p align="center">
+  <a href="https://github.com/wochenlong/lora-scripts-next/tree/anima-edit"><b>Experimental: Anima Edit branch</b></a>
+</p>
 
 ---
 
@@ -82,6 +85,7 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 | Mode | Model / script | Notes |
 |------|----------------|-------|
 | **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · from ~12 GB VRAM |
+| **Anima Edit** | Image editing LoRA (experimental) | Maintained on the [`anima-edit`](https://github.com/wochenlong/lora-scripts-next/tree/anima-edit) branch |
 | **Anima LoRA Fast** | LoRA only (plugin) | Optional [anima_lora](https://github.com/sorryhyun/anima_lora) runtime · ~16 GB+ · see [`docs/anima-fast.md`](docs/anima-fast.md) |
 | **Anima Finetune** | Full DiT (`anima_train.py`) | Sidebar **全量微调 → Anima Finetune** · **~24 GB VRAM** (4090-class) |
 | SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
