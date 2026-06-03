@@ -140,6 +140,7 @@
                     "AdamW",
                     "AdamW8bit",
                     "Automagic",
+                    "EmoSens",
                     "PagedAdamW8bit",
                     "RAdamScheduleFree",
                     "Lion",
@@ -167,6 +168,13 @@
                     prodigy_d0: Schema.string(),
                     prodigy_d_coef: Schema.string().default("2.0"),
                 }),
+                Schema.object({}),
+            ]),
+
+            Schema.union([
+                Schema.object({
+                    optimizer_type: Schema.const('EmoSens').required(),
+                }).description("⚠ 选用 EmoSens 时请将学习率手动调至约 1.0（LoRA），优化器通过 emoPulse 自主生成 LR"),
                 Schema.object({}),
             ]),
 

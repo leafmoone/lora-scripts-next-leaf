@@ -5267,6 +5267,13 @@ def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
         # Automagic manages its own lr; pass lr as the starting point
         optimizer = optimizer_class(trainable_params, lr=lr if lr is not None else 1e-6, **optimizer_kwargs)
 
+    elif optimizer_type == "EmoSens".lower():
+        from library.optimizers.emosens import EmoSens
+        logger.info(f"use EmoSens optimizer (muooon/EmoSens, Apache-2.0) | {optimizer_kwargs}")
+        optimizer_class = EmoSens
+        # EmoSens generates LR autonomously via emoPulse; lr=1.0 is recommended
+        optimizer = optimizer_class(trainable_params, lr=lr if lr is not None else 1.0, **optimizer_kwargs)
+
     elif optimizer_type == "AdamW".lower():
         logger.info(f"use AdamW optimizer | {optimizer_kwargs}")
         optimizer_class = torch.optim.AdamW
