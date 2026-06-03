@@ -45,6 +45,10 @@
 
 The portable package ships the default WD tagger **wd14-convnextv2-v2** under **`tagger-models/wd14/`** (~400 MB). If Hugging Face download fails, place `model.onnx` and `selected_tags.csv` there manually — see [`docs/tagger-models.md`](docs/tagger-models.md).
 
+> **CLI / cloud training:** `train.sh` is the legacy SD/SDXL/Flux entry. For Anima use the dedicated scripts:
+> `bash train_anima_by_toml.sh docs/examples/anima-lora-benchmark-kohya.toml` (standard, non-Fast) or
+> `bash train_anima_fast_by_toml.sh docs/examples/anima-lora-benchmark-fast.toml` (Fast plugin; run `bash scripts/cli/install_anima_fast.sh` first).
+
 > **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
 
 <details>

@@ -26,9 +26,33 @@
 
 - `LORA_ENABLE_ANIMA_FAST=1`（默认开启 Fast 入口；设为 `0` 可隐藏侧栏与 API）。
 
-### v2.7.0 整合包热更新 — 2026-06-01
+### v2.7.0 整合包热更新 — 2026-06-02（第三次重发）
 
-> 同 tag **v2.7.0** 重发 7z（`PORTABLE_BUILD` **`18e15cc`**，约 **381.6 MB**）。初版 Release 7z 为 `7841f19` 前后构建，不含下列修复。
+> 同 tag **v2.7.0** 重发 7z（`PORTABLE_BUILD` **`65df2ba`**，约 **381.3 MB**）。相对 **`18e15cc`** 构建新增下列内容；更早相对初版 7z 的修复见上一节历史说明。
+
+#### 整合包 / 更新器
+
+- **Bootstrap 自更新（`UPDATER_VERSION=2`）**：运行 `Update-*.bat` 前先从 GitHub `main` 同步最新更新脚本（SHA256 比对），有变更则自动重启后再执行 Git / Release 更新；网络失败回退本地 bundled 脚本。
+- **版本信息展示**：更新开始时打印 **本地 VERSION / PORTABLE_BUILD / git**、**线上 main VERSION**、**最新 Release**、**本地 vs 线上 UPDATER_VERSION**。
+- 团队约定与变迁索引：[Discussion #73](https://github.com/wochenlong/lora-scripts-next/discussions/73)。
+
+#### Bug 修复（相对 `18e15cc` 7z 新增）
+
+- **#72** Anima Fast 插件安装：`EnvironmentInstallPlan` 为 frozen dataclass，改用 `dataclasses.replace` 设置 `source_root`，修复 `cannot assign to field 'source_root'`。
+
+#### 升级指引
+
+| 场景 | 操作 |
+|------|------|
+| 已装 **v2.7.0 整合包**（任意 `PORTABLE_BUILD`） | **`Update-SD-Trainer-Release.bat`**（推荐）或 **`Update-SD-Trainer.bat`** |
+| 从 v2.5.x / v2.6.x | 保留用户数据目录后 Release 更新或下载本 7z |
+| 无 `.git` 的旧包 | **Release 更新** 或整包下载 |
+
+更新后确认 **`SD-Trainer/PORTABLE_BUILD`** 第一行为 **`65df2ba`**，`scripts/portable/UPDATER_VERSION` 为 **`2`**。
+
+### v2.7.0 整合包热更新 — 2026-06-01（第二次重发，已 supersede）
+
+> 同 tag **v2.7.0** 重发 7z（`PORTABLE_BUILD` **`18e15cc`**，约 **381.6 MB**）。初版 Release 7z 为 `7841f19` 前后构建，不含下列修复。**已被 2026-06-02 `65df2ba` 构建取代。**
 
 #### 整合包 / 更新器
 
@@ -36,6 +60,7 @@
 - 新增 **`SD-Trainer/PORTABLE_BUILD`**（git short SHA + `built_at` + version），便于对比是否已同步最新构建。
 - Release 更新后写入 **`config/.portable_release_sync.json`**（Release 资产 id / 更新时间）。
 - 修复 **`update_from_release.ps1`** PowerShell 字符串解析（尾随 `\`、方括号等导致脚本后半段未执行）。
+- Release 合并后**显式同步** `SD-Trainer/.git`；打包时写入 `scripts/portable/templates/Update-*.bat`，避免根目录仍为 v2.5 时代「仅 `git pull`、无 `.git` 检查仍显示完成」的旧脚本。
 
 #### Bug 修复（本重发包相对初版 7z 新增）
 

@@ -5,10 +5,11 @@ from mikazuki.app.api import apply_anima_training_defaults
 
 
 class AnimaTrainingDefaultsTests(unittest.TestCase):
-    def test_anima_does_not_auto_enable_full_bf16(self):
+    def test_anima_does_not_auto_enable_full_bf16_for_non_lokr(self):
         config = {
             "mixed_precision": "bf16",
             "optimizer_type": "AdamW8bit",
+            "lora_type": "lora",
             "unet_lr": "5e-5",
             "attn_mode": "torch",
         }
@@ -17,6 +18,20 @@ class AnimaTrainingDefaultsTests(unittest.TestCase):
 
         self.assertNotIn("full_bf16", config)
         self.assertEqual(config["unet_lr"], 5e-5)
+
+    def test_anima_auto_enables_full_bf16_for_lokr_bf16(self):
+        config = {
+            "mixed_precision": "bf16",
+            "optimizer_type": "AdamW8bit",
+            "network_module": "lycoris.kohya",
+            "network_args": ["algo=lokr", "factor=8"],
+            "unet_lr": "5e-5",
+            "attn_mode": "torch",
+        }
+
+        apply_anima_training_defaults(config, "anima-lora")
+
+        self.assertTrue(config.get("full_bf16"))
 
     def test_anima_disables_full_bf16_for_came(self):
         config = {

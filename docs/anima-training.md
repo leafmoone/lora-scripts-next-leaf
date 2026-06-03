@@ -56,6 +56,39 @@ Download-Anima-Model.bat
 
 **Fast 模式（进阶插件）**：与标准 Kohya 后端并列，需单独安装插件；同参下 RTX 4090 实测约 **2.5×** 步速提升。详见 **[Anima Fast 模式指南](./anima-fast.md)**。
 
+## 纯命令行训练
+
+云平台无法访问 WebUI 时，可以直接用 TOML 训练。`train.sh` 是旧式 SD/SDXL/Flux 入口，Anima 请使用专用脚本。
+
+**Anima LoRA 标准模式（非 Fast）：**
+
+```bash
+bash train_anima_by_toml.sh docs/examples/anima-lora-benchmark-kohya.toml
+```
+
+等价底层入口：
+
+```bash
+python scripts/dev/anima_train_network.py --config_file docs/examples/anima-lora-benchmark-kohya.toml
+```
+
+训练前请复制 `docs/examples/anima-lora-benchmark-kohya.toml` 并修改模型与数据集路径：
+
+- `pretrained_model_name_or_path`：Anima DiT 主权重
+- `vae`：Qwen Image VAE
+- `qwen3`：Qwen3 文本模型
+- `dataset_config`：数据集配置
+- `output_dir` / `output_name`：输出位置与模型名称
+
+**Anima Fast 插件模式：**
+
+```bash
+bash scripts/cli/install_anima_fast.sh
+bash train_anima_fast_by_toml.sh docs/examples/anima-lora-benchmark-fast.toml
+```
+
+Fast 使用 `extensions/anima_lora/.venv` 独立环境；标准 Anima 使用主项目环境和 `scripts/dev/anima_train_network.py` wrapper。两者不要混用配置入口。
+
 ## 进阶：T-LoRA 训练教程
 
 ### 什么是 T-LoRA？

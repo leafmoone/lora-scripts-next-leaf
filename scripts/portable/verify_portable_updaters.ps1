@@ -29,12 +29,32 @@ Test-FileExists "Update-SD-Trainer-Release.bat" "Release updater" | Out-Null
 Test-FileExists "update\update_sd_trainer.bat" "update_sd_trainer shortcut" | Out-Null
 Test-FileExists "update\update_from_release.bat" "update_from_release shortcut" | Out-Null
 Test-FileExists "SD-Trainer\scripts\portable\update_from_release.ps1" "update_from_release.ps1" | Out-Null
+Test-FileExists "SD-Trainer\scripts\portable\UPDATER_VERSION" "UPDATER_VERSION" | Out-Null
+Test-FileExists "SD-Trainer\scripts\portable\bootstrap_portable_updaters.ps1" "bootstrap_portable_updaters.ps1" | Out-Null
+Test-FileExists "SD-Trainer\scripts\portable\portable_updater_common.ps1" "portable_updater_common.ps1" | Out-Null
+Test-FileExists "SD-Trainer\scripts\portable\show_portable_update_status.ps1" "show_portable_update_status.ps1" | Out-Null
 
 $gitHead = Join-Path $PortableRoot "SD-Trainer\.git\HEAD"
 if (Test-Path $gitHead) {
     Write-Host '[OK] SD-Trainer\.git\HEAD'
 } else {
     $failures += "[FAIL] SD-Trainer\.git\HEAD missing (git update will not work)"
+}
+
+$gitUpdater = Join-Path $PortableRoot "Update-SD-Trainer.bat"
+if (Test-Path $gitUpdater) {
+    $bat = Get-Content $gitUpdater -Raw
+    if ($bat -match 'Pulling latest code') {
+        $failures += "[FAIL] Update-SD-Trainer.bat is legacy (git pull without .git check); replace from Release or scripts\portable\templates"
+    } elseif ($bat -notmatch 'not exist "\.git\\"') {
+        $failures += "[FAIL] Update-SD-Trainer.bat missing .git pre-check"
+    } elseif ($bat -notmatch 'bootstrap_updater_scripts') {
+        $failures += "[FAIL] Update-SD-Trainer.bat missing updater bootstrap"
+    } elseif ($bat -notmatch 'show_portable_update_status') {
+        $failures += "[FAIL] Update-SD-Trainer.bat missing show_portable_update_status"
+    } else {
+        Write-Host '[OK] Update-SD-Trainer.bat is current (not legacy pull-only)'
+    }
 }
 
 $ps1 = Join-Path $PortableRoot "SD-Trainer\scripts\portable\update_from_release.ps1"

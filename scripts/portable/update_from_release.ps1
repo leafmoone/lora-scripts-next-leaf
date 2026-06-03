@@ -10,6 +10,8 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot "portable_updater_common.ps1")
+
 function Write-Step([string]$Message) {
     Write-Host $Message
 }
@@ -65,9 +67,7 @@ function Set-ReleaseSyncState([string]$TrainerDir, [object]$Asset) {
 }
 
 function Read-PortableBuild([string]$TrainerDir) {
-    $path = Join-Path $TrainerDir "PORTABLE_BUILD"
-    if (-not (Test-Path $path)) { return "" }
-    return ((Get-Content $path -TotalCount 1 -ErrorAction SilentlyContinue) -join "").Trim()
+    Read-LocalPortableBuild $TrainerDir
 }
 
 function Get-ReleaseAsset {
@@ -103,20 +103,17 @@ if (-not (Test-Path (Join-Path $TrainerDir "gui.py"))) {
 
 $repo = "wochenlong/lora-scripts-next"
 $asset = Get-ReleaseAsset -Repository $repo -TagName $Tag -PreferredAssetName $AssetName
-$currentVersion = ""
-$versionFile = Join-Path $TrainerDir "VERSION"
-if (Test-Path $versionFile) {
-    $currentVersion = (Get-Content $versionFile -TotalCount 1).Trim()
-}
+$currentVersion = Read-LocalProductVersion $TrainerDir
 $currentBuild = Read-PortableBuild $TrainerDir
+$updaterVersion = Read-LocalUpdaterVersion $TrainerDir
+$scriptPath = $MyInvocation.MyCommand.Path
+Write-PortableUpdateStatusBanner -PortableRoot $PortableRoot -UpdaterLabel "Release (PowerShell)" -UpdaterFile $scriptPath
+
 $releaseTag = $asset.name -replace '\.7z$','' -replace '^SD-Trainer-v','v'
 $syncState = Get-ReleaseSyncState $TrainerDir
 
+Write-Step "--- Target Release / 目标 Release ---"
 Write-Step "Release tag / 发布标签: $releaseTag"
-Write-Step "Current VERSION / 当前版本: $(if ($currentVersion) { $currentVersion } else { '(unknown)' })"
-if ($currentBuild) {
-    Write-Step "Current PORTABLE_BUILD / 当前构建: $currentBuild"
-}
 Write-Step "Release asset updated / 资产更新时间: $($asset.updated_at)"
 if ($syncState -and $syncState.asset_id -eq ([string]$asset.id) -and $syncState.asset_updated_at -eq ([string]$asset.updated_at)) {
     Write-Step 'Release asset unchanged since last sync - will re-download and merge anyway.'
@@ -203,6 +200,18 @@ if ($LASTEXITCODE -ge 8) {
     throw "robocopy failed with exit code $LASTEXITCODE"
 }
 
+$stagingGit = Join-Path $stagingTrainer ".git"
+$destGit = Join-Path $TrainerDir ".git"
+if (Test-Path $stagingGit) {
+    if (Test-Path $destGit) {
+        Remove-Item $destGit -Recurse -Force
+    }
+    Copy-Item $stagingGit $destGit -Recurse -Force
+    Write-Step "Synced SD-Trainer\.git from Release package"
+} else {
+    Write-Step "WARNING: Release package missing SD-Trainer\.git (Git update will not work)"
+}
+
 Write-Step ""
 Write-Step "Refreshing root launchers / 刷新根目录启动脚本..."
 $rootFiles = @(
@@ -238,11 +247,18 @@ Write-Step ""
 Write-Step "========================================"
 Write-Step "  Done / 更新完成"
 Write-Step "========================================"
+Write-Step "  Updater script version / 更新脚本版本: $updaterVersion"
 if ($newVersion) {
     Write-Step "  New VERSION / 新版本: $newVersion"
 }
 if ($newBuild) {
     Write-Step "  New PORTABLE_BUILD / 新构建: $newBuild"
+}
+if ($currentVersion -and $newVersion -and $currentVersion -ne $newVersion) {
+    Write-Step "  VERSION changed / 版本变化: $currentVersion -> $newVersion"
+}
+if ($currentBuild -and $newBuild -and $currentBuild -ne $newBuild) {
+    Write-Step "  PORTABLE_BUILD changed / 构建变化: $currentBuild -> $newBuild"
 }
 if ($newVersion -and $currentVersion -and $newVersion -eq $currentVersion -and $newBuild -and $newBuild -ne $currentBuild) {
     Write-Step ""

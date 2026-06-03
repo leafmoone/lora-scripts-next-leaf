@@ -35,7 +35,7 @@
 |------|------|------|
 | **项目级** | @wochenlong | 跨模块、发布、契约路径、优先级、是否采纳设计草案 |
 | **领域级** | 上表 DRI | 改动**不削弱其它功能稳定性**且**对用户有明确正面作用**时，可自行决策并提 PR |
-| **方案讨论** | 开放式 | [Discussions](https://github.com/wochenlong/lora-scripts-next/discussions)（如 [端口 #53](https://github.com/wochenlong/lora-scripts-next/discussions/53)）不定稿；**落地须拆 Issue** |
+| **方案讨论** | 开放式 | [Discussions](https://github.com/wochenlong/lora-scripts-next/discussions)（如 [端口 #53](https://github.com/wochenlong/lora-scripts-next/discussions/53)、[整合包更新 #73](https://github.com/wochenlong/lora-scripts-next/discussions/73)）不定稿；**落地须拆 Issue** |
 
 ---
 

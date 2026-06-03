@@ -90,3 +90,40 @@ def test_portable_builder_writes_portable_build_metadata():
 
     assert "Write-PortableBuildMetadata" in script
     assert "PORTABLE_BUILD" in script
+    assert "scripts\\portable\\templates" in script
+
+
+def test_portable_git_updater_is_not_legacy_pull_only():
+    bat = (ROOT / "build-scripts" / "templates" / "Update-SD-Trainer.bat").read_text(
+        encoding="utf-8"
+    )
+    assert "Pulling latest code" not in bat
+    assert 'not exist ".git\\"' in bat
+    assert "print_version_info" in bat
+    assert "UPDATER_VERSION" in bat
+
+
+def test_portable_updater_version_file_exists():
+    version_file = ROOT / "scripts" / "portable" / "UPDATER_VERSION"
+    assert version_file.is_file()
+    text = version_file.read_text(encoding="utf-8").strip()
+    assert text.isdigit()
+    assert int(text) >= 1
+
+
+def test_portable_updater_manifest_paths_exist():
+    common = (
+        ROOT / "scripts" / "portable" / "portable_updater_common.ps1"
+    ).read_text(encoding="utf-8")
+    assert "Get-PortableUpdaterManifest" in common
+    for rel in (
+        "build-scripts/templates/Update-SD-Trainer.bat",
+        "scripts/portable/bootstrap_portable_updaters.ps1",
+        "scripts/portable/UPDATER_VERSION",
+    ):
+        assert rel in common
+    bat = (ROOT / "build-scripts" / "templates" / "Update-SD-Trainer.bat").read_text(
+        encoding="utf-8"
+    )
+    assert "bootstrap_updater_scripts" in bat
+    assert "--no-bootstrap" in bat
