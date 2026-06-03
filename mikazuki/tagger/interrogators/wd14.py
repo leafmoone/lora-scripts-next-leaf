@@ -15,6 +15,7 @@ from huggingface_hub import hf_hub_download
 from mikazuki.tagger.interrogators.base import Interrogator
 from mikazuki.tagger import dbimutils, format
 from mikazuki.tagger.local_models import local_model_asset_paths
+from mikazuki.tagger.ort_session import create_inference_session
 
 
 class WaifuDiffusionInterrogator(Interrogator):
@@ -61,14 +62,9 @@ class WaifuDiffusionInterrogator(Interrogator):
         #     run_pip(f'install {package}', 'onnxruntime')
 
         # Load torch to load cuda libs built in torch for onnxruntime, do not delete this.
-        import torch
-        from onnxruntime import InferenceSession
+        import torch  # noqa: F401 — onnxruntime may use torch CUDA libs in portable builds
 
-        # https://onnxruntime.ai/docs/execution-providers/
-        # https://github.com/toriato/stable-diffusion-webui-wd14-tagger/commit/e4ec460122cf674bbf984df30cdb10b4370c1224#r92654958
-        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-
-        self.model = InferenceSession(str(model_path), providers=providers)
+        self.model = create_inference_session(model_path)
 
         print(f'Loaded {self.name} model from {model_path}')
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from mikazuki.tagger import dbimutils, format
 from mikazuki.tagger.interrogators.base import Interrogator
 from mikazuki.tagger.local_models import local_model_asset_paths
+from mikazuki.tagger.ort_session import create_inference_session
 
 
 @dataclass
@@ -156,12 +157,9 @@ class CLTaggerInterrogator(Interrogator):
     def load(self) -> None:
         model_path, tag_mapping_path = self.download()
 
-        import torch
-        from onnxruntime import InferenceSession
+        import torch  # noqa: F401
 
-        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
-
-        self.model = InferenceSession(str(model_path), providers=providers)
+        self.model = create_inference_session(model_path)
 
         print(f'Loaded {self.name} model from {model_path}')
 

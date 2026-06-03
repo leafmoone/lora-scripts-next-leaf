@@ -55,6 +55,19 @@ WebUI「数据集打标」会**优先**使用项目根目录下 `tagger-models/`
 
 设置环境变量 `MIKAZUKI_TAGGER_MODELS_DIR` 指向其它绝对路径，可覆盖默认的 `<项目根>/tagger-models`。
 
+## 一直停在「加载模型」、无进度（排障）
+
+日志若只有 `Loading … from local tagger-models directory` 而无后续 `Loaded …`：
+
+1. 检查 `model.onnx` 体积约 **370–400 MB**（仅几 MB 多为下载不完整，会校验失败并提示重下）。
+2. Windows 便携包首次用 CUDA 加载 ONNX 可能挂死，启动前可强制 CPU：
+   ```bat
+   set MIKAZUKI_TAGGER_ORT_PROVIDERS=cpu
+   python gui.py
+   ```
+3. 可选：`MIKAZUKI_TAGGER_ORT_LOAD_TIMEOUT=120`（秒）避免无限等待。
+4. 打标页底部应有进度 dock；若无，确认 `frontend/dist/tagger.html` 已引入 `tagger-progress.js`（见 Issue #78）。
+
 ## 相关文档
 
 - 打标 API 与进度：[docs/api/dataset-tagging.md](api/dataset-tagging.md)

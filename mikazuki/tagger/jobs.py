@@ -61,6 +61,16 @@ def run_interrogate_job(req) -> None:
 
         tagger_progress.check_cancelled()
 
+        tagger_progress.begin_tagging(model_key, 0, message="正在加载 ONNX 模型…")
+        try:
+            interrogator.load()
+        except Exception as exc:  # noqa: BLE001
+            if tagger_progress.is_cancel_requested():
+                tagger_progress.finish_cancelled()
+            else:
+                tagger_progress.finish_error(str(exc))
+            return
+
         result = on_interrogate(
             image=None,
             batch_input_glob=req.path,
