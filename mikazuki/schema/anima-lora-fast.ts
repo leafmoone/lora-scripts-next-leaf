@@ -14,10 +14,10 @@ Schema.intersect([
         qwen3_max_token_length: Schema.number().step(1).default(512).description("Qwen3 最大 token 长度"),
         timestep_sampling: Schema.union(["sigma", "uniform", "sigmoid", "shift", "flux_shift"]).default("shift").description("时间步采样"),
         discrete_flow_shift: Schema.number().step(0.001).default(3.0).description("Rectified Flow 位移"),
-        attn_mode: Schema.union(["", "torch", "xformers", "sageattn", "flash"]).default("flash").description("Attention 加速实现"),
+        attn_mode: Schema.union(["", "torch", "xformers", "sageattn", "flash"]).default("").description("Attention 加速实现。留空使用 torch 保底，避免 flash-attn 缺失导致预检查失败；手动选择 flash 需要插件环境已安装 flash-attn 且显卡支持"),
         torch_compile: Schema.boolean().default(true).description("启用 torch.compile"),
-        static_token_count: Schema.number().min(1).default(4096).description("静态 token 上限；bucket 高分辨率训练建议保持 4096 或更高"),
-        compile_mode: Schema.union(["blocks", "full"]).default("blocks").description("compile 模式"),
+        static_token_count: Schema.number().min(1).default(4096).description("静态 token 上限；1024×1024 为 4096，1536×1536 为 9216。torch.compile 开启时后端会按分辨率自动抬高，但高分辨率会显著增加显存占用"),
+        compile_mode: Schema.union(["blocks", "full"]).default("blocks").description("compile 模式（推荐 blocks）。full 与「梯度检查点」互斥，不能同时开启"),
     }).description("Anima Fast 参数"),
 
     Schema.object({
@@ -46,7 +46,7 @@ Schema.intersect([
         max_train_epochs: Schema.number().min(1).default(1).description("最大训练 epoch；设置后 Anima 会按 epoch 和 dataloader 长度重算 step"),
         max_train_steps: Schema.number().min(1).description("最大训练 step；仅在 max_train_epochs 为空时按 step 控制"),
         train_batch_size: Schema.number().min(1).default(1).description("批量大小"),
-        gradient_checkpointing: Schema.boolean().default(true).description("梯度检查点"),
+        gradient_checkpointing: Schema.boolean().default(true).description("梯度检查点（省显存）。开启时请勿选 compile_mode=full"),
         gradient_accumulation_steps: Schema.number().min(1).default(1).description("梯度累加步数"),
         seed: Schema.number().step(1).default(42).description("随机种子"),
     }).description("训练相关参数"),
@@ -55,12 +55,12 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            enable_preview: Schema.boolean().default(false).description("启用训练预览图"),
+            enable_preview: Schema.boolean().default(false).description("启用训练预览图。默认关闭；开启后采样会额外加载 VAE/Qwen3，增加显存占用与训练耗时"),
         }).description("训练预览图设置"),
         Schema.union([
             Schema.object({
                 enable_preview: Schema.const(true).required(),
-                randomly_choice_prompt: Schema.boolean().default(false).description("随机选择预览图 Prompt（训练集仅一个子文件夹且含 .txt 时可用）"),
+                randomly_choice_prompt: Schema.boolean().default(false).description("随机选择预览图 Prompt；若训练集有多个子文件夹，则按文件夹名排序使用第一个子文件夹中的 .txt"),
                 prompt_file: Schema.string().role('textarea').description("预览 Prompt 文件路径；填写后优先于下方 positive/negative"),
                 positive_prompts: Schema.string().role('textarea').default("1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looking at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukata, choker, split mouth, side ponytail, bow, brown hair").description("预览 Prompt"),
                 negative_prompts: Schema.string().role('textarea').default("nsfw, explicit, sexual content, nude, naked, nipples, areola, genitals, cleavage, breasts, ass, buttocks, thighs, underwear, lingerie, bikini, swimsuit, erotic, suggestive, lewd, spread legs, close-up body, transparent clothes, worst quality, low quality, score_1, score_2, score_3, artist name, jpeg artifacts").description("Negative Prompt"),
@@ -70,7 +70,7 @@ Schema.intersect([
                 sample_seed: Schema.number().default(42).description("预览图种子"),
                 sample_steps: Schema.number().min(1).max(300).default(40).description("推理步数（Anima 建议 30–50）"),
                 sample_sampler: Schema.union(["euler", "k_euler"]).default("euler").description("Anima 训练预览采样器"),
-                sample_at_first: Schema.boolean().default(true).description("训练开始前生成 step 0 预览图"),
+                sample_at_first: Schema.boolean().default(false).description("训练开始前生成 step 0 预览图。默认关闭；开启会在训练前额外采样一次并增加显存峰值"),
                 sample_every_n_epochs: Schema.number().default(2).description("每 N 个 epoch 生成一次预览图"),
             }),
             Schema.object({}),
@@ -83,6 +83,16 @@ Schema.intersect([
         network_dim: Schema.number().min(1).default(16).description("LoRA 维度"),
         network_alpha: Schema.number().min(1).default(16).description("LoRA alpha"),
         network_dropout: Schema.number().step(0.01).default(0).description("LoRA dropout"),
-        network_args_custom: Schema.array(String).role('table').description("自定义 network_args，一行一个 key=value"),
+        network_args_custom: Schema.array(String).role('table').description("高级项：自定义 network_args，一行一个 key=value；这是传给 anima_lora LoRA 网络模块的参数列表，不是顶层 TOML。新手谨慎使用；Fast 仅允许 rank_dropout、module_dropout、loraplus_lr_ratio、loraplus_unet_lr_ratio、loraplus_text_encoder_lr_ratio，不支持的 key 会中止训练"),
     }).description("网络设置"),
+
+    Schema.union([
+        Schema.object({
+            compile_mode: Schema.const("full").required(),
+            gradient_checkpointing: Schema.const(false).default(false).description(
+                "compile_mode=full 时必须关闭；与 full compile 不兼容"
+            ),
+        }),
+        Schema.object({}),
+    ]),
 ])

@@ -11,6 +11,8 @@ from unittest import mock
 from starlette.requests import Request
 
 from mikazuki.anima_fast_backend.extension_state import ExtensionLayout, STATE_READY, write_install_state
+from mikazuki.anima_fast_backend.preflight import PreflightResult
+from mikazuki.anima_fast_backend.settings import discover_runtime
 from mikazuki.app import api
 
 
@@ -33,6 +35,48 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             os.environ.pop("LORA_ENABLE_ANIMA_FAST", None)
         else:
             os.environ["LORA_ENABLE_ANIMA_FAST"] = self.previous
+
+    def test_preflight_fail_message_includes_errors(self):
+        result = PreflightResult(
+            ok=False,
+            errors=["anima_lora requires Python 3.13.*, got 3.12.0", "torch.cuda is not available"],
+        )
+        response = api._anima_fast_fail_from_preflight(result)
+        self.assertEqual(response.status, "fail")
+        self.assertIn("Python 3.13", response.message)
+        self.assertIn("预检查失败", response.message)
+
+    def test_discover_runtime_prefers_extension_venv_over_external_python(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = ExtensionLayout(root / "extensions" / "anima_lora")
+            layout.source.mkdir(parents=True)
+            layout.train_py.write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+            external = root / "external_anima"
+            external.mkdir()
+            (external / "train.py").write_text("", encoding="utf-8")
+            ext_py = external / ".venv" / "Scripts" / "python.exe"
+            ext_py.parent.mkdir(parents=True)
+            ext_py.write_text("", encoding="utf-8")
+            config_path = root / "config" / "anima_fast_backend.toml"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[backend]",
+                        f'source_dir = "extensions/anima_lora/source"',
+                        f'venv_python = "extensions/anima_lora/.venv/Scripts/python.exe"',
+                        f'external_root = "{external.as_posix()}"',
+                        f'external_python = "{ext_py.as_posix()}"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            runtime = discover_runtime(lora_next_root=root)
+
+        self.assertEqual(runtime.python.resolve(), layout.venv_python.resolve())
 
     def test_install_starts_background_task_and_returns_log_stream(self):
         with tempfile.TemporaryDirectory() as td:
@@ -126,6 +170,30 @@ class AnimaFastPluginApiTests(unittest.TestCase):
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["task_id"], "train-1")
         runner.assert_called_once()
+
+    def test_preflight_response_includes_adapter_warnings(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            adapted = type(
+                "Adapted",
+                (),
+                {
+                    "values": {"attn_mode": "torch"},
+                    "warnings": ["cache 与 skip_cache_check 已自动关闭"],
+                },
+            )()
+            preflight = PreflightResult(ok=True, warnings=["runtime warning"])
+
+            with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
+                mock.patch("mikazuki.app.api._anima_fast_runtime", return_value=object()), \
+                mock.patch("mikazuki.app.api.apply_anima_fast_preview", return_value=[]), \
+                mock.patch("mikazuki.app.api.adapt_config", return_value=adapted), \
+                mock.patch("mikazuki.app.api.run_preflight", return_value=preflight):
+                response = asyncio.run(api.anima_lora_plugin_preflight(make_request({"model_train_type": "anima-lora-fast"})))
+
+        self.assertEqual(response.status, "success")
+        self.assertIn("cache 与 skip_cache_check 已自动关闭", response.data["warnings"])
+        self.assertIn("runtime warning", response.data["warnings"])
 
 
 if __name__ == "__main__":

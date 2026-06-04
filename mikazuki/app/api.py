@@ -472,10 +472,15 @@ def _write_adapted_anima_fast_toml(values: dict, warnings: list[str], run_id: st
 
 
 def _anima_fast_fail_from_preflight(result):
-    return APIResponseFail(
-        message="Anima Fast preflight failed / Anima Fast 预检查失败",
-        data=result.as_dict(),
-    )
+    errors = list(getattr(result, "errors", None) or [])
+    if errors:
+        detail = "; ".join(errors[:4])
+        if len(errors) > 4:
+            detail += f" …（共 {len(errors)} 项）"
+        message = f"Anima Fast 预检查失败：{detail}"
+    else:
+        message = "Anima Fast 预检查失败（未返回具体原因，请修复插件或查看浏览器 Network 响应）"
+    return APIResponseFail(message=message, data=result.as_dict())
 
 
 def _anima_fast_ready_gate():
@@ -635,7 +640,7 @@ async def anima_lora_plugin_preflight(request: Request):
     except AdapterError as exc:
         return APIResponseFail(message=str(exc))
     result = run_preflight(adapted.values, runtime)
-    result.warnings = [*preview_warnings, *result.warnings]
+    result.warnings = [*adapted.warnings, *preview_warnings, *result.warnings]
     if result.ok:
         return APIResponseSuccess(data=result.as_dict())
     return _anima_fast_fail_from_preflight(result)

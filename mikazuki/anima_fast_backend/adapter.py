@@ -48,6 +48,18 @@ PATH_FIELDS = {
 }
 
 SUPPORTED_LORA_TYPES = {"lora"}
+UNSUPPORTED_FAST_MEMORY_FIELDS = {
+    "blocks_to_swap",
+    "cpu_offload_checkpointing",
+    "unsloth_offload_checkpointing",
+}
+FAST_NETWORK_ARGS_ALLOWLIST = {
+    "rank_dropout",
+    "module_dropout",
+    "loraplus_lr_ratio",
+    "loraplus_unet_lr_ratio",
+    "loraplus_text_encoder_lr_ratio",
+}
 
 FAST_SUPPORTED_OPTIMIZERS = {
     "AdamW",
@@ -86,6 +98,37 @@ def is_empty(value: Any) -> bool:
     return value is None or (isinstance(value, str) and value.strip().lower() in {"", "undefined", "null", "nan"})
 
 
+def truthy(value: Any) -> bool:
+    return value in (True, "true", "True", "1", 1)
+
+
+def int_value(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(str(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def resolution_tokens(value: Any) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, int):
+        width = height = value
+    else:
+        text = str(value).replace("x", ",").replace(" ", "")
+        parts = [p for p in text.split(",") if p]
+        if len(parts) == 1:
+            width = height = int_value(parts[0])
+        elif len(parts) >= 2:
+            width = int_value(parts[0])
+            height = int_value(parts[1])
+        else:
+            return 0
+    if width <= 0 or height <= 0:
+        return 0
+    return (width // 16) * (height // 16)
+
+
 def normalize_kv_args(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
@@ -105,6 +148,49 @@ def normalize_kv_args(values: Any) -> list[str]:
         else:
             key_index[key] = len(out)
             out.append(item)
+    return out
+
+
+def normalize_fast_network_args(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    out: list[str] = []
+    key_index: dict[str, int] = {}
+    unsupported: list[str] = []
+    malformed: list[str] = []
+    for raw in values:
+        if not isinstance(raw, str) or "=" not in raw:
+            if raw not in (None, ""):
+                malformed.append(str(raw))
+            continue
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or value.lower() in {"undefined", "null", "nan"}:
+            malformed.append(str(raw))
+            continue
+        if key not in FAST_NETWORK_ARGS_ALLOWLIST:
+            unsupported.append(key)
+            continue
+        item = f"{key}={value}"
+        if key in key_index:
+            out[key_index[key]] = item
+        else:
+            key_index[key] = len(out)
+            out.append(item)
+
+    if malformed:
+        raise AdapterError(
+            "network_args_custom must be key=value lines; invalid item(s): "
+            + ", ".join(malformed[:5])
+        )
+    if unsupported:
+        allowed = ", ".join(sorted(FAST_NETWORK_ARGS_ALLOWLIST))
+        raise AdapterError(
+            "network_args_custom contains unsupported Anima Fast key(s): "
+            + ", ".join(sorted(set(unsupported)))
+            + f". Allowed keys: {allowed}"
+        )
     return out
 
 
@@ -177,11 +263,22 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     for key, value in source.items():
         if key in UI_ONLY_FIELDS:
             continue
+        if key in UNSUPPORTED_FAST_MEMORY_FIELDS:
+            if (key == "blocks_to_swap" and int_value(value) > 0) or (key != "blocks_to_swap" and truthy(value)):
+                warnings.append(f"{key} is not exposed in Anima Fast MVP and was ignored")
+            continue
         if is_empty(value):
             continue
-        if key in {"network_args", "optimizer_args", "network_args_custom", "optimizer_args_custom"}:
+        if key in {"network_args", "network_args_custom"}:
+            normalized = normalize_fast_network_args(value)
+            target = "network_args"
+            if normalized:
+                existing = values.get(target, [])
+                values[target] = normalize_fast_network_args([*existing, *normalized]) if existing else normalized
+            continue
+        if key in {"optimizer_args", "optimizer_args_custom"}:
             normalized = normalize_kv_args(value)
-            target = key.replace("_custom", "")
+            target = "optimizer_args"
             if normalized:
                 existing = values.get(target, [])
                 values[target] = normalize_kv_args([*existing, *normalized]) if existing else normalized
@@ -195,9 +292,31 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
 
     values.setdefault("torch_compile", True)
     values.setdefault("static_token_count", 4096)
+    if truthy(values.get("torch_compile")):
+        tokens = resolution_tokens(values.get("resolution"))
+        static_token_count = int_value(values.get("static_token_count"), 0)
+        if tokens and tokens > static_token_count:
+            values["static_token_count"] = tokens
+            warnings.append(
+                f"static_token_count 已按 resolution 自动提高到 {tokens}；"
+                "高分辨率 Fast compile 会显著增加显存占用"
+            )
+    cache_keys = ("cache_latents", "cache_text_encoder_outputs")
+    if truthy(values.get("skip_cache_check")) and any(truthy(values.get(key)) for key in cache_keys):
+        for key in (*cache_keys, "skip_cache_check"):
+            values[key] = False
+        warnings.append(
+            "cache_latents/cache_text_encoder_outputs 不能与 skip_cache_check 同时开启；"
+            "已自动关闭缓存读取和跳过检查，改用 live encoding"
+        )
     values.setdefault("compile_mode", "blocks")
+    if str(values.get("compile_mode", "blocks")) == "full" and truthy(values.get("gradient_checkpointing")):
+        values["compile_mode"] = "blocks"
+        warnings.append("compile_mode=full 与 gradient_checkpointing 不兼容，已自动改为 blocks")
     values.setdefault("dynamo_backend", "inductor")
-    values.setdefault("attn_mode", "flash")
+    if is_empty(values.get("attn_mode")):
+        values["attn_mode"] = "torch"
+        warnings.append("attn_mode 留空时使用 torch 保底；如需 flash 请先确认插件环境已安装 flash-attn")
     values.setdefault("network_module", "networks.lora_anima")
 
     if not is_empty(source.get("max_train_epochs")) and not is_empty(source.get("max_train_steps")):

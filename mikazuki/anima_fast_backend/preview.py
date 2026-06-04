@@ -27,13 +27,7 @@ def is_preview_enabled(config: dict) -> bool:
         return True
     if raw in (False, "false", "False", "0", 0):
         return False
-    if not is_empty(config.get("prompt_file")):
-        return True
-    if not is_empty(config.get("positive_prompts")):
-        return True
-    if not is_empty(config.get("sample_every_n_epochs")) or not is_empty(config.get("sample_every_n_steps")):
-        return True
-    if config.get("sample_at_first") in (True, "true", "True", "1", 1):
+    if not is_empty(config.get("prompt_file")) or not is_empty(config.get("sample_prompts")):
         return True
     return False
 
@@ -53,12 +47,16 @@ def _positive_from_dataset(config: dict) -> str:
     train_data_dir = config.get("train_data_dir")
     if not train_data_dir:
         raise AdapterError("随机预览 Prompt 需要填写训练图片目录 train_data_dir")
-    sub_dirs = [path for path in glob(os.path.join(train_data_dir, "*")) if os.path.isdir(path)]
-    if len(sub_dirs) != 1:
-        raise AdapterError("训练数据集下有多个子文件夹，无法启用随机选取 Prompt 功能")
-    txt_files = glob(os.path.join(sub_dirs[0], "*.txt"))
+    sub_dirs = sorted(
+        (path for path in glob(os.path.join(train_data_dir, "*")) if os.path.isdir(path)),
+        key=lambda path: Path(path).name.lower(),
+    )
+    if not sub_dirs:
+        raise AdapterError("训练数据集路径没有子文件夹，无法随机选取 Prompt")
+    prompt_dir = sub_dirs[0]
+    txt_files = glob(os.path.join(prompt_dir, "*.txt"))
     if not txt_files:
-        raise AdapterError("训练数据集路径没有 txt 文件")
+        raise AdapterError(f"随机预览 Prompt 选择的首个子文件夹没有 txt 文件: {prompt_dir}")
     sample_prompt_file = random.choice(txt_files)
     try:
         return Path(sample_prompt_file).read_text(encoding="utf-8").strip()
@@ -116,7 +114,7 @@ def apply_anima_fast_preview(config: dict, autosave_dir: str, run_id: str) -> li
         config["sample_prompts"] = str(out_path.resolve())
 
     if config.get("sample_at_first") is None:
-        config["sample_at_first"] = True
+        config["sample_at_first"] = False
     if is_empty(config.get("sample_every_n_epochs")) and is_empty(config.get("sample_every_n_steps")):
         config["sample_every_n_epochs"] = 2
     config.setdefault("sample_sampler", "euler")

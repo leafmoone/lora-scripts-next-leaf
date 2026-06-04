@@ -162,7 +162,7 @@ class AdapterTests(unittest.TestCase):
                 "lora_type": "lora",
                 "train_data_dir": "dataset",
                 "pretrained_model_name_or_path": "models/model.safetensors",
-                "network_args_custom": ["rank=16"],
+                "network_args_custom": ["rank_dropout=0.1"],
             }, runtime, "run-1")
 
         self.assertEqual(adapted.values["method"], "lora")
@@ -171,6 +171,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("lora_cache_dir", adapted.values)
         self.assertNotIn("cache_dir", adapted.values)
         self.assertNotIn("model_train_type", adapted.values)
+        self.assertEqual(adapted.values["network_args"], ["rank_dropout=0.1"])
         self.assertIn('method = "lora"', dump_flat_toml(adapted.values))
 
     def test_adapt_config_uses_stable_dataset_cache_paths(self):
@@ -209,6 +210,78 @@ class AdapterTests(unittest.TestCase):
 
         self.assertTrue(any("max_train_epochs is set" in warning for warning in adapted.warnings))
 
+    def test_adapt_config_uses_torch_when_attn_mode_is_empty(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config({
+                "lora_type": "lora",
+                "attn_mode": "",
+            }, runtime, "run-1")
+
+        self.assertEqual(adapted.values["attn_mode"], "torch")
+        self.assertTrue(any("attn_mode" in warning for warning in adapted.warnings))
+
+    def test_adapt_config_raises_static_token_count_for_high_resolution_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config({
+                "lora_type": "lora",
+                "resolution": "1536,1536",
+                "torch_compile": True,
+                "static_token_count": 4096,
+            }, runtime, "run-1")
+
+        self.assertEqual(adapted.values["static_token_count"], 9216)
+        self.assertTrue(any("static_token_count" in warning for warning in adapted.warnings))
+
+    def test_adapt_config_ignores_unsupported_fast_memory_fields(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config({
+                "lora_type": "lora",
+                "blocks_to_swap": 8,
+                "cpu_offload_checkpointing": True,
+                "unsloth_offload_checkpointing": True,
+            }, runtime, "run-1")
+
+        self.assertNotIn("blocks_to_swap", adapted.values)
+        self.assertNotIn("cpu_offload_checkpointing", adapted.values)
+        self.assertNotIn("unsloth_offload_checkpointing", adapted.values)
+        self.assertTrue(any("blocks_to_swap" in warning for warning in adapted.warnings))
+
+    def test_adapt_config_disables_cache_when_skip_cache_check_is_combined(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config({
+                "lora_type": "lora",
+                "cache_latents": True,
+                "cache_text_encoder_outputs": True,
+                "skip_cache_check": True,
+            }, runtime, "run-1")
+
+        self.assertFalse(adapted.values["cache_latents"])
+        self.assertFalse(adapted.values["cache_text_encoder_outputs"])
+        self.assertFalse(adapted.values["skip_cache_check"])
+        self.assertTrue(any("skip_cache_check" in warning for warning in adapted.warnings))
+
+    def test_adapt_config_rejects_unsupported_network_args_custom(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            with self.assertRaisesRegex(AdapterError, "unsupported Anima Fast key"):
+                adapt_config({
+                    "lora_type": "lora",
+                    "network_args_custom": ["train_llm_adapter=True"],
+                }, runtime, "run-1")
+
+    def test_adapt_config_rejects_malformed_network_args_custom(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            with self.assertRaisesRegex(AdapterError, "key=value"):
+                adapt_config({
+                    "lora_type": "lora",
+                    "network_args_custom": ["rank_dropout"],
+                }, runtime, "run-1")
+
     def test_rejects_non_mvp_lora_type(self):
         with tempfile.TemporaryDirectory() as td:
             runtime = make_runtime(Path(td))
@@ -237,6 +310,29 @@ class PreflightLauncherTests(unittest.TestCase):
                 "static_token_count": 4096,
                 "attn_mode": "flash",
             }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True, flash_attn_importable=True))
+
+        self.assertTrue(result.ok, result.errors)
+
+    def test_preflight_does_not_require_flash_attn_when_attn_mode_is_empty(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            for file in ("model.safetensors", "vae.safetensors", "qwen.safetensors"):
+                (root / file).write_text("", encoding="utf-8")
+            dataset = root / "dataset"
+            dataset.mkdir()
+            (dataset / "a.png").write_text("", encoding="utf-8")
+            (dataset / "a.txt").write_text("caption", encoding="utf-8")
+
+            result = run_preflight({
+                "pretrained_model_name_or_path": "model.safetensors",
+                "vae": "vae.safetensors",
+                "qwen3": "qwen.safetensors",
+                "train_data_dir": "dataset",
+                "resolution": "64,64",
+                "static_token_count": 4096,
+                "attn_mode": "",
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True, flash_attn_importable=False))
 
         self.assertTrue(result.ok, result.errors)
 
@@ -379,6 +475,53 @@ class PreflightLauncherTests(unittest.TestCase):
         self.assertEqual(adapted.values["optimizer_type"], "Automagic")
         self.assertTrue(any("Automagic" in w for w in adapted.warnings))
 
+    def test_preflight_rejects_compile_mode_full_with_gradient_checkpointing(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            (root / "data").mkdir()
+            (root / "data" / "1.png").write_bytes(b"png")
+            (root / "data" / "1.txt").write_text("test", encoding="utf-8")
+            for name in ("dit.safetensors", "vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(root / "dit.safetensors"),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(root / "data"),
+                    "compile_mode": "full",
+                    "gradient_checkpointing": True,
+                    "torch_compile": False,
+                    "static_token_count": 4096,
+                    "attn_mode": "torch",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True),
+            )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("gradient_checkpointing" in err for err in result.errors))
+
+    def test_adapt_config_downgrades_compile_mode_full_conflict(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            adapted = adapt_config(
+                {
+                    "model_train_type": "anima-lora-fast",
+                    "train_data_dir": str(root / "data"),
+                    "compile_mode": "full",
+                    "gradient_checkpointing": True,
+                },
+                runtime,
+                "run-1",
+            )
+
+        self.assertEqual(adapted.values["compile_mode"], "blocks")
+        self.assertTrue(any("gradient_checkpointing" in w for w in adapted.warnings))
+
     def test_preflight_rejects_automagic_without_quanto(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -410,7 +553,7 @@ class PreflightLauncherTests(unittest.TestCase):
             )
 
         self.assertFalse(result.ok)
-        self.assertTrue(any("Automagic requires optimum-quanto" in err for err in result.errors))
+        self.assertTrue(any("Automagic" in err and "optimum-quanto" in err and "修复环境" in err for err in result.errors))
 
     def test_launcher_uses_external_python_and_isolated_env(self):
         with tempfile.TemporaryDirectory() as td:

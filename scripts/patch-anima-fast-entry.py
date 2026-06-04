@@ -18,6 +18,7 @@ DATA_JS = ASSETS / "anima-fast.html.data.js"
 
 POLISH_CSS = ASSETS / "sd-trainer-ui-polish.css"
 STYLE_CSS = ASSETS / "style.874872ce.css"
+INSTALL_JS = ASSETS / "anima-fast-install.js"
 
 ROUTE_KEY = "v-anima-fast"
 PAGE_TITLE = "Anima LoRA · Fast 模式"
@@ -152,7 +153,7 @@ def patch_html() -> None:
         main_block,
     )
     html = html.replace("sd3-训练-专家模式", "anima-fast-lora")
-    html = html.replace("</body>", f"    <script>{INSTALL_GUARD}</script>\n  </body>")
+    html = _ensure_install_script(html)
     TARGET_HTML.parent.mkdir(parents=True, exist_ok=True)
     TARGET_HTML.write_text(html, encoding="utf-8")
 
@@ -182,8 +183,17 @@ def patch_app_js() -> None:
         '["v-0dc76a3b","/lora/sd3.html",{title:"SD3 \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"},["/lora/sd3","/lora/sd3.md"]]',
         '["v-0dc76a3b","/lora/sd3.html",{title:"SD3 \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"},["/lora/sd3","/lora/sd3.md"]],["v-anima-fast","/lora/anima-fast.html",{title:"Anima LoRA \\u00b7 Fast \\u6a21\\u5f0f"},["/lora/anima-fast","/lora/anima-fast.md"]]',
     )
-    js += INSTALL_GUARD
     APP_JS.write_text(js, encoding="utf-8")
+
+
+def _ensure_install_script(html: str) -> str:
+    script = f'<script src="/assets/{INSTALL_JS.name}" defer></script>'
+    if script in html:
+        return html
+    marker = '<script type="module" src="/assets/app.547295de.js" defer></script>'
+    if marker in html:
+        return html.replace(marker, script + marker, 1)
+    return html.replace("</body>", f"    {script}\n  </body>")
 
 
 def patch_prefetch_links() -> None:
@@ -191,11 +201,16 @@ def patch_prefetch_links() -> None:
     data_link = f'<link rel="prefetch" href="/assets/{DATA_JS.name}">'
     for path in sorted(DIST.rglob("*.html")):
         html = path.read_text(encoding="utf-8")
-        if page_link in html and data_link in html:
-            continue
         marker = '<link rel="prefetch" href="/assets/sd3.html.1a4bf31e.js">'
-        if marker in html:
+        changed = False
+        if marker in html and (page_link not in html or data_link not in html):
             html = html.replace(marker, marker + data_link + page_link, 1)
+            changed = True
+        updated = _ensure_install_script(html)
+        if updated != html:
+            html = updated
+            changed = True
+        if changed:
             path.write_text(html, encoding="utf-8")
 
 
@@ -397,6 +412,76 @@ html.dark body.anima-fast-page .example-container .schema-container .el-collapse
   color: var(--c-text, #adbac7) !important;
   border-bottom-color: var(--c-border, #3d444d) !important;
 }}
+
+.anima-fast-compile-warn {{
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--sd-radius-md, 8px);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--el-color-warning-dark-2, #b88230);
+  background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 12%, var(--c-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--el-color-warning, #e6a23c) 35%, var(--c-border, #dcdfe6));
+}}
+
+.anima-fast-compile-warn[hidden] {{
+  display: none !important;
+}}
+
+body.anima-fast-page .el-form-item.anima-fast-compile-locked .el-switch {{
+  opacity: 0.55;
+  pointer-events: none;
+}}
+
+body.anima-fast-page .k-schema-item.anima-fast-compile-locked .el-switch {{
+  opacity: 0.55;
+  pointer-events: none;
+}}
+
+body.anima-fast-page .el-form-item.anima-fast-compile-locked .el-select {{
+  opacity: 0.55;
+  pointer-events: none;
+}}
+
+body.anima-fast-page .k-schema-item.anima-fast-compile-locked .el-select {{
+  opacity: 0.55;
+  pointer-events: none;
+}}
+
+body.anima-fast-page .el-form-item.anima-fast-audit-limited .el-form-item__label::after {{
+  content: "（部分选项需修复插件环境）";
+  margin-left: 4px;
+  color: var(--el-color-warning-dark-2, #b88230);
+  font-size: 12px;
+  font-weight: 400;
+}}
+
+body.anima-fast-page .k-schema-item.anima-fast-audit-limited .k-schema-main::after {{
+  content: "（部分选项需修复插件环境）";
+  margin-left: 4px;
+  color: var(--el-color-warning-dark-2, #b88230);
+  font-size: 12px;
+  font-weight: 400;
+}}
+
+body.anima-fast-page .el-select-dropdown__item.anima-fast-option-disabled {{
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--el-text-color-disabled, #a8abb2) !important;
+}}
+
+body.anima-fast-page .el-select-dropdown__item.anima-fast-option-disabled::after {{
+  content: " 不可用";
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--el-color-warning-dark-2, #b88230);
+}}
+
+html.dark .anima-fast-compile-warn {{
+  color: #e6c27a;
+  background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 16%, var(--c-bg, #22272e));
+  border-color: color-mix(in srgb, var(--el-color-warning, #e6a23c) 32%, var(--c-border, #3d444d));
+}}
 /* ----- /Anima Fast UI ----- */
 """
 
@@ -449,6 +534,8 @@ def assert_registered() -> None:
         ("anima-fast-doc-links" in html, "doc tutorial link in html"),
         ("data-anima-fast-guide-toggle" in html, "collapsible guide toggle in html"),
         (FAST_UI_CSS_MARKER in POLISH_CSS.read_text(encoding="utf-8"), "fast ui css block"),
+        (INSTALL_JS.name in html, "install guard script in target html"),
+        (INSTALL_JS.name in (DIST / "index.html").read_text(encoding="utf-8"), "install guard script in root html"),
     ]
     missing = [label for ok, label in checks if not ok]
     if missing:
