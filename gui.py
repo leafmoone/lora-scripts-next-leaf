@@ -11,8 +11,8 @@ from mikazuki.log import log
 from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
 
 parser = argparse.ArgumentParser(description="GUI for stable diffusion training")
-parser.add_argument("--host", type=str, default="127.0.0.1")
-parser.add_argument("--port", type=int, default=28000, help="Port to run the server on")
+parser.add_argument("--host", type=str, default="0.0.0.0")
+parser.add_argument("--port", type=int, default=12345, help="Port to run the server on")
 parser.add_argument("--listen", action="store_true")
 parser.add_argument("--skip-prepare-environment", action="store_true")
 parser.add_argument("--skip-prepare-onnxruntime", action="store_true")
@@ -25,9 +25,9 @@ parser.add_argument(
 )
 parser.add_argument("--disable-train-monitor", action="store_true")
 parser.add_argument("--disable-auto-mirror", action="store_true")
-parser.add_argument("--tensorboard-host", type=str, default="127.0.0.1", help="Port to run the tensorboard")
-parser.add_argument("--tensorboard-port", type=int, default=6006, help="Port to run the tensorboard")
-parser.add_argument("--train-monitor-port", type=int, default=6008, help="Port to run the train status monitor")
+parser.add_argument("--tensorboard-host", type=str, default="0.0.0.0", help="Host to run tensorboard on")
+parser.add_argument("--tensorboard-port", type=int, default=12348, help="Port to run the tensorboard")
+parser.add_argument("--train-monitor-port", type=int, default=12347, help="Port to run the train status monitor")
 parser.add_argument("--localization", type=str)
 parser.add_argument("--browser", type=str, default=None,
                     choices=["chrome", "edge", "default"],

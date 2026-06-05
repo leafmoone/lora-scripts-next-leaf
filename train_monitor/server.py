@@ -37,7 +37,7 @@ from mikazuki.anima_fast_backend.progress import (
 )
 
 
-HOST = os.environ.get("TRAIN_MONITOR_HOST", "127.0.0.1")
+HOST = os.environ.get("TRAIN_MONITOR_HOST", "0.0.0.0")
 PORT = int(os.environ.get("TRAIN_MONITOR_PORT", 6008))
 _GUI_API_PORT = int(os.environ.get("MIKAZUKI_PORT", 28000))
 GUI_API = f"http://127.0.0.1:{_GUI_API_PORT}/api"
