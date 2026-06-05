@@ -57,6 +57,8 @@
     "帮助 → 新手上路": "Help → Getting started",
     "秋叶用户迁移说明": "Migration from Akiba lora-scripts",
     参数释义: "Parameter glossary",
+    "差分 LoRA": "Differential LoRA",
+    "DiffSynth Tagger": "DiffSynth Tagger",
   };
 
   const EN_TO_ZH = Object.fromEntries(
@@ -236,6 +238,45 @@
       legacy.classList.remove("active");
     }
     setSidebarAnchorLabel(native, "原生标签编辑");
+  }
+
+  function ensureNewFeatureLinks() {
+    const sidebar = document.querySelector(".sidebar .sidebar-items");
+    if (!sidebar) return;
+
+    // Differential LoRA → 挂到 "训练" 分组（LoRA训练 下方）
+    if (!sidebar.querySelector('a[href="/lora/differential-lora.html"]')) {
+      var loraAnchor = sidebar.querySelector('a[href="/lora/index.md"]');
+      var loraLi = loraAnchor && loraAnchor.closest("li");
+      if (loraLi) {
+        var diffLi = document.createElement("li");
+        var diffA = document.createElement("a");
+        diffA.href = "/lora/differential-lora.html";
+        diffA.className = "sidebar-item";
+        diffA.target = "_self";
+        diffA.setAttribute("aria-label", "差分 LoRA");
+        diffA.appendChild(document.createTextNode(" 差分 LoRA "));
+        diffLi.appendChild(diffA);
+        loraLi.after(diffLi);
+      }
+    }
+
+    // DiffSynth Tagger → 挂到 "工具与调试" 分组（原生标签编辑 下方）
+    if (!sidebar.querySelector('a[href="/tag-edit-leaf.html"]')) {
+      var nativeAnchor = sidebar.querySelector('a[href="/native-tageditor.html"]');
+      var nativeLi = nativeAnchor && nativeAnchor.closest("li");
+      if (nativeLi) {
+        var tagLi = document.createElement("li");
+        var tagA = document.createElement("a");
+        tagA.href = "/tag-edit-leaf.html";
+        tagA.className = "sidebar-item";
+        tagA.target = "_self";
+        tagA.setAttribute("aria-label", "DiffSynth Tagger");
+        tagA.appendChild(document.createTextNode(" DiffSynth Tagger "));
+        tagLi.appendChild(tagA);
+        nativeLi.after(tagLi);
+      }
+    }
   }
 
   function ensureTerminalStyle() {
@@ -789,6 +830,7 @@
     const map = english ? ZH_TO_EN : EN_TO_ZH;
     ensureSidebarTerminalLink();
     ensureTagEditorLinks();
+    ensureNewFeatureLinks();
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (sidebar) replaceInElement(sidebar, map);
 

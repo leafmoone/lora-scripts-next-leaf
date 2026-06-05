@@ -30,10 +30,13 @@ h1{font-size:20px;margin:0 0 4px}
 .progress-bar .fill{height:100%;background:var(--c-brand);transition:width .3s}
 .status{font-size:12px;opacity:.85;margin-top:6px}
 .foot{text-align:center;font-size:11px;opacity:.4;margin-top:20px}
+.back-home{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--c-brand);text-decoration:none;margin-bottom:16px}
+.back-home:hover{text-decoration:underline}
 </style>
 </head>
 <body>
 <div class="container">
+  <a href="/" target="_self" class="back-home">← 返回 Next Trainer 主页</a>
   <h1>🔀 Differential LoRA · 差分训练</h1>
   <p class="subtitle">双步 LoRA 训练策略 — 捕捉配对图片之间的风格/特征差异。推理时加上触发词激活目标风格。</p>
 
