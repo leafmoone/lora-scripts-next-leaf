@@ -1,0 +1,60 @@
+# Differential LoRA 默认配置
+# 差分 LoRA 双步训练策略默认参数
+
+[model]
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+attn_mode = ""
+discrete_flow_shift = 3.0
+
+[differential]
+trigger_word = "Character_Splitting"
+remove_tokens = ""
+
+[training]
+lora_rank = 32
+conv_dim = 0
+conv_alpha = 1
+lora_exclude_modules = ""
+learning_rate = "1e-4"
+num_epochs = 5
+dataset_repeat = 1000
+resolution = "1024,1024"
+enable_bucket = true
+gradient_accumulation_steps = 1
+gradient_checkpointing = false
+mixed_precision = "bf16"
+optimizer_type = "AdamW8bit"
+lr_scheduler = "constant"
+max_grad_norm = 1.0
+seed = 42
+save_precision = "fp16"
+
+[tagging]
+auto_tag = false
+tagger_mode = "smart"
+tagger_use_vlm = true
+tagger_use_cpu = false
+tagger_recursive = false
+tagger_model = "wd-eva02-large-tagger-v3"
+tagger_threshold = 0.35
+tagger_char_threshold = 0.85
+tagger_max_tags = 0
+tagger_blacklist = ""
+tagger_purpose = "character"
+
+[logging]
+logging_dir = "./logs/differential_lora"
+sample_every = 10000
+sample_prompts = ""
+sample_sampler = "euler"
+noise_offset = 0
+
+[output]
+output_dir = "./models/differential_lora"
+
+[postprocess]
+comfyui_convert = true
+svd_merge = true
+keep_temp = false
