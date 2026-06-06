@@ -446,6 +446,7 @@ def load_clip_vision_model(
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = anima_setup_parser()
+    parser.set_defaults(network_module="networks.lora")  # IP-Adapter doesn't use LoRA, but train() expects this
 
     parser.add_argument(
         "--clip_model",
