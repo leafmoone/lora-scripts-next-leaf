@@ -177,6 +177,47 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         return dit, text_encoders
 
+    # ── training ───────────────────────────────────────────────
+
+    def train(self, args):
+        """Override train() to inject ImageProjModel params into the LoRA network
+        param collection, since IP-Adapter trains ImageProjModel instead of LoRA.
+        """
+        import types
+
+        original_prepare = None
+        network_for_patch = None
+
+        _trainer_ref = self
+
+        def _patched_prepare_optimizer_params(self_network, *a, **kw):
+            results = original_prepare(*a, **kw)
+            if isinstance(results, tuple):
+                params_list, lr_descs = results
+            else:
+                params_list, lr_descs = results, None
+
+            # Inject IP-Adapter proj parameters
+            proj_params = _trainer_ref.get_trainable_params()
+            params_list = list(params_list) + proj_params
+            return (params_list, lr_descs) if lr_descs is not None else params_list
+
+        def _patched_get_trainable_params(self_network):
+            return []
+
+        import importlib, networks.lora
+        cls = networks.lora.LoRANetwork
+        original_prepare = getattr(cls, "prepare_optimizer_params", None)
+
+        if original_prepare is not None:
+            cls.prepare_optimizer_params = _patched_prepare_optimizer_params
+
+        try:
+            super().train(args)
+        finally:
+            if original_prepare is not None:
+                cls.prepare_optimizer_params = original_prepare
+
     # ── training setup ─────────────────────────────────────────
 
     def get_trainable_params(self):
