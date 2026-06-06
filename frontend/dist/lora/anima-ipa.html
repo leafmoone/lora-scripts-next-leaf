@@ -206,6 +206,8 @@ logging_dir="./log"</textarea></div>
 <script>
 // ===== 参数保存/加载 =====
 const STORAGE_KEY = 'mikazuki_ipa_v2';
+const state = { enableBucket: true };
+
 function saveParams() {
   const els = document.querySelectorAll('input[id], select[id], textarea[id]');
   var data = {};
@@ -230,8 +232,6 @@ function saveParams() {
   if (data.enableBucket_sw) state.enableBucket = !!data.enableBucket_sw;
   if (data.enableBucket_sw) document.getElementById('enableBucket-sw').classList.toggle('on', data.enableBucket_sw);
 })();
-
-const state = { enableBucket: true };
 
 function toggleSwitch(id) {
   state[id] = !state[id];
