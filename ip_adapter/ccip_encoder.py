@@ -181,7 +181,7 @@ class CaFormerBackbone(nn.Module):
 
 
 class CCIPIdentityEncoder(nn.Module):
-    def __init__(self, ckpt_path: str = DEFAULT_CKPT, output_dim: int = 1024, freeze_proj: bool = True):
+    def __init__(self, ckpt_path: str = DEFAULT_CKPT, output_dim: int = 1024, freeze_proj: bool = False):
         super().__init__()
         self.backbone = CaFormerBackbone()
         self._load_ckpt(ckpt_path)
@@ -223,7 +223,7 @@ class CCIPIdentityEncoder(nn.Module):
 
 
 def load_ccip_encoder(ckpt_path: str = DEFAULT_CKPT, device: str = "cpu",
-                      dtype: torch.dtype = torch.float32, freeze_proj: bool = True) -> CCIPIdentityEncoder:
+                      dtype: torch.dtype = torch.float32, freeze_proj: bool = False) -> CCIPIdentityEncoder:
     encoder = CCIPIdentityEncoder(ckpt_path=ckpt_path, freeze_proj=freeze_proj)
     encoder.to(device=device, dtype=dtype)
     encoder.eval()

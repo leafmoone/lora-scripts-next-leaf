@@ -68,7 +68,7 @@ class LSNetStyleEncoder(nn.Module):
         ckpt_path: str,
         feature_dim: int = LSNET_FEATURE_DIM,
         output_dim: int = 1024,
-        freeze_proj: bool = True,
+        freeze_proj: bool = False,
     ):
         super().__init__()
         self.feature_dim = feature_dim
@@ -133,7 +133,7 @@ def load_lsnet_encoder(
     ckpt_path: str,
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
-    freeze_proj: bool = True,
+    freeze_proj: bool = False,
 ) -> LSNetStyleEncoder:
     """Load LSNet style encoder with dimension projection.
 
