@@ -63,7 +63,7 @@ from library import (
     strategy_anima,
     train_util,
 )
-from anima_train_network import AnimaNetworkTrainer
+from anima_train_network import AnimaNetworkTrainer, setup_parser as anima_setup_parser
 from library.utils import setup_logging
 
 setup_logging()
@@ -445,7 +445,7 @@ def load_clip_vision_model(
 
 
 def setup_parser() -> argparse.ArgumentParser:
-    parser = AnimaNetworkTrainer.setup_parser()
+    parser = anima_setup_parser()
 
     parser.add_argument(
         "--clip_model",
