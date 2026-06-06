@@ -44,6 +44,15 @@ h1{font-size:20px;margin:0 0 4px}
   <p class="subtitle">训练 IP-Adapter 权重，将参考图片作为条件注入 Anima DiT 的 Cross-Attention 层。推理时给定一张参考图即可引导生成风格 / 构图。</p>
 
   <div class="card">
+    <h2>🖼️ 采样（训练时生成预览图）</h2>
+    <div class="row">
+      <div class="col"><label>参考图像路径</label><input type="text" id="sampleRefImage" placeholder="留空 = 无 IP 条件采样"><div class="input-helper">用于 IP-Adapter 采样的参考图。留空则采样时不注入 IP tokens。</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+
+
     <h2>📁 数据集</h2>
     <div class="row">
       <div class="col"><label>训练数据目录</label><input type="text" id="trainDataDir" placeholder="./train/ipa_dataset/"><div class="input-helper">标准 Kohya 格式（子文件夹 + 同名 .txt）</div></div>

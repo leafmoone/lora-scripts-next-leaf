@@ -235,6 +235,144 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
     # ── forward: multi-encoder IP tokens ────────────────────────
 
+    def _encode_reference_image(self, args, accelerator, weight_dtype):
+        """Load and encode the sample reference image into cached IP tokens.
+
+        Returns:
+            ``(ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet)``
+            or ``(None,)*4`` if no reference image is configured.
+        """
+        ref_path = getattr(args, "sample_reference_image", "") or ""
+        if not ref_path:
+            return None, None, None, None
+
+        import os
+        if not os.path.isfile(ref_path):
+            logger.warning(f"Sample reference image not found, skipping IP injection: {ref_path}")
+            return None, None, None, None
+
+        from PIL import Image
+        from torch.nn.functional import interpolate
+        from torchvision.transforms import functional as tvf
+
+        device = accelerator.device
+        self._ensure_encoders_on_device(device)
+
+        pil_img = Image.open(ref_path).convert("RGB")
+
+        # ── CLIP encoding (224x224) ─────────────────────────
+        clip_tensor = tvf.to_tensor(pil_img).unsqueeze(0).to(device=device, dtype=weight_dtype)
+        clip_tensor = interpolate(clip_tensor, size=(224, 224), mode="bilinear", align_corners=False)
+        with torch.no_grad():
+            clip_outputs = self.clip_image_encoder(clip_tensor, output_hidden_states=True)
+        clip_embeds = clip_outputs.image_embeds  # (1, 1024)
+
+        # ── CCIP encoding (384x384) ──────────────────────────
+        ccip_embeds = None
+        if self.ccip_encoder is not None:
+            ccip_tensor = tvf.to_tensor(pil_img).unsqueeze(0).to(device=device, dtype=weight_dtype)
+            ccip_tensor = interpolate(ccip_tensor, size=(384, 384), mode="bilinear", align_corners=False)
+            with torch.no_grad():
+                ccip_embeds = self.ccip_encoder(ccip_tensor)
+
+        # ── LSNet encoding (448x448) ─────────────────────────
+        lsnet_embeds = None
+        if self.lsnet_encoder is not None:
+            lsnet_tensor = tvf.to_tensor(pil_img).unsqueeze(0).to(device=device, dtype=weight_dtype)
+            lsnet_tensor = interpolate(lsnet_tensor, size=(448, 448), mode="bilinear", align_corners=False)
+            with torch.no_grad():
+                lsnet_embeds = self.lsnet_encoder(lsnet_tensor)
+
+        ipa_mode = getattr(args, "ipa_mode", "simple")
+
+        ip_tokens = None
+        ip_tokens_fine = None
+        ip_tokens_ccip = None
+        ip_tokens_lsnet = None
+
+        if isinstance(self.image_proj, MultiStreamProj):
+            embeds_list = [clip_embeds]
+            if ccip_embeds is not None:
+                embeds_list.append(ccip_embeds)
+            if lsnet_embeds is not None:
+                embeds_list.append(lsnet_embeds)
+            ip_list = self.image_proj(embeds_list)
+            ip_tokens = ip_list[0]
+            aux = list(self._aux_encoders)
+            for i, name in enumerate(aux):
+                if name == "ccip":
+                    ip_tokens_ccip = ip_list[1 + i]
+                elif name == "lsnet":
+                    ip_tokens_lsnet = ip_list[1 + i]
+        elif ipa_mode == "double":
+            ip_tokens = self.image_proj(clip_embeds)
+            patch_feats = clip_outputs.hidden_states[-2][:, 1:, :]
+            ip_tokens_fine = self.image_proj_fine(patch_feats) if self.image_proj_fine is not None else None
+        elif ipa_mode == "resampler":
+            patch_feats = clip_outputs.hidden_states[-2][:, 1:, :]
+            ip_tokens = self.image_proj(patch_feats)
+        else:
+            ip_tokens = self.image_proj(clip_embeds)
+
+        return ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet
+
+    def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
+        """Override to inject IP tokens via callbacks during sampling.
+
+        Encodes the reference image once and stashes IP tokens before
+        each prompt's DiT forward.  Tokens are cleared after each prompt.
+        """
+        import functools
+
+        ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet = (
+            self._encode_reference_image(args, accelerator, 
+                                         self.clip_image_encoder.dtype 
+                                         if self.clip_image_encoder is not None 
+                                         else torch.bfloat16)
+        )
+
+        has_ip = ip_tokens is not None
+
+        def _on_prompt_start(prompt_dict, accel):
+            if has_ip:
+                self._stash_ip_tokens(ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet)
+
+        def _on_prompt_end(prompt_dict):
+            if has_ip:
+                self._stash_ip_tokens(None, None, None, None)
+
+        from library import anima_train_utils, strategy_base
+        text_encoders = text_encoder if isinstance(text_encoder, list) else [text_encoder]
+        te = self.get_models_for_text_encoding(args, accelerator, text_encoders)
+        qwen3_te = te[0] if te is not None else None
+
+        text_encoding_strategy = strategy_base.TextEncodingStrategy.get_strategy()
+        tokenize_strategy = strategy_base.TokenizeStrategy.get_strategy()
+
+        if has_ip:
+            logger.info(
+                f"IP-Adapter sample: injecting IP tokens ("
+                f"shape={ip_tokens.shape if ip_tokens is not None else 'none'}"
+                f"{', +ccip' if ip_tokens_ccip is not None else ''}"
+                f"{', +lsnet' if ip_tokens_lsnet is not None else ''}"
+                f")"
+            )
+
+        anima_train_utils.sample_images(
+            accelerator,
+            args,
+            epoch,
+            global_step,
+            unet,
+            vae,
+            qwen3_te,
+            tokenize_strategy,
+            text_encoding_strategy,
+            self.sample_prompts_te_outputs,
+            on_prompt_start=_on_prompt_start if has_ip else None,
+            on_prompt_end=_on_prompt_end if has_ip else None,
+        )
+
     def _ensure_encoders_on_device(self, device):
         """Lazily move auxiliary encoders to the training device."""
         if self.ccip_encoder is not None:
@@ -411,6 +549,14 @@ def setup_parser() -> argparse.ArgumentParser:
         default="simple",
         choices=["simple", "resampler", "double"],
         help="IP-Adapter mode: simple=global CLIP, resampler=perceiver, double=both",
+    )
+    parser.add_argument(
+        "--sample_reference_image",
+        type=str,
+        default="",
+        help="Path to a reference image for IP-Adapter sampling. "
+             "Encodes the image with CLIP (+CCIP/+LSNet if enabled) "
+             "and injects IP tokens during sample generation.",
     )
     return parser
 
