@@ -269,6 +269,22 @@
       }
     }
 
+    // Anima IP-Adapter → 挂到 "训练" 分组，在 Differential LoRA 下方
+    if (!sidebar.querySelector('a[href="/lora/anima-ipa.html"]')) {
+      var diffLi = sidebar.querySelector('a[href="/lora/differential-lora.html"]');
+      if (diffLi) {
+        var ipaLi = document.createElement("li");
+        var ipaA = document.createElement("a");
+        ipaA.href = "/lora/anima-ipa.html";
+        ipaA.className = "sidebar-item";
+        ipaA.target = "_self";
+        ipaA.setAttribute("aria-label", "Anima IP-Adapter");
+        ipaA.appendChild(document.createTextNode(" Anima IP-Adapter "));
+        ipaLi.appendChild(ipaA);
+        diffLi.closest("li")?.after(ipaLi);
+      }
+    }
+
     // Tagger-leaf → 挂到 "工具与调试" 分组的第一行
     if (!sidebar.querySelector('a[href="/tag-edit-leaf.html"]')) {
       var toolsChildren = null;

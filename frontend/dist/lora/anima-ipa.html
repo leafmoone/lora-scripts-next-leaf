@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.ico?v=20260525-nt" sizes="any">
+<title>Anima IP-Adapter | Next Trainer</title>
+<style>
+:root{--c-bg:#fff;--c-text:#2c3e50;--c-border:#e2e2e2;--c-brand:#3eaf7c;--c-danger:#f56c6c;--c-group:#f5f7fa}
+html.dark{--c-bg:#1e1e1e;--c-text:#ccc;--c-border:#444;--c-group:#2a2a2a}
+html,body{background:var(--c-bg);color:var(--c-text);font-family:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:0}
+.container{max-width:680px;margin:0 auto;padding:24px 20px}
+h1{font-size:20px;margin:0 0 4px}
+.subtitle{font-size:13px;opacity:.7;margin:0 0 16px}
+.card{background:var(--c-group);border:1px solid var(--c-border);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.card h2{font-size:14px;margin:0 0 10px;color:var(--c-brand)}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.col{flex:1;min-width:180px}
+.col label{display:block;font-size:12px;font-weight:600;margin-bottom:3px;opacity:.8}
+.col input,.col select{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text)}
+.col input:focus,.col select:focus{outline:none;border-color:var(--c-brand)}
+.input-helper{font-size:11px;opacity:.5;margin-top:2px}
+.btn{padding:8px 18px;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn-primary{background:var(--c-brand);color:#fff}
+.btn-block{display:block;width:100%;margin-top:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.progress-bar{height:4px;border-radius:2px;background:var(--c-border);overflow:hidden;margin:8px 0 0}
+.progress-bar .fill{height:100%;background:var(--c-brand);transition:width .3s}
+.status{font-size:12px;opacity:.85;margin-top:6px}
+.foot{text-align:center;font-size:11px;opacity:.4;margin-top:20px}
+.back-home{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--c-brand);text-decoration:none;margin-bottom:16px}
+.back-home:hover{text-decoration:underline}
+.toggle{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}
+.toggle-switch{width:36px;height:20px;border-radius:10px;background:var(--c-border);position:relative;transition:background .2s}
+.toggle-switch.on{background:var(--c-brand)}
+.toggle-switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:9px;background:#fff;transition:left .2s}
+.toggle-switch.on::after{left:18px}
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" target="_self" class="back-home">← 返回 Next Trainer 主页</a>
+  <h1>🖼️ Anima IP-Adapter · 图像条件训练</h1>
+  <p class="subtitle">训练 IP-Adapter 权重，将参考图片作为条件注入 Anima DiT 的 Cross-Attention 层。推理时给定一张参考图即可引导生成风格 / 构图。</p>
+
+  <div class="card">
+    <h2>📁 数据集</h2>
+    <div class="row">
+      <div class="col"><label>训练数据目录</label><input type="text" id="trainDataDir" placeholder="./train/ipa_dataset/"><div class="input-helper">标准 Kohya 格式（子文件夹 + 同名 .txt）</div></div>
+      <div class="col"><label>输出目录</label><input type="text" id="outputDir" value="./output/ipa"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🏗️ 基础模型</h2>
+    <div class="row">
+      <div class="col"><label>Anima DiT 模型</label><input type="text" id="modelPath" value="./sd-models/anima/anima-base-v1.0.safetensors"></div>
+      <div class="col"><label>VAE</label><input type="text" id="vaePath" value="./sd-models/anima/qwen_image_vae.safetensors"></div>
+      <div class="col"><label>Qwen3</label><input type="text" id="qwen3Path" value="./sd-models/anima/qwen_3_06b_base.safetensors"></div>
+    </div>
+    <div class="row">
+      <div class="col"><label>CLIP 图像编码器</label><input type="text" id="clipModel" value="openai/clip-vit-large-patch14"><div class="input-helper">HuggingFace model ID，自动下载</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎯 IP-Adapter 参数</h2>
+    <div class="row">
+      <div class="col"><label>IPA 模式</label><select id="ipaMode">
+        <option value="simple" selected>Simple (全局 CLIP 特征，轻量)</option>
+        <option value="resampler">Resampler (Perceiver，细粒度 patch 级)</option>
+        <option value="double">Double-Stream (全局+细粒度并行)</option>
+      </select><div class="input-helper">选择合适的投影方案，影响特征粒度和参数量</div></div>
+    </div>
+    <div class="row">
+      <div class="col"><label>IP Token 数量</label><input type="number" id="numIpTokens" value="4" min="1" max="32"><div class="input-helper">4=粗粒度, 8=中等, 16=细粒度（Resampler 模式）</div></div>
+      <div class="col"><label>IP Scale</label><input type="number" id="ipScale" value="1.0" min="0" max="2" step="0.1"><div class="input-helper">图像条件强度，推理时可调</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ 训练超参数</h2>
+    <div class="row">
+      <div class="col"><label>学习率</label><input type="text" id="learningRate" value="1e-4"></div>
+      <div class="col"><label>训练 Epochs</label><input type="number" id="numEpochs" value="10" min="1"></div>
+      <div class="col"><label>Batch Size</label><input type="number" id="batchSize" value="1" min="1"></div>
+      <div class="col"><label>随机种子</label><input type="number" id="seed" value="42"></div>
+    </div>
+    <div class="row">
+      <div class="col"><label>分辨率</label><input type="text" id="resolution" value="1024,1024"></div>
+      <div class="col"><label>混合精度</label><select id="mixedPrecision"><option value="bf16" selected>bf16</option><option value="fp16">fp16</option><option value="no">no</option></select></div>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <label class="toggle" onclick="toggleSwitch('enableBucket')" style="cursor:pointer">
+        <span class="toggle-switch on" id="enableBucket-sw"></span> 启用 ARB 桶</label>
+    </div>
+    <div id="bucketSection" style="display:block;margin-top:4px">
+      <div class="row">
+        <div class="col"><label>最小分辨率</label><input type="number" id="minBucketReso" value="256" min="64" step="64"></div>
+        <div class="col"><label>最大分辨率</label><input type="number" id="maxBucketReso" value="2048" min="64" step="64"></div>
+        <div class="col"><label>划分步长</label><input type="number" id="bucketResoSteps" value="64" min="32" step="32"></div>
+        <div class="col"><label>不放大</label><select id="bucketNoUpscale"><option value="true" selected>是</option><option value="false">否</option></select></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:4px;cursor:pointer;user-select:none" onclick="toggleAdv('ipa')">
+      <span style="font-size:13px;opacity:.7;font-weight:600">⚙️ 高级参数 <small style="font-weight:400">(优化器、调度器、噪声等)</small> <span id="advArrow_ipa" style="font-size:11px">▶</span></span>
+    </div>
+    <div id="advSection_ipa" style="display:none;margin-top:6px">
+      <div class="row">
+        <div class="col"><label>优化器</label><select id="optimizer">
+          <option value="AdamW8bit" selected>AdamW8bit</option><option value="AdamW">AdamW</option><option value="Lion">Lion</option><option value="Lion8bit">Lion8bit</option>
+          <option value="SGDNesterov">SGDNesterov</option><option value="SGDNesterov8bit">SGDNesterov8bit</option>
+          <option value="DAdaptation">DAdaptation</option><option value="DAdaptAdam">DAdaptAdam</option>
+          <option value="DAdaptAdaGrad">DAdaptAdaGrad</option><option value="DAdaptAdanIP">DAdaptAdanIP</option>
+          <option value="DAdaptLion">DAdaptLion</option><option value="DAdaptSGD">DAdaptSGD</option>
+          <option value="Prodigy">Prodigy</option><option value="prodigyplus.ProdigyPlusScheduleFree">ProdigyPlusScheduleFree</option>
+          <option value="AdaFactor">AdaFactor</option><option value="PagedAdamW8bit">PagedAdamW8bit</option>
+          <option value="PagedLion8bit">PagedLion8bit</option><option value="RAdamScheduleFree">RAdamScheduleFree</option>
+          <option value="Automagic">Automagic</option>
+        </select></div>
+        <div class="col"><label>学习率调度器</label><select id="lrScheduler">
+          <option value="constant" selected>constant</option><option value="cosine_with_restarts">cosine_with_restarts</option>
+          <option value="cosine">cosine</option><option value="linear">linear</option><option value="constant_with_warmup">constant_with_warmup</option>
+        </select></div>
+        <div class="col"><label>预热步数</label><input type="number" id="lrWarmupSteps" value="0" min="0"></div>
+        <div class="col"><label>梯度累加</label><input type="number" id="gradAccum" value="1" min="1"></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Attention 加速</label><select id="attnMode"><option value="" selected>自动</option><option value="torch">torch</option><option value="xformers">xformers</option><option value="flash">flash</option></select></div>
+        <div class="col"><label>噪声偏移</label><input type="number" id="noiseOffset" value="0" min="0" step="0.01"></div>
+        <div class="col"><label>Discrete Flow Shift</label><input type="number" id="discreteFlowShift" value="1.0" step="0.1"></div>
+        <div class="col"><label>梯度检查点</label><select id="gradientCheckpoint"><option value="false" selected>关闭</option><option value="true">开启</option></select></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="col" style="flex:3"><label>自定义 TOML 参数 <small>(一行一个 key=value，直接覆盖上述选项)</small></label><textarea id="customParams" rows="20" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:14px;background:var(--c-bg);color:var(--c-text);resize:vertical;font-family:"Microsoft YaHei","PingFang SC",monospace" spellcheck="false" placeholder="如: optimizer_args=[&quot;betas=0.9,0.999&quot;]">max_train_steps=0
+dataset_repeat=1
+vae_batch_size=1
+full_bf16=true
+output_name="ipa"
+save_every_n_epochs=1
+full_bf16=true
+shuffle_caption=false
+cache_latents=false
+sample_every_n_steps=1000
+sample_prompts="./sample_prompts.txt"
+torch_compile=false
+logging_dir="./log"</textarea></div>
+      </div>
+      <details style="margin-top:10px;font-size:11px;opacity:.7">
+        <summary style="cursor:pointer;font-weight:600">📖 可用参数列表（Kohya Anima 训练参数）</summary>
+        <div style="margin-top:6px;line-height:1.8;max-height:300px;overflow:auto;padding:4px 0">
+<b>基础:</b> pretrained_model_name_or_path, vae, qwen3, train_data_dir, output_dir, output_name, logging_dir<br>
+<b>数据集:</b> resolution, enable_bucket, caption_extension, shuffle_caption, keep_tokens, max_token_length<br>
+<b>训练:</b> learning_rate, max_train_epochs, max_train_steps, train_batch_size, mixed_precision, seed<br>
+<b>网络:</b> network_module, network_dim, network_alpha, network_dropout, network_args, network_weights<br>
+<b>优化器:</b> optimizer_type, lr_scheduler, lr_warmup_steps, optimizer_args<br>
+<b>梯度:</b> gradient_accumulation_steps, gradient_checkpointing, max_grad_norm<br>
+<b>采样:</b> sample_prompts, sample_every_n_steps, sample_sampler, sample_at_first<br>
+<b>加速:</b> attn_mode, xformers, sdpa, cache_latents, cache_text_encoder_outputs<br>
+<b>Anima:</b> discrete_flow_shift, timestep_sampling, qwen3_max_token_length, t5_tokenizer_path, compile_mode, static_token_count, blocks_to_swap
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <button class="btn btn-primary btn-block" id="btnRun" onclick="startTraining()">🚀 开始 IP-Adapter 训练</button>
+  <div style="display:flex;gap:8px;margin-top:6px">
+    <button class="btn btn-secondary btn-sm" onclick="saveParams()" style="flex:1">💾 保存参数</button>
+    <span class="status" id="saveStatus" style="margin-top:0;font-size:11px"></span>
+  </div>
+  <div id="progress" style="display:none;margin-top:12px">
+    <div class="progress-bar"><div class="fill" id="progressFill" style="width:0"></div></div>
+    <div class="status" id="progressText"></div>
+  </div>
+
+  <p class="foot">训练引擎: Anima / Kohya sd-scripts · IP-Adapter: CLIP → Anima Cross-Attention</p>
+</div>
+
+<script>
+// ===== 参数保存/加载 =====
+const STORAGE_KEY = 'mikazuki_ipa_v2';
+function saveParams() {
+  const els = document.querySelectorAll('input[id], select[id], textarea[id]');
+  var data = {};
+  els.forEach(function(el) {
+    if (el.type === 'checkbox') data[el.id] = el.checked;
+    else data[el.id] = el.value;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  document.getElementById('saveStatus').textContent='已保存 ✓';
+  setTimeout(function(){ document.getElementById('saveStatus').textContent=''; }, 2000);
+}
+(function loadParams() {
+  var raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try { var data = JSON.parse(raw); } catch(e) { return; }
+  Object.keys(data).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = data[id];
+    else el.value = data[id];
+  });
+  if (data.enableBucket_sw) state.enableBucket = !!data.enableBucket_sw;
+  if (data.enableBucket_sw) document.getElementById('enableBucket-sw').classList.toggle('on', data.enableBucket_sw);
+})();
+
+const state = { enableBucket: true };
+
+function toggleSwitch(id) {
+  state[id] = !state[id];
+  document.getElementById(id+'-sw').classList.toggle('on', state[id]);
+  // Show/hide bucket options if needed
+  var bucketSection = document.getElementById('bucketSection');
+  if (id === 'enableBucket' && bucketSection) {
+    bucketSection.style.display = state.enableBucket ? '' : 'none';
+  }
+}
+
+function toggleAdv(prefix) {
+  var s = document.getElementById('advSection_'+prefix);
+  var a = document.getElementById('advArrow_'+prefix);
+  if (s.style.display === 'none' || s.style.display === '') {
+    s.style.display = s.style.display === '' ? 'block' : '';
+    a.textContent = '▼';
+  } else {
+    s.style.display = 'none';
+    a.textContent = '▶';
+  }
+}
+
+function startTraining() {
+  const config = {
+    train_data_dir: document.getElementById('trainDataDir').value.trim(),
+    output_dir: document.getElementById('outputDir').value.trim(),
+    pretrained_model_name_or_path: document.getElementById('modelPath').value.trim(),
+    vae: document.getElementById('vaePath').value.trim(),
+    qwen3: document.getElementById('qwen3Path').value.trim(),
+    clip_model: document.getElementById('clipModel').value.trim(),
+    num_ip_tokens: parseInt(document.getElementById('numIpTokens').value)||4,
+    ip_scale: parseFloat(document.getElementById('ipScale').value)||1.0,
+    ipa_mode: document.getElementById('ipaMode').value,
+    learning_rate: document.getElementById('learningRate').value.trim(),
+    max_train_epochs: parseInt(document.getElementById('numEpochs').value)||10,
+    train_batch_size: parseInt(document.getElementById('batchSize').value)||1,
+    resolution: document.getElementById('resolution').value.trim(),
+    mixed_precision: document.getElementById('mixedPrecision').value,
+    enable_bucket: state.enableBucket,
+    seed: parseInt(document.getElementById('seed').value)||42,
+    optimizer_type: document.getElementById('optimizer').value,
+    lr_scheduler: document.getElementById('lrScheduler').value,
+    lr_warmup_steps: parseInt(document.getElementById('lrWarmupSteps').value)||0,
+    gradient_accumulation_steps: parseInt(document.getElementById('gradAccum').value)||1,
+    gradient_checkpointing: document.getElementById('gradientCheckpoint').value==='true',
+    attn_mode: document.getElementById('attnMode').value,
+    discrete_flow_shift: parseFloat(document.getElementById('discreteFlowShift').value)||1.0,
+    custom_params: document.getElementById('customParams').value.trim(),
+  };
+  if (!config.train_data_dir) { alert('请填写训练数据目录'); return; }
+
+  document.getElementById('progress').style.display='';
+  document.getElementById('btnRun').disabled=true;
+  document.getElementById('progressText').textContent='提交中...';
+
+  fetch('/api/run', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...config, model_train_type:'anima-ipa'})
+  }).then(r=>r.json()).then(d=>{
+    if (d.status==='success') {
+      document.getElementById('progressText').textContent='训练已启动，task_id: '+d.data.task_id;
+    } else {
+      document.getElementById('progressText').textContent='失败: '+(d.message||'未知');
+      document.getElementById('btnRun').disabled=false;
+    }
+  }).catch(e=>{
+    document.getElementById('progressText').textContent='请求失败: '+e.message;
+    document.getElementById('btnRun').disabled=false;
+  });
+}
+</script>
+</body>
+</html>

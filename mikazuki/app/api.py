@@ -107,6 +107,7 @@ trainer_mapping = {
     "sd3-lora": "./scripts/dev/anima_train_network.py",
     "anima-lora": "./scripts/dev/anima_train_network.py",
     "anima-finetune": "./scripts/dev/anima_train.py",
+    "anima-ipa": "./ip_adapter/anima_ip_train.py",
     "flux-lora": "./scripts/dev/flux_train_network.py",
     "flux-finetune": "./scripts/dev/flux_train.py",
 }

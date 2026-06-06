@@ -5,7 +5,9 @@ DiffSynth Tag Editor (Tag-Edit-Leaf) REST API
 支持 simple 和 smart 两种模式，适用于任意图片文件夹。
 """
 
+import json
 import os
+import base64
 import subprocess
 import sys
 import threading
@@ -123,6 +125,10 @@ async def run_tagger(request: Request):
     verbose = data.get("verbose", False)
     data_dir = data.get("data_dir") or os.path.join(os.path.dirname(TAGGER_DIR), "..", "models")
     data_dir = os.path.abspath(data_dir)  # resolve relative to project root, not tagger cwd
+
+    # API mode: call third-party API instead of local tagger
+    if data.get("api_mode"):
+        return _run_api_tagging(data)
 
     # Build command
     cmd = [sys.executable, os.path.join(TAGGER_DIR, "main.py"),
@@ -277,6 +283,152 @@ async def get_status():
         "results": _task_state.get("results", [])[:20],
         "elapsed_seconds": elapsed,
     })
+
+
+def _run_api_tagging(data: dict) -> dict:
+    """后台线程：扫描图片 → base64 编码 → 调用 OpenAI/Anthropic API → 写 .txt + results.json"""
+    global _task_state
+
+    input_dir = data.get("input_dir", "")
+    output_dir = data.get("output_dir", "") or input_dir
+    save_captions = data.get("save_captions", True)
+    recursive = data.get("recursive", False)
+    trigger = data.get("trigger", "")
+
+    api_provider = data.get("api_provider", "openai")
+    api_base_url = data.get("api_base_url", "https://api.openai.com/v1").rstrip("/")
+    api_key = data.get("api_key", "")
+    api_model = data.get("api_model", "gpt-4o")
+    api_system_prompt = data.get("api_system_prompt", "You are an AI image tagging assistant.")
+    api_max_tokens = data.get("api_max_tokens", 256)
+    api_temperature = data.get("api_temperature", 0.3)
+
+    _task_state.update({
+        "status": "running", "progress": 0,
+        "message": "API 标注: 扫描图片...",
+        "output_dir": output_dir, "results": [],
+        "start_time": time.time(),
+    })
+
+    def _worker():
+        global _task_state
+        try:
+            import requests
+
+            # Scan images
+            p = Path(input_dir)
+            pattern = "**/*" if recursive else "*"
+            image_files = sorted(f for f in p.glob(pattern) if f.suffix.lower() in
+                {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif"})
+            if not image_files:
+                _task_state["status"] = "error"
+                _task_state["message"] = "未找到图片文件"
+                return
+
+            results = []
+            # Build OpenAI-compatible request (Anthropic via dedicated endpoint)
+            is_openai = api_provider == "openai"
+            if is_openai:
+                url = f"{api_base_url}/chat/completions"
+            else:
+                url = f"{api_base_url}/v1/messages"
+
+            headers = {"Content-Type": "application/json"}
+            if is_openai:
+                headers["Authorization"] = f"Bearer {api_key}"
+            else:
+                headers["x-api-key"] = api_key
+                headers["anthropic-version"] = "2023-06-01"
+
+            # Prepare system prompt
+            system_msg = api_system_prompt
+            if trigger:
+                system_msg += f"\nAlways include the trigger word \"{trigger}\" at the beginning."
+
+            for idx, img_path in enumerate(image_files):
+                base_name = img_path.stem
+                _task_state["progress"] = round(idx / len(image_files) * 100)
+                _task_state["message"] = f"API 标注: [{idx+1}/{len(image_files)}] {img_path.name}"
+
+                # Base64 encode image
+                img_bytes = img_path.read_bytes()
+                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                ext = img_path.suffix.lower().lstrip(".")
+                data_uri = f"data:image/{ext};base64,{img_b64}"
+
+                # Build messages
+                if is_openai:
+                    messages = [
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": [
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                            {"type": "text", "text": "Tag this image:"},
+                        ]},
+                    ]
+                    payload = {"model": api_model, "messages": messages,
+                               "max_tokens": api_max_tokens, "temperature": api_temperature}
+                else:
+                    messages = [
+                        {"role": "user", "content": [
+                            {"type": "image", "source": {
+                                "type": "base64", "media_type": f"image/{ext}", "data": img_b64}},
+                            {"type": "text", "text": "Tag this image:"},
+                        ]},
+                    ]
+                    payload = {"model": api_model, "messages": messages,
+                               "max_tokens": api_max_tokens, "temperature": api_temperature,
+                               "system": system_msg}
+
+                try:
+                    resp = requests.post(url, json=payload, headers=headers, timeout=60)
+                    resp.raise_for_status()
+                    body = resp.json()
+                    if is_openai:
+                        content = body["choices"][0]["message"]["content"]
+                    else:
+                        content = body["content"][0]["text"]
+                except Exception as exc:
+                    log.warning(f"[TagLeaf API] {img_path.name} 请求失败: {exc}")
+                    results.append({"image_path": str(img_path), "error": str(exc), "all_tags": []})
+                    continue
+
+                tags = [t.strip() for t in content.replace("\n", ",").split(",") if t.strip()]
+                if trigger and tags and trigger not in tags[0]:
+                    tags.insert(0, trigger)
+
+                # Save .txt
+                if save_captions:
+                    txt_path = img_path.with_suffix(".txt")
+                    txt_path.write_text(", ".join(tags), encoding="utf-8")
+
+                results.append({
+                    "image_path": str(img_path),
+                    "caption": content,
+                    "all_tags": [{"tag": t, "category": "general"} for t in tags],
+                })
+
+            # Save results.json
+            os.makedirs(output_dir, exist_ok=True)
+            with open(os.path.join(output_dir, "results.json"), "w", encoding="utf-8") as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+
+            _task_state["status"] = "done"
+            _task_state["progress"] = 100
+            _task_state["message"] = f"API 标注完成: {len(results)} 张"
+            _task_state["results"] = results
+            log.info(f"[TagLeaf API] 完成: {len(results)} 张图片")
+
+        except Exception as exc:
+            log.error(f"[TagLeaf API] 异常: {exc}")
+            _task_state["status"] = "error"
+            _task_state["message"] = str(exc)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+    return APIResponseSuccess(
+        message="API 标注已启动",
+        data={"output_dir": output_dir},
+    )
 
 
 @router.get("/models")

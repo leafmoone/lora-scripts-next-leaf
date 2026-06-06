@@ -5,10 +5,25 @@ Differential LoRA TOML 配置适配器
 用于 Step 1 和 Step 2 的训练。
 """
 
+import ast
 import os
 from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional
+
+
+def _try_parse_value(v: str) -> Any:
+    """Try to parse a string as Python literal (int/float/bool/list); fallback to string."""
+    v = v.strip()
+    if v.lower() == "true":
+        return True
+    if v.lower() == "false":
+        return False
+    try:
+        return ast.literal_eval(v)
+    except (ValueError, SyntaxError):
+        pass
+    return v
 
 
 def build_step1_toml(
@@ -88,6 +103,29 @@ def build_step1_toml(
 
     # ── 日志 ──
     toml["logging_dir"] = config.get("logging_dir", "./logs/differential_lora")
+
+    # ── 采样 ──
+    if config.get("enable_sample"):
+        sample_every = config.get("sample_every", 10000)
+        if sample_every > 0:
+            toml["sample_every_n_steps"] = sample_every
+        if config.get("sample_prompts"):
+            toml["sample_prompts"] = config["sample_prompts"]
+        toml["sample_at_first"] = config.get("sample_at_first", False)
+
+    # ── 自定义 TOML 参数（前端 textarea，逐行 key=value）──
+    custom_params = config.get("custom_params", "")
+    if custom_params:
+        for line in custom_params.strip().split("\n"):
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if not key:
+                continue
+            # Try to parse as literal Python value (int, float, list, str)
+            toml[key] = _try_parse_value(value)
 
     data_enhancement = config.get("data_enhancement", [])
     if isinstance(data_enhancement, str):

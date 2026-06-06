@@ -112,6 +112,7 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
           <select id="mode" onchange="updateMode()">
             <option value="smart">Smart Tag（多阶段 + VLM 自然语言）</option>
             <option value="simple">Simple（仅 WD14 booru 标签）</option>
+            <option value="api">☁️ 第三方 API 反推（OpenAI / Anthropic）</option>
           </select>
         </div>
         <div class="col">
@@ -203,9 +204,35 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
 
   <!-- Section 4: 操作 -->
   <div class="card">
+    <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')" id="apiSection" style="display:none">
+      <span class="arrow">▶</span> <span>☁️ 第三方 API 设置</span>
+    </div>
+    <div class="section-body" id="apiBody">
+      <div class="row">
+        <div class="col"><label>API 提供商</label><select id="apiProvider"><option value="openai" selected>OpenAI 兼容</option><option value="anthropic">Anthropic 兼容</option></select></div>
+        <div class="col"><label>API Base URL</label><input type="text" id="apiBaseUrl" value="https://api.openai.com/v1"><div class="input-helper">OpenAI: https://api.openai.com/v1 | Anthropic: https://api.anthropic.com</div></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>API Key</label><input type="password" id="apiKey" placeholder="sk-..."><div class="input-helper">仅用于本次请求，不会存储</div></div>
+        <div class="col"><label>模型</label><input type="text" id="apiModel" value="gpt-4o"><div class="input-helper">如 gpt-4o, claude-3-5-sonnet, etc.</div></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>系统提示词</label><textarea id="apiSystemPrompt" rows="3" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text);resize:vertical">You are an AI image tagging assistant. Given an image, describe it in a comma-separated list of booru-style tags focusing on: character features (gender, hair color, eye color, clothing), scene elements (background, lighting, weather), artistic attributes (style, angle, composition). Return ONLY the tags, no explanations.</textarea></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>最大 Token</label><input type="number" id="apiMaxTokens" value="256" min="16" max="4096"></div>
+        <div class="col"><label>温度</label><input type="number" id="apiTemperature" value="0.3" min="0" max="2" step="0.1"><div class="input-helper">越低越确定，越高越随机</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: 操作 -->
+  <div class="card">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnRun" onclick="runTagger()">🚀 开始标注</button>
       <button class="btn btn-secondary btn-sm" onclick="scanDir()">🔍 预览目录</button>
+      <button class="btn btn-secondary btn-sm" onclick="saveParams()">💾 保存参数</button>
+      <span class="status" id="saveStatus" style="margin-top:0;font-size:11px"></span>
       <span class="status" id="scanResult"></span>
     </div>
     <div id="progressSection" style="display:none;margin-top:12px">
@@ -240,6 +267,40 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
 </div>
 
 <script>
+// ===== 参数保存/加载 =====
+const STORAGE_KEY = 'mikazuki_tagger_v2';
+function saveParams() {
+  const els = document.querySelectorAll('input[id], select[id], textarea[id]');
+  var data = {};
+  els.forEach(function(el) {
+    if (el.type === 'checkbox') data[el.id] = el.checked;
+    else data[el.id] = el.value;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  document.getElementById('saveStatus').textContent='已保存 ✓';
+  setTimeout(function(){ document.getElementById('saveStatus').textContent=''; }, 2000);
+}
+(function loadParams() {
+  var raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try { var data = JSON.parse(raw); } catch(e) { return; }
+  Object.keys(data).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = data[id];
+    else el.value = data[id];
+  });
+  if (data.recursive_sw) state.recursive = !!data.recursive_sw;
+  if (data.useGPU_sw !== undefined) state.useGPU = data.useGPU_sw;
+  if (data.useVLM_sw !== undefined) state.useVLM = data.useVLM_sw;
+  if (data.saveCaptions_sw !== undefined) state.saveCaptions = data.saveCaptions_sw;
+  // Update toggle switches
+  ['recursive','useGPU','useVLM','saveCaptions'].forEach(function(k){
+    var sw = document.getElementById(k+'-sw');
+    if (sw) sw.classList.toggle('on', state[k]);
+  });
+})();
+
 // State
 const state = {
   recursive: false, saveCaptions: true, useGPU: true,
@@ -279,6 +340,9 @@ function toggleSwitch(id) {
 function updateMode() {
   const mode = document.getElementById('mode').value;
   document.getElementById('smartSection').style.display = mode==='smart'?'':'none';
+  const apiMode = mode === 'api';
+  document.getElementById('apiSection').style.display = apiMode ? '' : 'none';
+  document.getElementById('apiBody').classList.toggle('show', apiMode);
 }
 
 async function scanDir() {
@@ -337,7 +401,7 @@ function escapeHtml(s) {
 }
 
 function collectConfig() {
-  return {
+  const config = {
     input_dir: document.getElementById('inputDir').value.trim(),
     output_dir: document.getElementById('outputDir').value.trim(),
     mode: document.getElementById('mode').value,
@@ -356,6 +420,18 @@ function collectConfig() {
     blacklist: document.getElementById('blacklist').value.trim().split(/\s+/).filter(Boolean),
     data_dir: document.getElementById('dataDir').value.trim() || '',
   };
+  // API mode extra fields
+  if (config.mode === 'api') {
+    config.api_mode = true;
+    config.api_provider = document.getElementById('apiProvider').value;
+    config.api_base_url = document.getElementById('apiBaseUrl').value.trim();
+    config.api_key = document.getElementById('apiKey').value.trim();
+    config.api_model = document.getElementById('apiModel').value.trim();
+    config.api_system_prompt = document.getElementById('apiSystemPrompt').value.trim();
+    config.api_max_tokens = parseInt(document.getElementById('apiMaxTokens').value)||256;
+    config.api_temperature = parseFloat(document.getElementById('apiTemperature').value)||0.3;
+  }
+  return config;
 }
 
 async function runTagger() {

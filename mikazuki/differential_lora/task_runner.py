@@ -50,6 +50,18 @@ def _get_project_python() -> str:
     return sys.executable
 
 
+def _write_sample_prompt_file(prompt: str, output_dir: str, name: str) -> str:
+    """Kohya 需要 prompt 文件（多行），每行格式: `prompt --n neg_prompt --w W --h H --l CFG --s steps --d seed`"""
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, f"{name}.txt")
+    default_neg = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, cropped, worst quality, low quality, jpeg artifacts"
+    line = f"{prompt} --n {default_neg} --w 1024 --h 1024 --l 4.5 --s 40 --d 42\n"
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(line)
+    log.info(f"[DiffLoRA] 生成采样提示词文件: {filepath}")
+    return filepath
+
+
 def _run_subprocess(cmd: list[str], desc: str = "") -> tuple[int, str, str]:
     """
     同步执行子进程，返回 (returncode, stdout, stderr)。
@@ -197,6 +209,11 @@ def _train_single_pair(
     # 确保使用正确的底模
     step1_toml["pretrained_model_name_or_path"] = base_model_path
 
+    # Auto-generate sample prompt file when enabled
+    if config.get("enable_sample") and not config.get("sample_prompts"):
+        prompt_file = _write_sample_prompt_file(base_tags, step1_toml.get("output_dir", output_dir), f"sample_prompts_step1_{safe_name}")
+        step1_toml["sample_prompts"] = prompt_file
+
     lora1_ckpt = _run_kohya_training(step1_toml, f"step1_{safe_name}", gpu_ids)
     if not lora1_ckpt:
         log.error(f"[DiffLoRA] Step1 失败: {img_filename}")
@@ -228,6 +245,9 @@ def _train_single_pair(
 
     step2_toml = build_step2_toml(config, step2_dataset, lora2_output, merged_model)
     step2_toml["output_name"] = f"lora2_{safe_name}"
+    if config.get("enable_sample") and not config.get("sample_prompts"):
+        prompt_file = _write_sample_prompt_file(step2_prompt, step2_toml.get("output_dir", output_dir), f"sample_prompts_step2_{safe_name}")
+        step2_toml["sample_prompts"] = prompt_file
 
     lora2_ckpt = _run_kohya_training(step2_toml, f"step2_{safe_name}", gpu_ids)
     if not lora2_ckpt:
