@@ -235,6 +235,17 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
     # ── forward: multi-encoder IP tokens ────────────────────────
 
+    def _ensure_encoders_on_device(self, device):
+        """Lazily move auxiliary encoders to the training device."""
+        if self.ccip_encoder is not None:
+            ccip_dev = next(self.ccip_encoder.parameters()).device
+            if ccip_dev != device:
+                self.ccip_encoder.to(device=device)
+        if self.lsnet_encoder is not None:
+            lsnet_dev = next(self.lsnet_encoder.parameters()).device
+            if lsnet_dev != device:
+                self.lsnet_encoder.to(device=device)
+
     def _stash_ip_tokens(self, ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet):
         """Stash IP tokens on every AnimaIPCrossAttention module before DiT forward.
 
@@ -265,6 +276,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         if images is not None and self.clip_image_encoder is not None:
             device = accelerator.device
+            self._ensure_encoders_on_device(device)
 
             # ── CLIP encoding ────────────────────────────────
             clip_input = interpolate(images, size=(224, 224), mode="bilinear", align_corners=False)
