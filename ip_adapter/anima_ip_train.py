@@ -34,6 +34,7 @@ Usage (standalone):
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -42,8 +43,12 @@ import torch
 import torch.nn as nn
 from accelerate import Accelerator
 
-# vendor/sd-scripts is a directory with "-" in name — add to sys.path
-_vendor_root = Path(__file__).resolve().parents[1] / "vendor" / "sd-scripts"
+# Ensure project root and vendor/sd-scripts are on sys.path
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+_vendor_root = _PROJECT_ROOT / "vendor" / "sd-scripts"
 if str(_vendor_root) not in sys.path:
     sys.path.insert(0, str(_vendor_root))
 
