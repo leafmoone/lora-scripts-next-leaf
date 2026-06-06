@@ -272,7 +272,7 @@ function startTraining() {
     qwen3: document.getElementById('qwen3Path').value.trim(),
     clip_model: document.getElementById('clipModel').value.trim(),
     aux_encoders: document.getElementById('auxEncoders').value,
-    ccip_model: document.getElementById('ccipModel').value.trim(),
+    ccip_ckpt: document.getElementById('ccipCkpt').value.trim(),
     lsnet_ckpt: document.getElementById('lsnetCkpt').value.trim(),
     num_ip_tokens: parseInt(document.getElementById('numIpTokens').value)||4,
     ip_scale: parseFloat(document.getElementById('ipScale').value)||1.0,
@@ -292,6 +292,7 @@ function startTraining() {
     attn_mode: document.getElementById('attnMode').value,
     discrete_flow_shift: parseFloat(document.getElementById('discreteFlowShift').value)||1.0,
     custom_params: document.getElementById('customParams').value.trim(),
+    sample_reference_image: document.getElementById('sampleRefImage').value.trim(),
   };
   if (!config.train_data_dir) { alert('请填写训练数据目录'); return; }
 
