@@ -26,6 +26,7 @@ class AnimaIPAConverter:
         dit: nn.Module,
         ip_scale: float = 1.0,
         ipa_mode: str = "simple",
+        aux_encoders: tuple[str, ...] = (),
     ) -> Dict[str, AnimaIPCrossAttention]:
         """
         Walk the DiT's ``named_modules()``, wrap every ``Block.cross_attn``.
@@ -34,6 +35,7 @@ class AnimaIPAConverter:
             dit: Anima DiT model.
             ip_scale: Multiplier for the IP cross-attention branch.
             ipa_mode: "simple" / "resampler" / "double".
+            aux_encoders: Tuple of auxiliary encoder names, e.g. ("ccip",) or ("ccip", "lsnet").
 
         Returns:
             ``{block_path: AnimaIPCrossAttention}`` mapping.
@@ -42,7 +44,11 @@ class AnimaIPAConverter:
 
         for name, module in dit.named_modules():
             if module.__class__.__name__ == "Block":
-                ip_attn = AnimaIPCrossAttention(module.cross_attn, ip_scale=ip_scale)
+                ip_attn = AnimaIPCrossAttention(
+                    module.cross_attn,
+                    ip_scale=ip_scale,
+                    aux_encoders=aux_encoders,
+                )
                 module.cross_attn = ip_attn
                 if ipa_mode == "double":
                     ip_attn.ensure_fine_stream()

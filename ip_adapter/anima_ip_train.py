@@ -1,21 +1,33 @@
 """
-Anima IP-Adapter Training Script
+Anima IP-Adapter Training Script with Multi-Encoder Support
 
-Extends ``AnimaNetworkTrainer`` to support IP-Adapter training on
-top of Anima DiT models.  Injects trainable ``ip_k_proj`` / ``ip_v_proj``
-layers into every Block's cross-attention while keeping the base model frozen.
+Extends ``AnimaNetworkTrainer`` to support IP-Adapter training with
+optional auxiliary vision encoders (CCIP for character identity,
+LSNet for artist style) alongside CLIP for content conditioning.
+
+Modes (controlled by --aux_encoders):
+  ``clip_only``     — CLIP only (original behavior)
+  ``clip_ccip``     — CLIP + CCIP dual-stream
+  ``clip_lsnet``    — CLIP + LSNet dual-stream
+  ``clip_ccip_lsnet`` — CLIP + CCIP + LSNet triple-stream
+
+Each auxiliary encoder has a learnable scalar gate initialized at 0.1
+so the model starts CLIP-dominant and gradually activates auxiliary signals.
 
 Usage (standalone):
-  accelerate launch ip_adapter/anima_ip_train.py \\
-    --pretrained_model_name_or_path anima.safetensors \\
-    --vae qwen_image_vae.safetensors \\
-    --qwen3 qwen3.safetensors \\
-    --clip_model openai/clip-vit-large-patch14 \\
-    --train_data_dir ./train/anima_ip_dataset \\
-    --output_dir ./output/ipa \\
-    --num_ip_tokens 4 \\
-    --ip_scale 1.0 \\
-    --learning_rate 1e-4 \\
+  accelerate launch ip_adapter/anima_ip_train.py \
+    --pretrained_model_name_or_path anima.safetensors \
+    --vae qwen_image_vae.safetensors \
+    --qwen3 qwen3.safetensors \
+    --clip_model openai/clip-vit-large-patch14 \
+    --aux_encoders clip_ccip_lsnet \
+    --ccip_model ccip-caformer-24-randaug-pruned \
+    --lsnet_ckpt /path/to/best_checkpoint.pth \
+    --train_data_dir ./train/anima_ip_dataset \
+    --output_dir ./output/ipa \
+    --num_ip_tokens 4 \
+    --ip_scale 1.0 \
+    --learning_rate 1e-4 \
     --max_train_epochs 10
 """
 
@@ -46,104 +58,198 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Import internal IP-Adapter modules (namespace-safe, no vendor coupling)
-from ip_adapter import AnimaIPAConverter, ImageProjModel, Resampler, AnimaIPAdapter
+from ip_adapter import (
+    AnimaIPAConverter,
+    ImageProjModel,
+    Resampler,
+    MultiStreamProj,
+    AnimaIPAdapter,
+)
+from ip_adapter.ccip_encoder import load_ccip_encoder
+from ip_adapter.lsnet_encoder import load_lsnet_encoder
+
+# ── Mode parser ──────────────────────────────────────────────────
 
 
-# ---------------------------------------------------------------------------
-# Trainer
-# ---------------------------------------------------------------------------
+def _parse_aux_encoders(mode: str) -> tuple[str, ...]:
+    """Parse --aux_encoders into a tuple of auxiliary encoder names."""
+    if not mode or mode in ("none", "clip_only", "0"):
+        return ()
+    parts = [p.strip().lower() for p in mode.split("_")]
+    encoders = tuple(p for p in parts if p in ("ccip", "lsnet"))
+    if "clip" in parts:
+        pass  # ignore "clip" — it's always present
+    return encoders
+
+
+# ── Trainer ──────────────────────────────────────────────────────
+
 
 class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
-    """Anima NetworkTrainer extended with IP-Adapter support.
-
-    Injects trainable ``ip_k_proj`` / ``ip_v_proj`` into every
-    Block.cross_attn.  Only the IP layers + image_proj are trained;
-    the base DiT stays frozen.
-    """
+    """Anima NetworkTrainer with multi-encoder IP-Adapter support."""
 
     def __init__(self):
         super().__init__()
         self.clip_image_encoder: Optional[nn.Module] = None
-        self.image_proj: Optional[ImageProjModel] = None
+        self.ccip_encoder: Optional[nn.Module] = None
+        self.lsnet_encoder: Optional[nn.Module] = None
+        self.image_proj: Optional[ImageProjModel | MultiStreamProj] = None
+        self.image_proj_fine: Optional[Resampler] = None
         self.ip_adapters: dict[str, Any] = {}
+        self._aux_encoders: tuple[str, ...] = ()
 
     # ── model loading ──────────────────────────────────────────
+
     def load_target_model(self, args, weight_dtype, accelerator):
         model_type, text_encoders, vae, unet = super().load_target_model(
             args, weight_dtype, accelerator
         )
-        # Load CLIP image encoder on CPU (will be moved during training)
+
+        # CLIP encoder (always loaded)
         self.clip_image_encoder = load_clip_vision_model(
             args.clip_model, device="cpu", dtype=weight_dtype
         )
+
+        # Parse auxiliary encoders
+        self._aux_encoders = _parse_aux_encoders(
+            getattr(args, "aux_encoders", "") or ""
+        )
+        logger.info(f"IP-Adapter auxiliary encoders: {self._aux_encoders or 'none'}")
+
+        # CCIP encoder (if enabled)
+        if "ccip" in self._aux_encoders:
+            ccip_model = getattr(args, "ccip_model", "ccip-caformer-24-randaug-pruned")
+            logger.info(f"Loading CCIP encoder: {ccip_model}")
+            self.ccip_encoder = load_ccip_encoder(
+                model_name=ccip_model,
+                device="cpu",
+                dtype=weight_dtype,
+            )
+
+        # LSNet encoder (if enabled)
+        if "lsnet" in self._aux_encoders:
+            lsnet_ckpt = getattr(args, "lsnet_ckpt", "")
+            if not lsnet_ckpt:
+                raise ValueError("--lsnet_ckpt is required when aux_encoders includes 'lsnet'")
+            logger.info(f"Loading LSNet encoder from: {lsnet_ckpt}")
+            self.lsnet_encoder = load_lsnet_encoder(
+                ckpt_path=lsnet_ckpt,
+                device="cpu",
+                dtype=weight_dtype,
+            )
+
         return model_type, text_encoders, vae, unet
 
     def load_unet_lazily(self, args, weight_dtype, accelerator, text_encoders):
         dit, text_encoders = super().load_unet_lazily(
             args, weight_dtype, accelerator, text_encoders
         )
-        # Inject IP-Adapter layers into DiT
+
+        ipa_mode = getattr(args, "ipa_mode", "simple")
+
+        # Inject IP-Adapter layers with auxiliary encoder awareness
         self.ip_adapters = AnimaIPAConverter.create(
-            dit, ip_scale=args.ip_scale,
-            ipa_mode=getattr(args, "ipa_mode", "simple"),
+            dit,
+            ip_scale=args.ip_scale,
+            ipa_mode=ipa_mode,
+            aux_encoders=self._aux_encoders,
         )
         logger.info(
-            f"IP-Adapter injected into {len(self.ip_adapters)} Block(s), mode={mode}"
+            f"IP-Adapter injected into {len(self.ip_adapters)} Block(s), "
+            f"mode={ipa_mode}, aux_encoders={self._aux_encoders}"
         )
 
-        # Image projection model — choose by ipa_mode
-        mode = getattr(args, "ipa_mode", "simple")
-        if mode == "simple":
-            self.image_proj = ImageProjModel(
+        # Determine number of streams
+        num_streams = 1 + len(self._aux_encoders)  # CLIP + aux
+
+        if num_streams > 1:
+            # Multi-stream projection
+            tokens_clip = getattr(args, "num_ip_tokens_clip", args.num_ip_tokens)
+            tokens_aux = getattr(args, "num_ip_tokens_aux", args.num_ip_tokens)
+            tokens_list = [tokens_clip] + [tokens_aux] * len(self._aux_encoders)
+            self.image_proj = MultiStreamProj(
+                num_streams=num_streams,
                 cross_attention_dim=1024,
-                clip_embeddings_dim=1024,
-                clip_extra_context_tokens=args.num_ip_tokens,
-            )
-        elif mode == "resampler":
-            self.image_proj = Resampler(
-                dim=1024, depth=4, dim_head=64, heads=16,
-                num_queries=args.num_ip_tokens, output_dim=1024,
-            )
-        elif mode == "double":
-            self.image_proj = ImageProjModel(
-                cross_attention_dim=1024,
-                clip_embeddings_dim=1024,
-                clip_extra_context_tokens=args.num_ip_tokens,
-            )
-            self.image_proj_fine = Resampler(
-                dim=1024, depth=4, dim_head=64, heads=16,
-                num_queries=max(args.num_ip_tokens, 8), output_dim=1024,
+                embed_dim=1024,
+                tokens_per_stream=tokens_list,
             )
         else:
-            self.image_proj = ImageProjModel(
-                cross_attention_dim=1024,
-                clip_embeddings_dim=1024,
-                clip_extra_context_tokens=args.num_ip_tokens,
-            )
+            # Single-stream (original behavior)
+            if ipa_mode == "simple":
+                self.image_proj = ImageProjModel(
+                    cross_attention_dim=1024,
+                    clip_embeddings_dim=1024,
+                    clip_extra_context_tokens=args.num_ip_tokens,
+                )
+            elif ipa_mode == "resampler":
+                self.image_proj = Resampler(
+                    dim=1024, depth=4, dim_head=64, heads=16,
+                    num_queries=args.num_ip_tokens, output_dim=1024,
+                )
+            elif ipa_mode == "double":
+                self.image_proj = ImageProjModel(
+                    cross_attention_dim=1024,
+                    clip_embeddings_dim=1024,
+                    clip_extra_context_tokens=args.num_ip_tokens,
+                )
+                self.image_proj_fine = Resampler(
+                    dim=1024, depth=4, dim_head=64, heads=16,
+                    num_queries=max(args.num_ip_tokens, 8), output_dim=1024,
+                )
+            else:
+                self.image_proj = ImageProjModel(
+                    cross_attention_dim=1024,
+                    clip_embeddings_dim=1024,
+                    clip_extra_context_tokens=args.num_ip_tokens,
+                )
+
         return dit, text_encoders
 
     # ── training setup ─────────────────────────────────────────
-    def get_trainable_params(self):
-        """Collect parameters for optimizer.
 
-        Returns:
-            List of param groups.  Only IP layers + image_proj are
-            marked as trainable; the base DiT stays frozen.
-        """
+    def get_trainable_params(self):
         params = []
-        params.append({
-            "params": list(self.image_proj.parameters()),
-            "lr": float(getattr(args, "learning_rate", 1e-4)),
-        })
+
+        if isinstance(self.image_proj, MultiStreamProj):
+            for proj in self.image_proj.projs:
+                params.append({
+                    "params": list(proj.parameters()),
+                    "lr": float(getattr(args, "learning_rate", 1e-4)),
+                })
+        else:
+            params.append({
+                "params": list(self.image_proj.parameters()),
+                "lr": float(getattr(args, "learning_rate", 1e-4)),
+            })
+
+        if self.image_proj_fine is not None:
+            params.append({
+                "params": list(self.image_proj_fine.parameters()),
+                "lr": float(getattr(args, "learning_rate", 1e-4)),
+            })
+
         for attn in self.ip_adapters.values():
             params.append({
                 "params": list(attn.trainable_parameters()),
                 "lr": float(getattr(args, "learning_rate", 1e-4)),
             })
+
         return params
 
-    # ── forward: inject IP tokens ──────────────────────────────
+    # ── forward: multi-encoder IP tokens ────────────────────────
+
+    def _stash_ip_tokens(self, ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet):
+        """Stash IP tokens on every AnimaIPCrossAttention module before DiT forward.
+
+        Anima DiT Blocks call ``self.cross_attn(x, attn_params, context=...)``
+        with a fixed signature.  We pass IP tokens via instance attributes.
+        """
+        for attn in self.ip_adapters.values():
+            attn._ip_tokens = ip_tokens
+            attn._ip_tokens_fine = ip_tokens_fine
+            attn._ip_tokens_ccip = ip_tokens_ccip
+            attn._ip_tokens_lsnet = ip_tokens_lsnet
+
     def get_noise_pred_and_target(
         self,
         args, accelerator, noise_scheduler,
@@ -151,34 +257,69 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         unet, network, weight_dtype,
         train_unet=True, is_train=True,
     ):
-        """Override to compute & inject IP tokens before the DiT forward."""
         from torch.nn.functional import interpolate
 
-        # Get raw training images from Kohya loader (standard format)
-        images = batch.get("images")  # (B, C, H, W) raw pixels, already normalized
-            if images is not None:
-                # Resize to CLIP input size (224×224)
-                clip_input = interpolate(images, size=(224, 224), mode="bilinear", align_corners=False)
-                clip_input = clip_input.to(device=accelerator.device, dtype=weight_dtype)
-                with torch.no_grad():
-                    clip_outputs = self.clip_image_encoder(clip_input, output_hidden_states=True)
+        images = batch.get("images")  # (B, C, H, W) raw pixels
 
-                mode = getattr(args, "ipa_mode", "simple")
-                if mode == "double":
-                    # Global stream
-                    ip_global = self.image_proj(clip_outputs.image_embeds)  # (B, N, 1024)
-                    # Fine stream — patch features from penultimate layer
-                    patch_feats = clip_outputs.hidden_states[-2][:, 1:, :]  # (B, 256, 1280)
-                    ip_fine = self.image_proj_fine(patch_feats)              # (B, N_fine, 1024)
-                    self._ip_tokens = ip_global
-                    self._ip_tokens_fine = ip_fine
-                elif mode == "resampler":
-                    patch_feats = clip_outputs.hidden_states[-2][:, 1:, :]
-                    self._ip_tokens = self.image_proj(patch_feats)
-                else:
-                    self._ip_tokens = self.image_proj(clip_outputs.image_embeds)
-        else:
-            self._ip_tokens = None
+        ip_tokens = None
+        ip_tokens_fine = None
+        ip_tokens_ccip = None
+        ip_tokens_lsnet = None
+
+        if images is not None and self.clip_image_encoder is not None:
+            device = accelerator.device
+
+            # ── CLIP encoding ────────────────────────────────
+            clip_input = interpolate(images, size=(224, 224), mode="bilinear", align_corners=False)
+            clip_input = clip_input.to(device=device, dtype=weight_dtype)
+            with torch.no_grad():
+                clip_outputs = self.clip_image_encoder(clip_input, output_hidden_states=True)
+            clip_embeds = clip_outputs.image_embeds  # (B, 1024)
+
+            # ── CCIP encoding (if enabled) ───────────────────
+            ccip_embeds = None
+            if self.ccip_encoder is not None:
+                with torch.no_grad():
+                    ccip_embeds = self.ccip_encoder(images.to(device=device, dtype=weight_dtype))
+
+            # ── LSNet encoding (if enabled) ──────────────────
+            lsnet_embeds = None
+            if self.lsnet_encoder is not None:
+                lsnet_input = interpolate(images, size=(448, 448), mode="bilinear", align_corners=False)
+                lsnet_input = lsnet_input.to(device=device, dtype=weight_dtype)
+                with torch.no_grad():
+                    lsnet_embeds = self.lsnet_encoder(lsnet_input)
+
+            # ── Project to IP tokens ─────────────────────────
+            ipa_mode = getattr(args, "ipa_mode", "simple")
+
+            if isinstance(self.image_proj, MultiStreamProj):
+                embeds_list = [clip_embeds]
+                if ccip_embeds is not None:
+                    embeds_list.append(ccip_embeds)
+                if lsnet_embeds is not None:
+                    embeds_list.append(lsnet_embeds)
+                ip_list = self.image_proj(embeds_list)
+                # ip_list = [ip_tokens_clip, ip_tokens_ccip?, ip_tokens_lsnet?]
+                ip_tokens = ip_list[0]
+                aux = list(self._aux_encoders)
+                for i, name in enumerate(aux):
+                    if name == "ccip":
+                        ip_tokens_ccip = ip_list[1 + i]
+                    elif name == "lsnet":
+                        ip_tokens_lsnet = ip_list[1 + i]
+            elif ipa_mode == "double":
+                ip_tokens = self.image_proj(clip_embeds)
+                patch_feats = clip_outputs.hidden_states[-2][:, 1:, :]
+                ip_tokens_fine = self.image_proj_fine(patch_feats)
+            elif ipa_mode == "resampler":
+                patch_feats = clip_outputs.hidden_states[-2][:, 1:, :]
+                ip_tokens = self.image_proj(patch_feats)
+            else:
+                ip_tokens = self.image_proj(clip_embeds)
+
+        # Stash IP tokens before DiT forward
+        self._stash_ip_tokens(ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet)
 
         return super().get_noise_pred_and_target(
             args, accelerator, noise_scheduler,
@@ -188,9 +329,8 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         )
 
 
-# ---------------------------------------------------------------------------
-# CLIP loading helper
-# ---------------------------------------------------------------------------
+# ── CLIP helper ──────────────────────────────────────────────────
+
 
 def load_clip_vision_model(
     model_id: str = "openai/clip-vit-large-patch14",
@@ -209,12 +349,12 @@ def load_clip_vision_model(
     return model
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+# ── CLI ──────────────────────────────────────────────────────────
+
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = AnimaNetworkTrainer.setup_parser()
+
     parser.add_argument(
         "--clip_model",
         type=str,
@@ -222,10 +362,43 @@ def setup_parser() -> argparse.ArgumentParser:
         help="HuggingFace model ID for CLIP vision encoder",
     )
     parser.add_argument(
+        "--aux_encoders",
+        type=str,
+        default="",
+        help=(
+            "Auxiliary encoders: 'clip_only' (default), 'clip_ccip', "
+            "'clip_lsnet', 'clip_ccip_lsnet'"
+        ),
+    )
+    parser.add_argument(
+        "--ccip_model",
+        type=str,
+        default="ccip-caformer-24-randaug-pruned",
+        help="CCIP model name for imgutils (when aux_encoders includes 'ccip')",
+    )
+    parser.add_argument(
+        "--lsnet_ckpt",
+        type=str,
+        default="",
+        help="Path to LSNet best_checkpoint.pth (when aux_encoders includes 'lsnet')",
+    )
+    parser.add_argument(
         "--num_ip_tokens",
         type=int,
         default=4,
-        help="Number of IP tokens (4 recommended for MVP)",
+        help="Number of IP tokens for CLIP (and aux when num_ip_tokens_aux not set)",
+    )
+    parser.add_argument(
+        "--num_ip_tokens_clip",
+        type=int,
+        default=None,
+        help="Number of IP tokens for CLIP specifically (defaults to num_ip_tokens)",
+    )
+    parser.add_argument(
+        "--num_ip_tokens_aux",
+        type=int,
+        default=None,
+        help="Number of IP tokens per auxiliary encoder (defaults to num_ip_tokens)",
     )
     parser.add_argument(
         "--ip_scale",
@@ -238,7 +411,7 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         default="simple",
         choices=["simple", "resampler", "double"],
-        help="IP-Adapter mode: simple=global CLIP feature, resampler=perceiver over patches, double=both",
+        help="IP-Adapter mode: simple=global CLIP, resampler=perceiver, double=both",
     )
     return parser
 
@@ -247,7 +420,14 @@ if __name__ == "__main__":
     parser = setup_parser()
     args = parser.parse_args()
     args = train_util.read_config_from_file(args, parser)
-    if hasattr(args, 'attn_mode') and args.attn_mode == "sdpa":
+    if hasattr(args, "attn_mode") and args.attn_mode == "sdpa":
         args.attn_mode = "torch"
+
+    # Resolve num_ip_tokens defaults for multi-stream
+    if getattr(args, "num_ip_tokens_clip", None) is None:
+        args.num_ip_tokens_clip = args.num_ip_tokens
+    if getattr(args, "num_ip_tokens_aux", None) is None:
+        args.num_ip_tokens_aux = args.num_ip_tokens
+
     trainer = AnimaIPAdapterTrainer()
     trainer.train(args)

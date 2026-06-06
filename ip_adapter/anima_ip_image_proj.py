@@ -114,3 +114,56 @@ class Resampler(nn.Module):
             latents = attn(latents, x) + latents
             latents = ff(latents) + latents
         return self.norm_out(self.proj_out(latents))
+
+
+# ---------------------------------------------------------------------------
+# Multi-Stream Projection for auxiliary encoder fusion
+# ---------------------------------------------------------------------------
+
+class MultiStreamProj(nn.Module):
+    """Manages independent ImageProjModel instances for each enabled encoder.
+
+    Encoder order convention:
+      index 0 = CLIP  (always present)
+      index 1 = CCIP  (character identity, optional)
+      index 2 = LSNet (artist style, optional)
+
+    Each encoder's global embedding (B, 1024) is projected to
+    (B, num_tokens, 1024) independently.
+    """
+
+    def __init__(
+        self,
+        num_streams: int = 3,
+        cross_attention_dim: int = 1024,
+        embed_dim: int = 1024,
+        tokens_per_stream: list[int] | None = None,
+    ):
+        super().__init__()
+        self.num_streams = num_streams
+
+        if tokens_per_stream is None:
+            tokens_per_stream = [4] * num_streams
+
+        assert len(tokens_per_stream) == num_streams
+
+        self.projs = nn.ModuleList([
+            ImageProjModel(
+                cross_attention_dim=cross_attention_dim,
+                clip_embeddings_dim=embed_dim,
+                clip_extra_context_tokens=tokens_per_stream[i],
+            )
+            for i in range(num_streams)
+        ])
+
+    def forward(self, embeddings: list[torch.Tensor]) -> list[torch.Tensor]:
+        """Project each encoder's embedding to IP tokens.
+
+        Args:
+            embeddings: list of (B, 1024) tensors, one per enabled stream.
+
+        Returns:
+            list of (B, N_i, 1024) IP token tensors, one per stream.
+        """
+        assert len(embeddings) <= self.num_streams
+        return [self.projs[i](embeddings[i]) for i in range(len(embeddings))]
