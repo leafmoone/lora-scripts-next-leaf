@@ -6,6 +6,7 @@ import csv
 import gc
 import io
 import os
+import sys
 import json
 import logging
 import threading
@@ -363,6 +364,9 @@ class WD14Tagger:
                     "filename": filename,
                     "local_dir": local_dir,
                     "endpoint": endpoint,
+                    "resume": True,
+                    "tqdm_args": {"disable": False, "file": sys.stdout, "desc": filename,
+                                  "unit": "B", "unit_scale": True, "miniters": 1},
                 }
                 return hf_hub.hf_hub_download(**kwargs)
             except Exception as exc:

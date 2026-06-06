@@ -11,6 +11,7 @@ Differential LoRA REST API 路由
 import asyncio
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -151,59 +152,63 @@ async def run_differential_training(request: Request):
 
 
 def _run_auto_tagging(folder_a: str, config: dict) -> None:
-    """使用 DiffSynth 标注器 (tools/differential_tagger/run.sh) 打标。"""
+    """调用 tools/differential_tagger/main.py 打标，直接生成 .txt 到 folder_a。"""
     import subprocess
 
     tagger_dir = os.path.join(os.path.dirname(__file__), "..", "..", "tools", "differential_tagger")
     tagger_dir = os.path.abspath(tagger_dir)
-    run_sh = os.path.join(tagger_dir, "run.sh")
+    main_py = os.path.join(tagger_dir, "main.py")
 
-    if not os.path.isfile(run_sh):
-        log.error(f"[DiffLoRA] 标注器脚本不存在: {run_sh}")
+    if not os.path.isfile(main_py):
+        log.error(f"[DiffLoRA] 标注器脚本不存在: {main_py}")
         return
 
-    # 构建参数
-    tagger_args = [folder_a, folder_a]  # input, output (同目录生成 .txt)
     mode = config.get("tagger_mode", "smart")
-    tagger_args.append(f"--{mode}")
+    tagger_model = config.get("tagger_model", "wd-eva02-large-tagger-v3")
+
+    cmd = [
+        sys.executable, main_py,
+        "--input", folder_a,
+        "--output", folder_a,
+        f"--{mode}",
+        "--save-captions",
+        "--model", tagger_model,
+        "--threshold", str(config.get("tagger_threshold", 0.35)),
+        "--character-threshold", str(config.get("tagger_char_threshold", 0.85)),
+    ]
 
     if config.get("tagger_use_vlm", True):
-        tagger_args.append("--vlm")
+        cmd.append("--vlm")
     else:
-        tagger_args.append("--no-vlm")
-
+        cmd.append("--no-vlm")
     if config.get("tagger_use_cpu", False):
-        tagger_args.append("--cpu")
-
+        cmd.append("--cpu")
     if config.get("tagger_recursive", False):
-        tagger_args.append("-r")
-
-    # 标注模型
-    tagger_model = config.get("tagger_model", "wd-eva02-large-tagger-v3")
-    tagger_args.extend(["--model", tagger_model])
-
-    # 阈值
-    tagger_args.extend(["--threshold", str(config.get("tagger_threshold", 0.35))])
-    tagger_args.extend(["--char-threshold", str(config.get("tagger_char_threshold", 0.85))])
-
-    # 黑名单
+        cmd.append("--recursive")
+    if mode == "smart":
+        cmd.extend(["--purpose", config.get("tagger_purpose", "character")])
+        taggers = config.get("tagger_taggers", "")
+        if taggers:
+            tagger_list = [t.strip() for t in taggers.split() if t.strip()]
+            if len(tagger_list) >= 2:
+                cmd += ["--taggers"] + tagger_list + ["--consensus", str(config.get("tagger_consensus", 2))]
+    max_tags = config.get("tagger_max_tags", 0)
+    if max_tags > 0:
+        cmd.extend(["--max-tags", str(max_tags)])
     blacklist = config.get("tagger_blacklist", "")
     if blacklist:
-        tagger_args.extend(["--blacklist"] + [t.strip() for t in blacklist.split(",") if t.strip()])
+        tokens = [t.strip() for t in blacklist.split(",") if t.strip()]
+        if tokens:
+            cmd += ["--blacklist"] + tokens
 
-    # Smart Tag 选项
-    if mode == "smart":
-        tagger_args.extend(["--purpose", config.get("tagger_purpose", "character")])
+    data_dir = os.path.join(os.path.dirname(tagger_dir), "..", "models")
+    data_dir = os.path.abspath(data_dir)
+    cmd += ["--data-dir", data_dir]
 
-    log.info(f"[DiffLoRA] 自动打标: bash {run_sh} {' '.join(tagger_args)}")
+    log.info(f"[DiffLoRA] 自动打标: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(
-            ["bash", run_sh] + tagger_args,
-            capture_output=False,  # 实时输出
-            timeout=600,  # 10 分钟超时
-            cwd=tagger_dir,
-        )
+        result = subprocess.run(cmd, capture_output=False, timeout=600, cwd=tagger_dir)
         if result.returncode == 0:
             log.info(f"[DiffLoRA] 自动打标完成: {folder_a}")
         else:

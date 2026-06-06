@@ -127,15 +127,19 @@ def create_single_image_dataset(
     prompt: str,
     output_dir: Optional[str] = None,
     safe_name: Optional[str] = None,
+    repeat: int = 1,
 ) -> str:
     """
     创建单图训练数据集（符合 Kohya Dataset 格式）。
 
     生成结构:
       <output_dir>/
-      └── 1_<safe_name>/
+      └── <repeat>_<safe_name>/
           ├── <image_filename>
           └── <image_filename_no_ext>.txt
+
+    Args:
+        repeat: Kohya repeats——文件夹名前缀数字，如 1000_xxx/ 表示每 epoch 重复 1000 次。
 
     同时生成 metadata.csv（兼容 DiffSynth 格式）:
       image,prompt
@@ -160,7 +164,7 @@ def create_single_image_dataset(
         safe_name = base_name
 
     # 创建 Kohya 格式的 repeats 子目录
-    repeat_dir = os.path.join(output_dir, f"1_{safe_name}")
+    repeat_dir = os.path.join(output_dir, f"{repeat}_{safe_name}")
     os.makedirs(repeat_dir, exist_ok=True)
 
     # 复制图片

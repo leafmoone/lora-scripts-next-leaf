@@ -1,51 +1,77 @@
-accelerate==0.33.0
-transformers==4.51.3
-diffusers[torch]==0.33.1
-ftfy==6.1.1
-# albumentations==1.3.0
-opencv-python==4.8.1.78
-einops==0.7.0
-pytorch-lightning==1.9.0
-bitsandbytes==0.46.0
-lion-pytorch==0.1.2
-schedulefree==1.4
-pytorch-optimizer==3.7.0
-prodigy-plus-schedule-free==1.9.0
-prodigyopt==1.1.2
-tensorboard==2.10.1
-safetensors==0.4.4
-setuptools<81
-prodigy-plus-schedule-free
-# gradio==3.16.2
-altair==4.2.2
-easygui==0.98.3
-toml==0.10.2
-voluptuous==0.13.1
-huggingface-hub==0.36.2
-# for Image utils
-imagesize==1.4.1
-# for T5XXL tokenizer (SD3/FLUX)
-sentencepiece==0.2.0
-# for ui
-rich==13.7.0
-pandas
-scipy
-requests
-pillow
-numpy==1.26.4
-# <=2.0.0
-gradio==3.44.2
-fastapi==0.95.1
-uvicorn==0.22.0
-wandb==0.16.2
-httpx==0.24.1
-# extra
-open-clip-torch==2.20.0
-lycoris-lora==3.3.0
-dadaptation==3.1
-# triton for Windows — source installs only (portable package skips this)
-# Needed by flash-attn on Windows; portable package has prebuilt flash-attn wheel that bundles triton.
-triton-windows<3.4; sys_platform == "win32" # skip_verify
+# ────────── PyTorch (CUDA 12.8 / cu128) ──────────
+# Install manually:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch>=2.5
+torchvision>=0.20
 
-optimum-quanto
-nvidia-ml-py
+# ────────── Training core ──────────
+accelerate>=0.33.0
+transformers>=4.53.0
+diffusers[torch]>=0.33.0
+bitsandbytes>=0.46.0
+safetensors>=0.4.0
+einops>=0.7.0
+
+# ────────── Optimizers ──────────
+lion-pytorch>=0.1.0
+pytorch-optimizer>=3.7.0
+prodigy-plus-schedule-free>=1.9.0
+prodigyopt>=1.1.0
+schedulefree>=1.4
+dadaptation>=3.1
+
+# ────────── LoRA / LyCORIS ──────────
+lycoris-lora>=3.3.0
+
+# ────────── Model utils ──────────
+ftfy>=6.1.0
+opencv-python>=4.8.0
+open-clip-torch>=2.20.0
+sentencepiece>=0.2.0
+huggingface-hub>=0.36.0
+optimum-quanto>=0
+
+# ────────── Numeric / Image ──────────
+numpy>=1.26,<2.0
+scipy>=1.10
+pandas>=2.0
+pillow>=10.0
+imagesize>=1.4.0
+
+# ────────── Attention ──────────
+flash-attn>=2.5
+flash-linear-attention>=0.2
+
+# ────────── Web server & API ──────────
+fastapi>=0.100
+uvicorn>=0.22
+httpx>=0.24.0
+gradio>=3.44,<4.0
+websockets>=10.0
+
+# ────────── Training tools ──────────
+tensorboard>=2.10
+pytorch-lightning>=1.9
+wandb>=0.16
+
+# ────────── UI / CLI ──────────
+rich>=13.7
+altair>=4.2
+easygui>=0.98
+voluptuous>=0.13
+
+# ────────── Config parsing ──────────
+toml>=0.10.0
+
+# ────────── System ──────────
+nvidia-ml-py>=12.0
+psutil>=5.9
+pydantic>=2.0
+setuptools<81
+requests>=2.31
+
+# ────────── ONNX (tagger) ──────────
+onnxruntime>=1.16
+onnxruntime-gpu>=1.16
+
+# ────────── Windows only ──────────
+triton-windows<3.4; sys_platform == "win32" # skip_verify

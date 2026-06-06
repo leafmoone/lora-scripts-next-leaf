@@ -187,33 +187,52 @@ class ToriiGateTagger:
         local_dir = os.path.join(self.model_dir, self.model_name)
         os.makedirs(local_dir, exist_ok=True)
 
-        if not os.path.exists(os.path.join(local_dir, "config.json")):
-            logger.info("Downloading ToriiGate model %s ...", self.model_name)
-            assert hf_hub is not None
-            last_error: Optional[Exception] = None
-            for endpoint in get_hf_endpoint_order(model_name="ToriiGate 0.5"):
-                try:
-                    logger.info("Downloading ToriiGate from %s via %s", config["repo_id"], endpoint_label(endpoint))
-                    hf_hub.snapshot_download(
-                        repo_id=config["repo_id"],
-                        revision=TORIIGATE_COMMIT_HASH,
-                        local_dir=local_dir,
-                        local_dir_use_symlinks=False,
-                        allow_patterns=[
-                            "*.json",
-                            "*.safetensors",
-                            "*.txt",
-                            "*.jinja",
-                        ],
-                        endpoint=endpoint,
-                    )
-                    break
-                except Exception as exc:
-                    last_error = exc
-                    logger.warning("ToriiGate download failed via %s: %s", endpoint_label(endpoint), exc)
-            else:
-                assert last_error is not None
-                raise last_error
+        # Check for model weight files, not just config.json.
+        # A complete snapshot must include .safetensors weights or an index file.
+        has_weights = (
+            os.path.isfile(os.path.join(local_dir, "model.safetensors"))
+            or os.path.isfile(os.path.join(local_dir, "model.safetensors.index.json"))
+        )
+        if has_weights and os.path.isfile(os.path.join(local_dir, "config.json")):
+            logger.info("ToriiGate model %s already present at %s", self.model_name, local_dir)
+            return local_dir
+
+        logger.info("Downloading ToriiGate model %s from %s ...", self.model_name, config["repo_id"])
+        assert hf_hub is not None
+
+        last_error: Optional[Exception] = None
+        for endpoint in get_hf_endpoint_order(model_name="ToriiGate 0.5"):
+            try:
+                logger.info("Downloading ToriiGate from %s via %s", config["repo_id"], endpoint_label(endpoint))
+                hf_hub.snapshot_download(
+                    repo_id=config["repo_id"],
+                    revision=TORIIGATE_COMMIT_HASH,
+                    local_dir=local_dir,
+                    local_dir_use_symlinks=False,
+                    allow_patterns=[
+                        "*.json",
+                        "*.safetensors",
+                        "*.txt",
+                        "*.jinja",
+                    ],
+                    endpoint=endpoint,
+                )
+                break
+            except Exception as exc:
+                last_error = exc
+                logger.warning("ToriiGate download failed via %s: %s", endpoint_label(endpoint), exc)
+        else:
+            assert last_error is not None
+            raise last_error
+
+        # Verify model weights actually landed
+        if not os.path.isfile(os.path.join(local_dir, "model.safetensors")) and not os.path.isfile(
+            os.path.join(local_dir, "model.safetensors.index.json")
+        ):
+            raise RuntimeError(
+                f"ToriiGate model downloaded but no weight file found in {local_dir}. "
+                f"The repo may use a different filename."
+            )
         return local_dir
 
     def _pick_torch_dtype(self):

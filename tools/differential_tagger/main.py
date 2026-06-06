@@ -36,6 +36,18 @@ from typing import Any, Dict, List, Optional
 # Add the package directory to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Pick up --data-dir early (before config.py reads STANDALONE_TAGGER_DATA_DIR at import).
+# Default download path is ./models/tagger; pass an explicit directory to reuse cached models.
+_data_dir_candidates = ["--data-dir"]
+_data_dir = None
+for _i, _arg in enumerate(sys.argv):
+    if _arg in _data_dir_candidates and _i + 1 < len(sys.argv):
+        _data_dir = os.path.abspath(sys.argv[_i + 1])
+        break
+os.environ["STANDALONE_TAGGER_DATA_DIR"] = (
+    _data_dir if _data_dir is not None else os.path.abspath("./models")
+)
+
 from config import (
     ALLOWED_IMAGE_EXTENSIONS,
     DEFAULT_TAGGER_MODEL,
@@ -342,8 +354,17 @@ def main():
         "--verbose", "-v", action="store_true",
         help="Verbose logging",
     )
+    parser.add_argument(
+        "--data-dir", default=None,
+        help="Override models/data directory (default: tools/differential_tagger/data/). "
+             "Set to a custom path to reuse pre-downloaded models.",
+    )
 
     args = parser.parse_args()
+
+    # Apply data-dir override before config loads defaults
+    if args.data_dir:
+        os.environ["STANDALONE_TAGGER_DATA_DIR"] = os.path.abspath(args.data_dir)
 
     # Setup logging
     log_level = logging.DEBUG if args.verbose else logging.INFO

@@ -11,8 +11,11 @@ from typing import List
 from pathlib import Path
 from typing import Optional
 
+import warnings
 try:
-    import pkg_resources
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        import pkg_resources
 except ImportError:
     pkg_resources = None
 
@@ -118,6 +121,20 @@ stderr: {result.stderr.decode(encoding="utf8", errors="ignore") if len(result.st
     return result.stdout.decode(encoding="utf8", errors="ignore")
 
 
+def _parse_version(v: str) -> tuple:
+    """Parse a version string into a comparable tuple, ignoring extras suffixes."""
+    v = str(v).strip()
+    # Strip '+cu128' / '+cpu' / '.post1' style suffixes
+    v = re.sub(r'\+.*$', '', v)
+    parts = []
+    for segment in v.split('.'):
+        try:
+            parts.append(int(segment))
+        except ValueError:
+            break
+    return tuple(parts) if parts else (0,)
+
+
 def is_installed(package, friendly: str = None):
     #
     # This function was adapted from code written by vladimandic: https://github.com/vladmandic/automatic/commits/master
@@ -162,10 +179,10 @@ def is_installed(package, friendly: str = None):
                 # log.debug(f'Package version found: {pkg_name} {version}')
 
                 if pkg_version is not None:
-                    if '>=' in pkg:
-                        ok = version >= pkg_version
-                    else:
-                        ok = version == pkg_version
+                    # Use >= semantics for both >= and == constraints.
+                    # When a package is already installed at a higher version
+                    # (e.g. via uv sync), treat it as satisfying the requirement.
+                    ok = _parse_version(version) >= _parse_version(pkg_version)
 
                     if not ok:
                         log.info(f'Package wrong version: {pkg_name} {version} required {pkg_version}')
@@ -229,10 +246,9 @@ def validate_requirements(requirements_file: str):
                 continue
 
             if not is_installed(spec):
-                if index_url != "":
-                    run_pip(f"install \"{spec}\" --index-url {index_url}", spec, live=True)
-                else:
-                    run_pip(f"install \"{spec}\"", spec, live=True)
+                log.warning(f"Dependency not satisfied: {spec} (install with: source .venv/bin/activate && uv pip install {spec})")
+                # NOTE: pip-based auto-install is skipped in uv-managed environments
+                # to avoid version conflicts with uv.lock / uv sync.
 
 
 def setup_windows_bitsandbytes():

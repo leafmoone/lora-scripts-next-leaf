@@ -169,7 +169,7 @@ def _train_single_pair(
     Returns:
         差分 LoRA safetensors 路径, 或 None (失败)
     """
-    base_tags = read_base_tags(config.get("tag_dir", config["folder_a"]), img_filename)
+    base_tags = read_base_tags(config.get("tag_dir") or config["folder_a"], img_filename)
     trigger_word = config.get("trigger_word", "Character_Splitting")
     remove_tokens_str = config.get("remove_tokens", "")
     step2_prompt = build_step2_prompt(base_tags, trigger_word, remove_tokens_str)
@@ -189,6 +189,7 @@ def _train_single_pair(
         image_path=img_a_path,
         prompt=base_tags,
         safe_name=safe_name,
+        repeat=config.get("dataset_repeat", 1000),
     )
 
     step1_toml = build_step1_toml(config, step1_dataset, lora1_output)
@@ -222,6 +223,7 @@ def _train_single_pair(
         image_path=img_b_path,
         prompt=step2_prompt,
         safe_name=safe_name,
+        repeat=config.get("dataset_repeat", 1000),
     )
 
     step2_toml = build_step2_toml(config, step2_dataset, lora2_output, merged_model)

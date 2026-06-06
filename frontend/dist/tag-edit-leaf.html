@@ -58,6 +58,11 @@ h2{font-size:15px;margin:20px 0 8px;color:var(--c-brand)}
 mark{background:#ffe58f;padding:0 2px;border-radius:2px}
 .back-home{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--c-brand);text-decoration:none;margin-bottom:12px}
 .back-home:hover{text-decoration:underline}
+.gallery-item{width:180px;border:1px solid var(--c-border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.gallery-item:hover{border-color:var(--c-brand)}
+.gallery-item img{width:100%;height:180px;object-fit:cover;display:block;background:var(--c-tip)}
+.gallery-item .caption-preview{padding:8px;font-size:11px;line-height:1.4;opacity:.8;max-height:60px;overflow:hidden;white-space:pre-wrap;word-break:break-all}
+.gallery-item .caption-preview.empty{opacity:.4;font-style:italic}
 </style>
 </head>
 <body>
@@ -142,6 +147,13 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
           <span class="toggle-switch on" id="useGPU-sw"></span> 使用 GPU（关闭则仅 CPU）
         </label>
       </div>
+      <div class="row" style="margin-top:8px">
+        <div class="col" style="flex:3">
+          <label>模型目录 <small>(可选，留空=./models 自动下载)</small></label>
+          <input type="text" id="dataDir" placeholder="指定已下载模型的目录路径">
+          <div class="input-helper">留空则使用默认 ./models（不存在时自动下载）；填写路径则从该目录加载已有模型。</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -203,6 +215,19 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         <button class="btn btn-danger btn-sm" style="display:none" id="btnClear" onclick="clearTask()">清除</button>
       </div>
     </div>
+
+    <!-- Image+caption preview gallery -->
+    <div id="gallerySection" style="display:none;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <label style="font-size:13px;font-weight:600">📸 图文预览 <span id="galleryCount" style="font-weight:400;opacity:.7"></span></label>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="startTagging()">🚀 开始标注</button>
+          <button class="btn btn-secondary btn-sm" onclick="hideGallery()" style="margin-left:6px">✕ 关闭</button>
+        </div>
+      </div>
+      <div id="galleryContainer" style="display:flex;flex-wrap:wrap;gap:12px;max-height:70vh;overflow:auto;padding:4px 0"></div>
+    </div>
+
     <div id="resultSection" style="display:none;margin-top:12px">
       <label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">📋 标注结果预览（前 20 张）</label>
       <div class="result-preview" id="resultContainer"></div>
@@ -267,13 +292,48 @@ async function scanDir() {
     });
     const data = await resp.json();
     if (data.status==='success') {
-      document.getElementById('scanResult').innerHTML=`找到 <b>${data.data.count}</b> 张图片`;
+      state.currentScan = {root: data.data.path, images: data.data.preview};
+      document.getElementById('scanResult').innerHTML=`找到 <b>${data.data.count}</b> 张图片 · 显示前 ${Math.min(data.data.count,50)} 张`;
+      showGallery(state.currentScan.images, state.currentScan.root);
     } else {
       document.getElementById('scanResult').textContent=data.message||'扫描失败';
     }
   } catch(e) {
     document.getElementById('scanResult').textContent='请求失败: '+e.message;
   }
+}
+
+function showGallery(images, root) {
+  document.getElementById('gallerySection').style.display='';
+  document.getElementById('galleryCount').textContent=`(${images.length} 张)`;
+  const container = document.getElementById('galleryContainer');
+  container.innerHTML = images.map(img => {
+    const cap = img.caption || '';
+    const capClass = cap ? '' : 'empty';
+    const capDisplay = cap || '（无标注文件）';
+    const imgUrl = `/api/tag-edit-leaf/image?root=${encodeURIComponent(root)}&img=${encodeURIComponent(img.relative_path)}`;
+    return `<div class="gallery-item" onclick="this.querySelector('input').checked^=1">
+      <img src="${imgUrl}" alt="${img.name}" loading="lazy">
+      <input type="checkbox" style="display:none" checked>
+      <div class="caption-preview ${capClass}">${escapeHtml(capDisplay)}</div>
+    </div>`;
+  }).join('');
+  // Show "start" button
+  document.getElementById('btnRun').style.display='none';
+}
+
+function startTagging() {
+  hideGallery();
+  runTagger();
+}
+
+function hideGallery() {
+  document.getElementById('gallerySection').style.display='none';
+  document.getElementById('btnRun').style.display='';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function collectConfig() {
@@ -294,6 +354,7 @@ function collectConfig() {
     taggers: state.consensusModels,
     consensus: parseInt(document.getElementById('consensus').value)||2,
     blacklist: document.getElementById('blacklist').value.trim().split(/\s+/).filter(Boolean),
+    data_dir: document.getElementById('dataDir').value.trim() || '',
   };
 }
 

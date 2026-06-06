@@ -1,0 +1,102 @@
+[project]
+name = "sd-trainer-mikazuki"
+version = "2.7.0"
+description = "SD-Trainer: Web GUI for Stable Diffusion / Anima / FLUX LoRA & Finetune training"
+requires-python = ">=3.10"
+authors = [{ name = "SD-Trainer Team" }]
+
+dependencies = [
+    # ── PyTorch (cu128 = CUDA 12.8, from PyTorch index) ──
+    "torch>=2.5,<2.8",
+    "torchvision>=0.20",
+
+    # ── Training core ──
+    "accelerate>=0.33.0",
+    "transformers>=5.3.0,<5.11",
+    "diffusers[torch]>=0.33.0",
+    "bitsandbytes>=0.46.0",
+    "safetensors>=0.4.0",
+    "einops>=0.7.0",
+
+    # ── Optimizers ──
+    "lion-pytorch>=0.1.0",
+    "pytorch-optimizer>=3.7.0",
+    "prodigy-plus-schedule-free>=1.9.0",
+    "prodigyopt>=1.1.0",
+    "schedulefree>=1.4",
+    "dadaptation>=3.1",
+
+    # ── LoRA / LyCORIS ──
+    "lycoris-lora>=3.3.0",
+
+    # ── Model utils ──
+    "ftfy>=6.1.0",
+    "opencv-python>=4.8.0",
+    "open-clip-torch>=2.20.0",
+    "sentencepiece>=0.2.0",
+    "huggingface-hub>=0.36.0",
+    "optimum-quanto>=0",
+
+    # ── Numeric / Image ──
+    "numpy>=1.26,<2.0",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "pillow>=10.0",
+    "imagesize>=1.4.0",
+
+    # ── Web server & API ──
+    "fastapi>=0.100",
+    "uvicorn>=0.22",
+    "httpx>=0.24.0",
+    "gradio>=3.44,<4.0",
+    # websockets pinned by gradio (gradio 3.x requires websockets 10-11)
+
+    # ── WebSocket (standalone) ──
+    "websockets>=10.0",
+
+    # ── Training tools ──
+    "tensorboard>=2.10",
+    "pytorch-lightning>=1.9,<2.0",
+    "wandb>=0.16",
+
+    # ── UI / CLI ──
+    "rich>=13.7",
+    "altair>=4.2",
+    "easygui>=0.98",
+    "voluptuous>=0.13",
+
+    # ── Config parsing ──
+    "toml>=0.10.0",
+
+    # ── System ──
+    "nvidia-ml-py>=12.0",
+    "psutil>=5.9",
+    "pydantic>=2.0",
+    "setuptools<81",
+    "requests>=2.31",
+
+    # ── Attention acceleration ──
+    "flash-attn>=2.5,<3.0",
+
+    # ── Tagger VLM (ToriiGate) ──
+    "flash-linear-attention>=0.2",
+    "onnxruntime>=1.16",
+    "onnxruntime-gpu>=1.16",
+]
+
+[tool.uv]
+# Default to copying sources (not hardlinking) — simpler for container/portable use
+link-mode = "copy"
+cache-dir = "/root/lanyun-tmp/cache"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.extra-build-dependencies]
+flash-attn = ["torch"]

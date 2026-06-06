@@ -1,14 +1,53 @@
 import argparse
+import atexit
 import locale
 import os
 import platform
+import signal
 import subprocess
 import sys
+from typing import List
 
 from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
                                    prepare_environment, check_port_avaliable)
 from mikazuki.log import log
 from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
+
+_child_processes: List[subprocess.Popen] = []
+
+
+def _track_child(proc: subprocess.Popen) -> subprocess.Popen:
+    _child_processes.append(proc)
+    return proc
+
+
+def _cleanup_children():
+    for proc in _child_processes:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+    for proc in _child_processes:
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+                proc.wait(timeout=3)
+            except Exception:
+                pass
+    _child_processes.clear()
+
+
+def _on_sigint(signum, frame):
+    log.info("Received SIGINT, cleaning up child processes...")
+    _cleanup_children()
+    sys.exit(1)
+
+
+atexit.register(_cleanup_children)
+signal.signal(signal.SIGINT, _on_sigint)
+signal.signal(signal.SIGTERM, _on_sigint)
 
 parser = argparse.ArgumentParser(description="GUI for stable diffusion training")
 parser.add_argument("--host", type=str, default="0.0.0.0")
@@ -62,14 +101,14 @@ def ensure_port_available(
 @catch_exception
 def run_train_monitor():
     env = os.environ.copy()
-    subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
+    _track_child(subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env))
 
 
 @catch_exception
 def run_tensorboard():
     log.info("Starting tensorboard...")
-    subprocess.Popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
-                     "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)])
+    _track_child(subprocess.Popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
+                     "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)]))
 
 
 @catch_exception
@@ -114,7 +153,7 @@ def run_tag_editor(port: int):
         f"sys.argv = [{str(launch_script)!r}] + {tag_args!r};"
         f"exec(compile(open({str(launch_script)!r}).read(), {str(launch_script)!r}, 'exec'))"
     )
-    subprocess.Popen([sys.executable, "-s", "-c", bootstrap])
+    _track_child(subprocess.Popen([sys.executable, "-s", "-c", bootstrap]))
 
 
 def launch():

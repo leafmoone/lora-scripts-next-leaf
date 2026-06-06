@@ -103,11 +103,24 @@ h1{font-size:20px;margin:0 0 4px}
   </div>
 
   <div class="card">
-    <h2>📦 后处理</h2>
+    <h2>📦 后处理 & 采样</h2>
     <div class="row">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="comfyuiConvert" checked style="transform:scale(1.2)"> 转换为 ComfyUI 格式</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="svdMerge" checked style="transform:scale(1.2)"> SVD 合并所有 LoRA</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="keepTemp" style="transform:scale(1.2)"> 保留临时文件</label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none" onclick="toggleSample()"><input type="checkbox" id="enableSample" style="transform:scale(1.2)"> 🖼️ 启用训练时采样</label>
+    </div>
+    <div id="sampleSection" style="display:none;margin-top:8px">
+      <div class="row">
+        <div class="col"><label>采样步数间隔 <small>(0=禁用)</small></label><input type="number" id="sampleEvery" value="10000" min="0"><div class="input-helper">每 N 步采样一次</div></div>
+        <div class="col"><label>采样器</label><select id="sampleSampler"><option value="euler" selected>euler</option><option value="k_euler">k_euler</option></select></div>
+        <div class="col"><label>噪声偏移</label><input type="number" id="noiseOffset" value="0" min="0" step="0.01"></div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:2"><label>采样提示词 <small>(多行, 留空自动使用训练提示词)</small></label><textarea id="samplePrompts" rows="2" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text);resize:vertical"></textarea></div>
+      </div>
     </div>
   </div>
 
@@ -122,6 +135,11 @@ h1{font-size:20px;margin:0 0 4px}
 
 <script>
 let pollId = null;
+
+function toggleSample() {
+  const on = document.getElementById('enableSample').checked;
+  document.getElementById('sampleSection').style.display = on ? '' : 'none';
+}
 
 function startTraining() {
   const config = {
@@ -154,6 +172,11 @@ function startTraining() {
     postprocess_comfyui: document.getElementById('comfyuiConvert').checked,
     postprocess_svd: document.getElementById('svdMerge').checked,
     keep_temp: document.getElementById('keepTemp').checked,
+    enable_sample: document.getElementById('enableSample').checked,
+    sample_every: parseInt(document.getElementById('sampleEvery').value)||0,
+    sample_prompts: document.getElementById('samplePrompts').value.trim(),
+    sample_sampler: document.getElementById('sampleSampler').value,
+    noise_offset: parseFloat(document.getElementById('noiseOffset').value)||0,
   };
 
   if (!config.folder_a || !config.folder_b) { alert('请填写 folder A 和 folder B'); return; }

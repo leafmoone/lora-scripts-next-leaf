@@ -55,15 +55,15 @@ def build_step1_toml(
     toml["save_every_n_epochs"] = config.get("num_epochs", 5)
     toml["save_model_as"] = "safetensors"
 
-    # ── LoRA 网络 ──
-    toml["network_module"] = "networks.lora"
+    # ── LoRA 网络（Anima DiT 必须用 lora_anima，networks.lora 是 SD 专用且导致 empty param list）──
+    toml["network_module"] = "networks.lora_anima"
     lora_rank = config.get("lora_rank", 32)
     toml["network_dim"] = lora_rank
     toml["network_alpha"] = lora_rank  # 1:1 ratio for overfitting
 
     conv_dim = config.get("conv_dim", 0)
     conv_alpha = config.get("conv_alpha", 1)
-    network_args = []
+    network_args = [r"exclude_patterns=[r'.*llm_adapter.*']"]
     if conv_dim:
         network_args.append(f"conv_dim={conv_dim}")
         network_args.append(f"conv_alpha={conv_alpha}")
@@ -73,10 +73,9 @@ def build_step1_toml(
         toml["network_args"] = network_args
 
     # ── 训练超参 ──
-    toml["learning_rate"] = config.get("learning_rate", "1e-4")
+    toml["learning_rate"] = float(config.get("learning_rate", "1e-4"))
     toml["train_batch_size"] = 1
     toml["max_train_epochs"] = config.get("num_epochs", 5)
-    toml["dataset_repeats"] = config.get("dataset_repeat", 1000)
 
     toml["optimizer_type"] = config.get("optimizer_type", "AdamW8bit")
     toml["lr_scheduler"] = config.get("lr_scheduler", "constant")
@@ -86,21 +85,9 @@ def build_step1_toml(
     # ── 梯度相关 ──
     toml["gradient_accumulation_steps"] = config.get("gradient_accumulation_steps", 1)
     toml["gradient_checkpointing"] = config.get("gradient_checkpointing", False)
-    toml["max_grad_norm"] = config.get("max_grad_norm", 1.0)
 
-    # ── 采样与日志 ──
+    # ── 日志 ──
     toml["logging_dir"] = config.get("logging_dir", "./logs/differential_lora")
-
-    sample_every = config.get("sample_every", 10000)
-    if sample_every > 0:
-        toml["sample_every_n_steps"] = sample_every
-        toml["sample_every_n_epochs"] = None
-
-    if config.get("sample_prompts"):
-        toml["sample_prompts"] = config["sample_prompts"]
-
-    toml["sample_sampler"] = config.get("sample_sampler", "euler")
-    toml["noise_offset"] = config.get("noise_offset", 0)
 
     data_enhancement = config.get("data_enhancement", [])
     if isinstance(data_enhancement, str):
@@ -110,8 +97,6 @@ def build_step1_toml(
 
     # ── 种子与杂项 ──
     toml["seed"] = config.get("seed", 42)
-    toml["clip_skip"] = config.get("clip_skip", 1)
-    toml["max_token_length"] = config.get("max_token_length", 255)
 
     # Anima 特定参数
     if config.get("attn_mode"):
@@ -166,7 +151,7 @@ def _build_default_config() -> dict:
         "resolution": "1024,1024",
         "enable_bucket": True,
         "lora_rank": 32,
-        "learning_rate": "1e-4",
+        "learning_rate": 1e-4,
         "num_epochs": 5,
         "dataset_repeat": 1000,
         "optimizer_type": "AdamW8bit",
@@ -175,7 +160,6 @@ def _build_default_config() -> dict:
         "gradient_accumulation_steps": 1,
         "gradient_checkpointing": False,
         "save_precision": "fp16",
-        "clip_skip": 1,
         "seed": 42,
         "logging_dir": "./logs/differential_lora",
         "output_dir": "./models/differential_lora",

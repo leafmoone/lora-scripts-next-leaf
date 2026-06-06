@@ -57,8 +57,8 @@
     "帮助 → 新手上路": "Help → Getting started",
     "秋叶用户迁移说明": "Migration from Akiba lora-scripts",
     参数释义: "Parameter glossary",
-    "差分 LoRA": "Differential LoRA",
-    "DiffSynth Tagger": "DiffSynth Tagger",
+    "Differential LoRA训练": "Differential LoRA Training",
+    "Tagger-leaf": "Tagger-leaf",
   };
 
   const EN_TO_ZH = Object.fromEntries(
@@ -244,37 +244,53 @@
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (!sidebar) return;
 
-    // Differential LoRA → 挂到 "训练" 分组（LoRA训练 下方）
+    // Differential LoRA训练 → 挂到 "训练" 分组，与 LoRA训练 同级，作为最后一项
     if (!sidebar.querySelector('a[href="/lora/differential-lora.html"]')) {
-      var loraAnchor = sidebar.querySelector('a[href="/lora/index.md"]');
-      var loraLi = loraAnchor && loraAnchor.closest("li");
-      if (loraLi) {
+      var trainChildren = null;
+      sidebar.querySelectorAll("li").forEach(function (li) {
+        if (trainChildren) return;
+        var heading = li.querySelector(":scope > p.sidebar-item.sidebar-heading");
+        if (!heading) return;
+        var text = normalize(heading.textContent);
+        if (text === "训练" || text === "Training") {
+          trainChildren = li.querySelector(":scope > ul.sidebar-item-children");
+        }
+      });
+      if (trainChildren) {
         var diffLi = document.createElement("li");
         var diffA = document.createElement("a");
         diffA.href = "/lora/differential-lora.html";
         diffA.className = "sidebar-item";
         diffA.target = "_self";
-        diffA.setAttribute("aria-label", "差分 LoRA");
-        diffA.appendChild(document.createTextNode(" 差分 LoRA "));
+        diffA.setAttribute("aria-label", "Differential LoRA训练");
+        diffA.appendChild(document.createTextNode(" Differential LoRA训练 "));
         diffLi.appendChild(diffA);
-        loraLi.after(diffLi);
+        trainChildren.appendChild(diffLi);
       }
     }
 
-    // DiffSynth Tagger → 挂到 "工具与调试" 分组（原生标签编辑 下方）
+    // Tagger-leaf → 挂到 "工具与调试" 分组的第一行
     if (!sidebar.querySelector('a[href="/tag-edit-leaf.html"]')) {
-      var nativeAnchor = sidebar.querySelector('a[href="/native-tageditor.html"]');
-      var nativeLi = nativeAnchor && nativeAnchor.closest("li");
-      if (nativeLi) {
-        var tagLi = document.createElement("li");
-        var tagA = document.createElement("a");
-        tagA.href = "/tag-edit-leaf.html";
-        tagA.className = "sidebar-item";
-        tagA.target = "_self";
-        tagA.setAttribute("aria-label", "DiffSynth Tagger");
-        tagA.appendChild(document.createTextNode(" DiffSynth Tagger "));
-        tagLi.appendChild(tagA);
-        nativeLi.after(tagLi);
+      var toolsChildren = null;
+      sidebar.querySelectorAll("li").forEach(function (li) {
+        if (toolsChildren) return;
+        var heading = li.querySelector(":scope > p.sidebar-item.sidebar-heading");
+        if (!heading) return;
+        var text = normalize(heading.textContent);
+        if (text === "工具与调试" || text === "Tools") {
+          toolsChildren = li.querySelector(":scope > ul.sidebar-item-children");
+        }
+      });
+      if (toolsChildren) {
+        var leafLi = document.createElement("li");
+        var leafA = document.createElement("a");
+        leafA.href = "/tag-edit-leaf.html";
+        leafA.className = "sidebar-item";
+        leafA.target = "_self";
+        leafA.setAttribute("aria-label", "Tagger-leaf");
+        leafA.appendChild(document.createTextNode(" Tagger-leaf "));
+        leafLi.appendChild(leafA);
+        toolsChildren.insertBefore(leafLi, toolsChildren.firstChild);
       }
     }
   }
@@ -884,7 +900,7 @@
       applyNavLocale();
       hookLanguageToggle();
       ensureTerminalPanel();
-    }, 60);
+    }, 150);
   }
 
   function boot() {

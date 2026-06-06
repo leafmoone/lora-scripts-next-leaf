@@ -5,7 +5,6 @@ DiffSynth Tag Editor (Tag-Edit-Leaf) REST API
 支持 simple 和 smart 两种模式，适用于任意图片文件夹。
 """
 
-import asyncio
 import os
 import subprocess
 import sys
@@ -55,19 +54,38 @@ async def scan_directory(request: Request):
     if not path or not os.path.isdir(path):
         return APIResponseFail(message=f"目录不存在: {path}")
 
-    # Quick scan via ls/find
     p = Path(path)
     pattern = "**/*" if recursive else "*"
     images = []
     for f in sorted(p.glob(pattern)):
         if f.is_file() and f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif"}:
-            images.append({"name": f.name, "path": str(f)})
+            caption_path = f.with_suffix(".txt")
+            caption = caption_path.read_text(encoding="utf-8").strip() if caption_path.is_file() else ""
+            images.append({
+                "name": f.name,
+                "path": str(f),
+                "relative_path": str(f.relative_to(p)),
+                "caption": caption,
+                "caption_exists": caption_path.is_file(),
+            })
 
     return APIResponseSuccess(data={
         "path": path,
         "count": len(images),
         "preview": images[:50],
     })
+
+
+@router.get("/image")
+async def serve_image(root: str, img: str):
+    """Serve an image file from the dataset directory."""
+    from fastapi.responses import FileResponse
+    from fastapi import HTTPException
+    img_path = Path(root) / img
+    if not img_path.is_file():
+        raise HTTPException(status_code=404, detail="image not found")
+    return FileResponse(str(img_path))
+
 
 
 @router.post("/run")
@@ -103,12 +121,13 @@ async def run_tagger(request: Request):
     blacklist = data.get("blacklist", [])
     save_captions = data.get("save_captions", True)
     verbose = data.get("verbose", False)
+    data_dir = data.get("data_dir") or os.path.join(os.path.dirname(TAGGER_DIR), "..", "models")
+    data_dir = os.path.abspath(data_dir)  # resolve relative to project root, not tagger cwd
 
     # Build command
-    python_exe = sys.executable
-    main_py = os.path.join(TAGGER_DIR, "main.py")
-
-    cmd = [python_exe, main_py, "--input", input_dir, "--output", output_dir]
+    cmd = [sys.executable, os.path.join(TAGGER_DIR, "main.py"),
+           "--data-dir", data_dir,
+           "--input", input_dir, "--output", output_dir]
 
     if mode == "smart":
         cmd.append("--smart")
@@ -149,17 +168,18 @@ async def run_tagger(request: Request):
 
     log.info(f"[TagLeaf] {' '.join(cmd)}")
 
-    _task_state = {
+    _task_state.update({
         "status": "running",
         "progress": 0,
         "message": "正在扫描图片...",
         "output_dir": output_dir,
         "results": [],
         "start_time": time.time(),
-    }
+    })
 
     def _run():
         global _task_state
+        captured_lines: list[str] = []
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -169,25 +189,38 @@ async def run_tagger(request: Request):
                 cwd=TAGGER_DIR,
             )
             for line in proc.stdout:
-                line = line.strip()
-                if not line:
+                stripped = line.rstrip("\r\n")
+                captured_lines.append(line)
+                if not stripped:
                     continue
-                # Parse progress like: [5/100] 5.0% — Tagging image_005.jpg
-                if "[" in line and "/" in line and "%" in line:
+                # Always log output (skip pure carriage-return tqdm lines to avoid noise)
+                if not stripped.startswith("\r") and stripped:
+                    log.info(f"[TagLeaf] {stripped}")
+                # Update frontend message
+                _task_state["message"] = stripped[-200:] if len(stripped) > 200 else stripped
+
+                # Parse [N/M] tagging progress (highest authority)
+                import re
+                m = re.search(r'\[(\d+)\s*/\s*(\d+)\]', stripped)
+                if m:
                     try:
-                        bracket = line[line.index("["):line.index("]") + 1]
-                        parts = bracket.strip("[]").split("/")
-                        current = int(parts[0])
-                        total = int(parts[1])
-                        pct = round(current / total * 100) if total > 0 else 0
-                        _task_state["progress"] = pct
-                        _task_state["message"] = line
-                    except Exception:
+                        cur, tot = int(m.group(1)), int(m.group(2))
+                        if tot > 0:
+                            _task_state["progress"] = round(cur / tot * 100)
+                    except (ValueError, IndexError):
+                        pass
+                    continue
+
+                # Parse download progress from any % line
+                m2 = re.search(r'(?:^|\r)\s*(\d+)%', stripped)
+                if m2:
+                    try:
+                        _task_state["progress"] = min(int(m2.group(1)), 99)
+                    except (ValueError, IndexError):
                         pass
             proc.wait()
 
             if proc.returncode == 0:
-                # Collect results
                 results_json = os.path.join(output_dir, "results.json")
                 results = []
                 if os.path.isfile(results_json):
@@ -204,13 +237,21 @@ async def run_tagger(request: Request):
                 _task_state["results"] = results
                 log.info(f"[TagLeaf] 标注完成: {output_dir}")
             else:
+                tail = "".join(captured_lines[-30:]) if captured_lines else "(无输出)"
+                error_summary = f"标注失败 (exit {proc.returncode})"
+                log.error(f"[TagLeaf] {error_summary}")
+                log.error(f"[TagLeaf] ── 子进程输出（最后 30 行）──\n{tail}\n── 结束 ──")
                 _task_state["status"] = "error"
-                _task_state["message"] = f"标注失败 (exit {proc.returncode})"
-                log.error(f"[TagLeaf] 标注失败 (exit {proc.returncode})")
+                _task_state["message"] = error_summary
+                _task_state["error_log"] = tail
         except Exception as e:
+            tail = "".join(captured_lines[-30:]) if captured_lines else "(无输出)"
+            log.error(f"[TagLeaf] 子进程异常: {e}")
+            if captured_lines:
+                log.error(f"[TagLeaf] ── 子进程输出（最后 30 行）──\n{tail}\n── 结束 ──")
             _task_state["status"] = "error"
             _task_state["message"] = str(e)
-            log.error(f"[TagLeaf] 异常: {e}")
+            _task_state["error_log"] = tail
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -233,7 +274,7 @@ async def get_status():
         "message": _task_state["message"],
         "output_dir": _task_state.get("output_dir", ""),
         "results_count": len(_task_state.get("results", [])),
-        "results": _task_state.get("results", [])[:20],  # First 20 for preview
+        "results": _task_state.get("results", [])[:20],
         "elapsed_seconds": elapsed,
     })
 

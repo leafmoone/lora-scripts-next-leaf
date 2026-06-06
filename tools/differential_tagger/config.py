@@ -28,7 +28,7 @@ DATA_DIR: Path = Path(
 ).expanduser()
 
 MODELS_DIR: Path = Path(
-    os.environ.get("STANDALONE_TAGGER_MODELS_DIR", str(DATA_DIR / "models"))
+    os.environ.get("STANDALONE_TAGGER_MODELS_DIR", str(DATA_DIR))
 ).expanduser()
 
 TEMP_DIR: Path = Path(
