@@ -163,15 +163,12 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         num_streams = 1 + len(self._aux_encoders)  # CLIP + aux
 
         if num_streams > 1:
-            # Multi-stream projection
-            tokens_clip = getattr(args, "num_ip_tokens_clip", args.num_ip_tokens)
-            tokens_aux = getattr(args, "num_ip_tokens_aux", args.num_ip_tokens)
-            tokens_list = [tokens_clip] + [tokens_aux] * len(self._aux_encoders)
+            # Multi-stream: all encoders share the same num_ip_tokens
             self.image_proj = MultiStreamProj(
                 num_streams=num_streams,
                 cross_attention_dim=1024,
                 embed_dim=1024,
-                tokens_per_stream=tokens_list,
+                tokens_per_stream=[args.num_ip_tokens] * num_streams,
             )
         else:
             # Single-stream (original behavior)
@@ -386,19 +383,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--num_ip_tokens",
         type=int,
         default=4,
-        help="Number of IP tokens for CLIP (and aux when num_ip_tokens_aux not set)",
-    )
-    parser.add_argument(
-        "--num_ip_tokens_clip",
-        type=int,
-        default=None,
-        help="Number of IP tokens for CLIP specifically (defaults to num_ip_tokens)",
-    )
-    parser.add_argument(
-        "--num_ip_tokens_aux",
-        type=int,
-        default=None,
-        help="Number of IP tokens per auxiliary encoder (defaults to num_ip_tokens)",
+        help="Number of IP tokens per encoder stream (shared across CLIP and aux)",
     )
     parser.add_argument(
         "--ip_scale",
@@ -422,12 +407,6 @@ if __name__ == "__main__":
     args = train_util.read_config_from_file(args, parser)
     if hasattr(args, "attn_mode") and args.attn_mode == "sdpa":
         args.attn_mode = "torch"
-
-    # Resolve num_ip_tokens defaults for multi-stream
-    if getattr(args, "num_ip_tokens_clip", None) is None:
-        args.num_ip_tokens_clip = args.num_ip_tokens
-    if getattr(args, "num_ip_tokens_aux", None) is None:
-        args.num_ip_tokens_aux = args.num_ip_tokens
 
     trainer = AnimaIPAdapterTrainer()
     trainer.train(args)

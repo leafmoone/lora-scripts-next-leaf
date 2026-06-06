@@ -83,17 +83,15 @@ h1{font-size:20px;margin:0 0 4px}
     <div id="ccipSection" style="display:none">
       <div class="row">
         <div class="col"><label>CCIP 模型</label><input type="text" id="ccipModel" value="ccip-caformer-24-randaug-pruned"><div class="input-helper">imgutils CCIP 模型名，首次使用自动下载 ONNX</div></div>
-        <div class="col"><label>CCIP Token 数</label><input type="number" id="numIpTokensAux" value="4" min="1" max="16"></div>
       </div>
     </div>
     <div id="lsnetSection" style="display:none">
       <div class="row">
         <div class="col"><label>LSNet 权重路径</label><input type="text" id="lsnetCkpt" value="/root/lanyun-tmp/workspace/lsnet/best_checkpoint.pth"><div class="input-helper">best_checkpoint.pth 完整路径</div></div>
-        <div class="col"><label>LSNet Token 数</label><input type="number" id="numIpTokensAux2" value="4" min="1" max="16"></div>
       </div>
     </div>
     <div class="row">
-      <div class="col"><label>IP Token 数量 (CLIP)</label><input type="number" id="numIpTokens" value="4" min="1" max="32"><div class="input-helper">4=粗粒度, 8=中等, 16=细粒度</div></div>
+      <div class="col"><label>IP Token 数量</label><input type="number" id="numIpTokens" value="4" min="1" max="32"><div class="input-helper">每编码器 IP token 数（CLIP + 辅编码器共享）</div></div>
       <div class="col"><label>IP Scale</label><input type="number" id="ipScale" value="1.0" min="0" max="2" step="0.1"><div class="input-helper">图像条件强度，推理时可调</div></div>
     </div>
   </div>
@@ -268,7 +266,6 @@ function startTraining() {
     ccip_model: document.getElementById('ccipModel').value.trim(),
     lsnet_ckpt: document.getElementById('lsnetCkpt').value.trim(),
     num_ip_tokens: parseInt(document.getElementById('numIpTokens').value)||4,
-    num_ip_tokens_aux: parseInt(document.getElementById('numIpTokensAux').value)||4,
     ip_scale: parseFloat(document.getElementById('ipScale').value)||1.0,
     ipa_mode: document.getElementById('ipaMode').value,
     learning_rate: document.getElementById('learningRate').value.trim(),
