@@ -65,7 +65,7 @@ from ip_adapter import (
     MultiStreamProj,
     AnimaIPAdapter,
 )
-from ip_adapter.ccip_encoder import load_ccip_encoder
+from ip_adapter.ccip_encoder import load_ccip_encoder, DEFAULT_CKPT as DEFAULT_CCIP_CKPT
 from ip_adapter.lsnet_encoder import load_lsnet_encoder
 
 # ── Mode parser ──────────────────────────────────────────────────
@@ -118,10 +118,10 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         # CCIP encoder (if enabled)
         if "ccip" in self._aux_encoders:
-            ccip_model = getattr(args, "ccip_model", "ccip-caformer-24-randaug-pruned")
-            logger.info(f"Loading CCIP encoder: {ccip_model}")
+            ccip_ckpt = getattr(args, "ccip_ckpt", DEFAULT_CCIP_CKPT)
+            logger.info(f"Loading CCIP encoder from: {ccip_ckpt}")
             self.ccip_encoder = load_ccip_encoder(
-                model_name=ccip_model,
+                ckpt_path=ccip_ckpt,
                 device="cpu",
                 dtype=weight_dtype,
             )
@@ -273,11 +273,13 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
                 clip_outputs = self.clip_image_encoder(clip_input, output_hidden_states=True)
             clip_embeds = clip_outputs.image_embeds  # (B, 1024)
 
-            # ── CCIP encoding (if enabled) ───────────────────
+            # ── CCIP encoding (GPU-native, 384×384) ─────────
             ccip_embeds = None
             if self.ccip_encoder is not None:
+                ccip_input = interpolate(images, size=(384, 384), mode="bilinear", align_corners=False)
+                ccip_input = ccip_input.to(device=device, dtype=weight_dtype)
                 with torch.no_grad():
-                    ccip_embeds = self.ccip_encoder(images.to(device=device, dtype=weight_dtype))
+                    ccip_embeds = self.ccip_encoder(ccip_input)
 
             # ── LSNet encoding (if enabled) ──────────────────
             lsnet_embeds = None
@@ -368,10 +370,10 @@ def setup_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--ccip_model",
+        "--ccip_ckpt",
         type=str,
-        default="ccip-caformer-24-randaug-pruned",
-        help="CCIP model name for imgutils (when aux_encoders includes 'ccip')",
+        default=DEFAULT_CCIP_CKPT,
+        help="Path to CCIP .ckpt file (when aux_encoders includes 'ccip')",
     )
     parser.add_argument(
         "--lsnet_ckpt",
