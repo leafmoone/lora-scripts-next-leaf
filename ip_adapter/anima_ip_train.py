@@ -34,11 +34,19 @@ Usage (standalone):
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 from typing import Any, Optional, Union
 
 import torch
 import torch.nn as nn
 from accelerate import Accelerator
+
+# vendor/sd-scripts is a directory with "-" in name — add to sys.path
+_vendor_root = Path(__file__).resolve().parents[1] / "vendor" / "sd-scripts"
+if str(_vendor_root) not in sys.path:
+    sys.path.insert(0, str(_vendor_root))
+
 from library.device_utils import init_ipex
 
 init_ipex()
@@ -50,7 +58,7 @@ from library import (
     strategy_anima,
     train_util,
 )
-from vendor.sd-scripts.anima_train_network import AnimaNetworkTrainer
+from anima_train_network import AnimaNetworkTrainer
 from library.utils import setup_logging
 
 setup_logging()
