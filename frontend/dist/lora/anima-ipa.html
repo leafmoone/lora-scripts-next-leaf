@@ -103,6 +103,12 @@ h1{font-size:20px;margin:0 0 4px}
       <div class="col"><label>IP Token 数量</label><input type="number" id="numIpTokens" value="4" min="1" max="32"><div class="input-helper">每编码器 IP token 数（CLIP + 辅编码器共享）</div></div>
       <div class="col"><label>IP Scale</label><input type="number" id="ipScale" value="1.0" min="0" max="2" step="0.1"><div class="input-helper">图像条件强度，推理时可调</div></div>
     </div>
+    <div class="row">
+      <div class="col"><label>参考图配对模式</label><select id="ipPairBy">
+        <option value="self" selected>Self (参考图 = 训练图本身)</option>
+        <option value="folder">Folder (同身份文件夹内取另一张，推荐多角色)</option>
+      </select><div class="input-helper">folder：每个子文件夹视为一个身份，训练时用同文件夹的另一张图作参考，逼模型学可迁移的角色/风格能力（需一身份一文件夹）；不会跨文件夹配对</div></div>
+    </div>
   </div>
 
   <div class="card">
@@ -276,6 +282,7 @@ function startTraining() {
     lsnet_ckpt: document.getElementById('lsnetCkpt').value.trim(),
     num_ip_tokens: parseInt(document.getElementById('numIpTokens').value)||4,
     ip_scale: parseFloat(document.getElementById('ipScale').value)||1.0,
+    ip_pair_by: document.getElementById('ipPairBy').value,
     ipa_mode: document.getElementById('ipaMode').value,
     learning_rate: document.getElementById('learningRate').value.trim(),
     max_train_epochs: parseInt(document.getElementById('numEpochs').value)||10,

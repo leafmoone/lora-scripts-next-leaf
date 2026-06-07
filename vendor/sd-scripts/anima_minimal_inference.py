@@ -64,6 +64,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include_patterns", type=str, nargs="*", default=None, help="LoRA module include patterns")
     parser.add_argument("--exclude_patterns", type=str, nargs="*", default=None, help="LoRA module exclude patterns")
 
+    # IP-Adapter (multi-stream image prompt)
+    parser.add_argument("--ip_adapter_sidecar", type=str, default=None,
+                        help="Path to a trained *.ipadapter.safetensors. Enables IP-Adapter image prompting.")
+    parser.add_argument("--ip_clip_model", type=str, default="openai/clip-vit-large-patch14",
+                        help="CLIP vision model id used for the IP-Adapter content stream.")
+    parser.add_argument("--ip_ccip_ckpt", type=str, default="",
+                        help="CCIP checkpoint (required if the sidecar uses a ccip stream).")
+    parser.add_argument("--ip_lsnet_ckpt", type=str, default="",
+                        help="LSNet checkpoint (required if the sidecar uses an lsnet stream).")
+    parser.add_argument("--ip_ref_image", type=str, default=None,
+                        help="Reference image used for all IP streams unless a per-stream image is given.")
+    parser.add_argument("--ip_clip_ref", type=str, default=None, help="Per-stream reference image for CLIP (content).")
+    parser.add_argument("--ip_ccip_ref", type=str, default=None, help="Per-stream reference image for CCIP (character).")
+    parser.add_argument("--ip_lsnet_ref", type=str, default=None, help="Per-stream reference image for LSNet (style).")
+    parser.add_argument("--ip_scale", type=float, default=1.0, help="Global IP-Adapter strength (applies to all streams).")
+    parser.add_argument("--ip_clip_scale", type=float, default=None, help="Override strength for the CLIP stream.")
+    parser.add_argument("--ip_ccip_scale", type=float, default=None, help="Override strength for the CCIP stream.")
+    parser.add_argument("--ip_lsnet_scale", type=float, default=None, help="Override strength for the LSNet stream.")
+
     # inference
     parser.add_argument(
         "--guidance_scale", type=float, default=3.5, help="Guidance scale for classifier free guidance. Default is 3.5."
@@ -310,6 +329,55 @@ def load_text_encoder(
 # endregion
 
 
+def setup_ip_adapter(args: argparse.Namespace, anima: "anima_models.Anima", device: torch.device):
+    """Attach a trained IP-Adapter to the DiT and stash IP tokens once.
+
+    Injects ``AnimaIPCrossAttention`` into every Block and encodes the reference
+    image(s) into IP tokens that ride along inside cross-attention. Safe no-op if
+    ``--ip_adapter_sidecar`` is not provided. Returns the adapter (kept alive on
+    the model) or ``None``.
+    """
+    if not getattr(args, "ip_adapter_sidecar", None):
+        return None
+
+    import sys
+    from pathlib import Path
+
+    project_root = str(Path(__file__).resolve().parents[2])  # .../lora-scripts-next
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from ip_adapter.anima_ip_adapter import AnimaIPAdapter
+
+    logger.info(f"Loading IP-Adapter sidecar: {args.ip_adapter_sidecar}")
+    adapter = AnimaIPAdapter.from_pretrained(
+        anima,
+        args.ip_adapter_sidecar,
+        clip_model=args.ip_clip_model,
+        ccip_ckpt=args.ip_ccip_ckpt,
+        lsnet_ckpt=args.ip_lsnet_ckpt,
+        device=device,
+        dtype=torch.bfloat16,
+    )
+    adapter.set_reference(
+        image=args.ip_ref_image,
+        clip_image=args.ip_clip_ref,
+        ccip_image=args.ip_ccip_ref,
+        lsnet_image=args.ip_lsnet_ref,
+        scale=args.ip_scale,
+        clip_scale=args.ip_clip_scale,
+        ccip_scale=args.ip_ccip_scale,
+        lsnet_scale=args.ip_lsnet_scale,
+    )
+    logger.info(
+        f"IP-Adapter active (aux={adapter.aux_encoders}, scale={args.ip_scale}, "
+        f"refs: clip={args.ip_clip_ref or args.ip_ref_image}, "
+        f"ccip={args.ip_ccip_ref or args.ip_ref_image}, "
+        f"lsnet={args.ip_lsnet_ref or args.ip_ref_image})"
+    )
+    return adapter
+
+
 def decode_latent(
     vae: qwen_image_autoencoder_kl.AutoencoderKLQwenImage, latent: torch.Tensor, device: torch.device
 ) -> torch.Tensor:
@@ -488,6 +556,11 @@ def generate(
         # use shared model
         logger.info("Using shared DiT model.")
         anima: anima_models.Anima = shared_models["model"]
+
+    # Attach IP-Adapter once per DiT (tokens persist on the cross-attn modules).
+    if getattr(args, "ip_adapter_sidecar", None) and not getattr(anima, "_ipa_done", False):
+        anima._ipa = setup_ip_adapter(args, anima, device)
+        anima._ipa_done = True
 
     if precomputed_text_data is not None:
         logger.info("Using precomputed text data.")

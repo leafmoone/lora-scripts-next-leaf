@@ -49,7 +49,10 @@ def _build_lsnet_backbone(num_classes: int = 0) -> nn.Module:
 
 
 class LSNetStyleEncoder(nn.Module):
-    """Extract artist style features via LSNet backbone and project to 1024.
+    """Frozen LSNet backbone returning the raw 768-dim artist-style feature.
+
+    The 768→1024 projection lives in the trainer (``lsnet_proj``) so it is
+    trainable and saved alongside the other IP-Adapter projections.
 
     Parameters
     ----------
@@ -57,34 +60,18 @@ class LSNetStyleEncoder(nn.Module):
         Path to ``best_checkpoint.pth``.
     feature_dim : int
         Backbone output dimension (768 for XL-448).
-    output_dim : int
-        Output dimension matching CLIP (default 1024).
-    freeze_proj : bool
-        If True, keep the projection layer frozen.
     """
 
     def __init__(
         self,
         ckpt_path: str,
         feature_dim: int = LSNET_FEATURE_DIM,
-        output_dim: int = 1024,
-        freeze_proj: bool = False,
     ):
         super().__init__()
         self.feature_dim = feature_dim
-        self.output_dim = output_dim
 
         self.backbone = _build_lsnet_backbone(num_classes=0)
         self._load_ckpt(ckpt_path)
-
-        self.proj = nn.Sequential(
-            nn.Linear(feature_dim, output_dim),
-            nn.LayerNorm(output_dim),
-        )
-
-        if freeze_proj:
-            for p in self.proj.parameters():
-                p.requires_grad = False
 
         self.eval()
         for p in self.backbone.parameters():
@@ -95,23 +82,24 @@ class LSNetStyleEncoder(nn.Module):
             raise FileNotFoundError(f"LSNet checkpoint not found: {ckpt_path}")
 
         ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-        state_dict = ckpt["model"]
+        state_dict = ckpt["model"] if "model" in ckpt else ckpt
 
         our_state = self.backbone.state_dict()
-        loaded = {}
-        for our_key in our_state:
-            if our_key in state_dict:
-                loaded[our_key] = state_dict[our_key]
-
-        self.backbone.load_state_dict(loaded, strict=False)
+        missing = [k for k in our_state if k not in state_dict]
+        if missing:
+            raise RuntimeError(
+                f"LSNet checkpoint is missing {len(missing)}/{len(our_state)} backbone "
+                f"keys (architecture mismatch). First few: {missing[:5]}"
+            )
+        self.backbone.load_state_dict({k: state_dict[k] for k in our_state}, strict=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: (B, 3, 448, 448) float32 images in [0, 1]
+            x: (B, 3, 448, 448) float images in [0, 1]
 
         Returns:
-            (B, 1024) projected artist style embeddings
+            (B, 768) raw artist-style backbone feature
         """
         mean = torch.tensor([0.485, 0.456, 0.406], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
         std = torch.tensor([0.229, 0.224, 0.225], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
@@ -124,8 +112,6 @@ class LSNetStyleEncoder(nn.Module):
             x = self.backbone.blocks3(x)
             x = self.backbone.blocks4(x)
             x = F.adaptive_avg_pool2d(x, 1).flatten(1)
-
-        x = self.proj(x)
         return x
 
 
@@ -133,23 +119,18 @@ def load_lsnet_encoder(
     ckpt_path: str,
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
-    freeze_proj: bool = False,
 ) -> LSNetStyleEncoder:
-    """Load LSNet style encoder with dimension projection.
+    """Load the frozen LSNet style backbone (raw 768-dim feature).
 
     Args:
         ckpt_path: Path to ``best_checkpoint.pth``.
         device: Device to place the model on.
         dtype: Data type.
-        freeze_proj: Keep projection frozen (style features only).
     """
     if not os.path.isfile(ckpt_path):
         raise FileNotFoundError(f"LSNet checkpoint not found: {ckpt_path}")
 
-    encoder = LSNetStyleEncoder(
-        ckpt_path=ckpt_path,
-        freeze_proj=freeze_proj,
-    )
+    encoder = LSNetStyleEncoder(ckpt_path=ckpt_path)
     encoder.to(device=device, dtype=dtype)
     encoder.eval()
     return encoder

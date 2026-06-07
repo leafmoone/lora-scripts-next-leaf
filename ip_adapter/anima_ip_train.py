@@ -11,8 +11,9 @@ Modes (controlled by --aux_encoders):
   ``clip_lsnet``    — CLIP + LSNet dual-stream
   ``clip_ccip_lsnet`` — CLIP + CCIP + LSNet triple-stream
 
-Each auxiliary encoder has a learnable scalar gate initialized at 0.1
-so the model starts CLIP-dominant and gradually activates auxiliary signals.
+Fusion is concat-mode: each stream's global feature is projected (768→1024,
+trainable) then expanded into N IP tokens that are concatenated onto the text
+context before the DiT's frozen cross-attention.
 
 Usage (standalone):
   accelerate launch ip_adapter/anima_ip_train.py \
@@ -21,7 +22,7 @@ Usage (standalone):
     --qwen3 qwen3.safetensors \
     --clip_model openai/clip-vit-large-patch14 \
     --aux_encoders clip_ccip_lsnet \
-    --ccip_model ccip-caformer-24-randaug-pruned \
+    --ccip_ckpt /path/to/ccip-caformer_b36-24.ckpt \
     --lsnet_ckpt /path/to/best_checkpoint.pth \
     --train_data_dir ./train/anima_ip_dataset \
     --output_dir ./output/ipa \
@@ -35,10 +36,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import random
 import sys
 from pathlib import Path
 from typing import Any, Optional, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
 from accelerate import Accelerator
@@ -81,6 +84,22 @@ from ip_adapter import (
 from ip_adapter.ccip_encoder import load_ccip_encoder, DEFAULT_CKPT as DEFAULT_CCIP_CKPT
 from ip_adapter.lsnet_encoder import load_lsnet_encoder
 
+# CLIP image normalization (OpenAI CLIP mean/std), applied to [0,1] pixels.
+_CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
+_CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
+
+
+def _clip_normalize(x: torch.Tensor) -> torch.Tensor:
+    """Normalize [0,1] pixels with CLIP mean/std. x: (B, 3, H, W)."""
+    mean = torch.tensor(_CLIP_MEAN, device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+    std = torch.tensor(_CLIP_STD, device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+    return (x - mean) / std
+
+
+def _make_projection(in_dim: int = 768, out_dim: int = 1024) -> nn.Module:
+    """Trainable 768→1024 projection (fp32) used per encoder stream."""
+    return nn.Sequential(nn.Linear(in_dim, out_dim), nn.LayerNorm(out_dim)).float()
+
 # ── Mode parser ──────────────────────────────────────────────────
 
 
@@ -104,12 +123,15 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
     def __init__(self):
         super().__init__()
         self.clip_image_encoder: Optional[nn.Module] = None
-        self.clip_proj: Optional[nn.Module] = None  # 768→1024 projection
+        self.clip_proj: Optional[nn.Module] = None  # 768→1024 projection (trainable)
+        self.ccip_proj: Optional[nn.Module] = None  # 768→1024 projection (trainable)
+        self.lsnet_proj: Optional[nn.Module] = None  # 768→1024 projection (trainable)
         self.ccip_encoder: Optional[nn.Module] = None
         self.lsnet_encoder: Optional[nn.Module] = None
         self.image_proj: Optional[ImageProjModel | MultiStreamProj] = None
         self.ip_adapters: dict[str, Any] = {}
         self._aux_encoders: tuple[str, ...] = ()
+        self._identity_index: dict[int, dict[str, list[str]]] = {}  # id(dataset) -> {identity: [paths]}
 
     # ── model loading ──────────────────────────────────────────
 
@@ -118,15 +140,12 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             args, weight_dtype, accelerator
         )
 
-        # CLIP encoder (always loaded)
+        # CLIP encoder (always loaded). Backbone runs in weight_dtype (frozen);
+        # the trainable projection is kept in fp32 for stable optimization.
         self.clip_image_encoder = load_clip_vision_model(
             args.clip_model, device="cpu", dtype=weight_dtype
         )
-        # CLIP 768→1024 projection (trainable, matches training dtype)
-        self.clip_proj = nn.Sequential(
-            nn.Linear(768, 1024),
-            nn.LayerNorm(1024),
-        ).to(dtype=weight_dtype)
+        self.clip_proj = _make_projection()
 
         # Parse auxiliary encoders
         self._aux_encoders = _parse_aux_encoders(
@@ -143,6 +162,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
                 device="cpu",
                 dtype=weight_dtype,
             )
+            self.ccip_proj = _make_projection()
 
         # LSNet encoder (if enabled)
         if "lsnet" in self._aux_encoders:
@@ -155,6 +175,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
                 device="cpu",
                 dtype=weight_dtype,
             )
+            self.lsnet_proj = _make_projection()
 
         return model_type, text_encoders, vae, unet
 
@@ -189,11 +210,37 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         """Override train() to inject ImageProjModel params into the LoRA network
         param collection, since IP-Adapter trains ImageProjModel instead of LoRA.
         """
+        self.args = args
+
+        # IP-Adapter needs a raw conditioning image for the vision encoders every
+        # step, decoupled from the VAE target (batch["images"]). We patch the
+        # dataset to add a dedicated `ip_reference_images` field, loaded directly
+        # from disk (downscaled) so it works regardless of latent caching, and so
+        # the reference can be a *different* image than the target (paired mode).
+        import library.train_util as _tu
+
+        _BaseDataset = _tu.BaseDataset
+        _orig_getitem = _BaseDataset.__getitem__
+        _trainer_ref = self
+
+        def _patched_getitem(ds_self, index):
+            example = _orig_getitem(ds_self, index)
+            if (
+                _trainer_ref.clip_image_encoder is not None
+                and getattr(ds_self, "caching_mode", None) is None
+            ):
+                example["ip_reference_images"] = _trainer_ref._load_reference_images_for_index(
+                    ds_self, index
+                )
+            return example
+
+        _BaseDataset.__getitem__ = _patched_getitem
+
         import networks.lora
 
         cls = networks.lora.LoRANetwork
         _orig_prepare = cls.prepare_optimizer_params
-        _trainer_ref = self
+        _orig_save = cls.save_weights
 
         def _patched_prepare(self_network, *a, **kw):
             results = _orig_prepare(self_network, *a, **kw)
@@ -201,41 +248,255 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
                 params_list, lr_descs = results if len(results) == 2 else (results[0], None)
             else:
                 params_list, lr_descs = results, None
-            params_list = list(params_list) + _trainer_ref.get_trainable_params()
+            added = _trainer_ref.get_trainable_params()
+            params_list = list(params_list) + added
+            # Keep lr_descriptions aligned with the optimizer param groups; otherwise
+            # train_network.generate_step_logs indexes lr_descriptions[i] out of range
+            # (one entry is required per param group / per lr_scheduler.get_last_lr()).
+            if lr_descs is not None:
+                lr_descs = list(lr_descs) + [f"ip_proj_{i}" for i in range(len(added))]
             return (params_list, lr_descs) if lr_descs is not None else params_list
 
+        def _patched_save(self_network, file, dtype, metadata, *a, **kw):
+            # IP-Adapter trains no LoRA modules, so the network state dict is
+            # empty. Skip writing that empty placeholder checkpoint and only
+            # persist the real IP-Adapter sidecar. (save_model only calls
+            # save_weights + optional HF upload, and remove_model checks
+            # existence, so skipping the file is safe.)
+            if len(self_network.state_dict()) == 0:
+                _trainer_ref._save_ip_adapter_weights(file, dtype)
+                return None
+            result = _orig_save(self_network, file, dtype, metadata, *a, **kw)
+            _trainer_ref._save_ip_adapter_weights(file, dtype)
+            return result
+
         cls.prepare_optimizer_params = _patched_prepare
+        cls.save_weights = _patched_save
         try:
             super().train(args)
         finally:
             cls.prepare_optimizer_params = _orig_prepare
+            cls.save_weights = _orig_save
+            _BaseDataset.__getitem__ = _orig_getitem
+
+    def _ensure_identity_index(self, dataset):
+        """Build (and cache) {identity -> [image paths]} for paired sampling.
+
+        Identity = the image's immediate parent directory, i.e. each kohya
+        concept folder (``N_name``) is treated as one identity. This matches the
+        recommended layout of "one folder per character/style".
+        """
+        key = id(dataset)
+        cached = self._identity_index.get(key)
+        if cached is not None:
+            return cached
+        groups: dict[str, list[str]] = {}
+        for _k, info in dataset.image_data.items():
+            path = info.absolute_path
+            groups.setdefault(os.path.dirname(path), []).append(path)
+        self._identity_index[key] = groups
+        return groups
+
+    def _choose_reference_path(self, dataset, target_path, pair_by):
+        """Pick the reference image path for a given target image.
+
+        ``self``   → the target image itself (copy-prone; ok for quick tests).
+        ``folder`` → a *different* image from the same identity folder, which
+                     forces the encoder to extract identity/style rather than
+                     copy pixels. Falls back to the target if the folder has
+                     only one image.
+        """
+        if pair_by != "folder":
+            return target_path
+        groups = self._ensure_identity_index(dataset)
+        candidates = groups.get(os.path.dirname(target_path))
+        if not candidates or len(candidates) <= 1:
+            return target_path
+        for _ in range(8):  # a few tries to avoid drawing the target itself
+            ref = random.choice(candidates)
+            if ref != target_path:
+                return ref
+        return target_path
+
+    def _load_reference_images_for_index(self, dataset, index):
+        """Load the IP reference images for the batch at ``index``.
+
+        Loaded directly from disk and resized to a fixed ``ip_cond_size`` square
+        (the encoders downsample to 224/384/448 anyway), so references of any
+        source size stack cleanly. Order matches the targets produced by
+        ``__getitem__``. With ``--ip_pair_by folder`` each reference is a
+        different same-identity image (true paired training).
+        """
+        from PIL import Image
+
+        cond_size = int(getattr(self.args, "ip_cond_size", 512) or 512)
+        pair_by = getattr(self.args, "ip_pair_by", "self") or "self"
+
+        bi = dataset.buckets_indices[index]
+        bucket = dataset.bucket_manager.buckets[bi.bucket_index]
+        bbs = bi.bucket_batch_size
+        start = bi.batch_index * bbs
+        keys = bucket[start : start + bbs]
+
+        tensors = []
+        for image_key in keys:
+            target_path = dataset.image_data[image_key].absolute_path
+            ref_path = self._choose_reference_path(dataset, target_path, pair_by)
+            with Image.open(ref_path) as img:
+                img = img.convert("RGB").resize((cond_size, cond_size), Image.BILINEAR)
+            arr = torch.from_numpy(np.array(img, dtype=np.float32) / 255.0)  # H,W,3 in [0,1]
+            arr = arr.permute(2, 0, 1).contiguous() * 2.0 - 1.0  # 3,H,W in [-1,1]
+            tensors.append(arr)
+
+        return torch.stack(tensors, dim=0)
+
+    def _ip_adapter_state_dict(self):
+        """Collect trainable IP-Adapter weights (per-stream projections + image_proj)."""
+        sd = {}
+        for prefix, mod in (
+            ("clip_proj", self.clip_proj),
+            ("ccip_proj", self.ccip_proj),
+            ("lsnet_proj", self.lsnet_proj),
+            ("image_proj", self.image_proj),
+        ):
+            if mod is not None:
+                for k, v in mod.state_dict().items():
+                    sd[f"{prefix}.{k}"] = v
+        return sd
+
+    def _ip_adapter_sidecar_path(self, network_file: str) -> str:
+        base, _ = os.path.splitext(network_file)
+        return base + ".ipadapter.safetensors"
+
+    def _save_ip_adapter_weights(self, network_file: str, dtype) -> None:
+        """Save clip_proj + image_proj next to the LoRA checkpoint.
+
+        The base ``save_weights`` only persists the (empty) LoRA network, so the
+        actual IP-Adapter parameters must be written separately.
+        """
+        from safetensors.torch import save_file
+
+        sd = self._ip_adapter_state_dict()
+        if not sd:
+            return
+        save_dtype = dtype if dtype is not None else torch.float32
+        cpu_sd = {k: v.detach().to(device="cpu", dtype=save_dtype).contiguous()
+                  for k, v in sd.items()}
+        metadata = {
+            "ipa_aux_encoders": ",".join(self._aux_encoders),
+            "ipa_num_streams": str(1 + len(self._aux_encoders)),
+            "ipa_num_ip_tokens": str(int(getattr(self.args, "num_ip_tokens", 4))),
+            "ipa_cross_attention_dim": "1024",
+            "ipa_format": "anima-ipadapter-v1",
+        }
+        out_path = self._ip_adapter_sidecar_path(network_file)
+        save_file(cpu_sd, out_path, metadata=metadata)
+        logger.info(f"Saved IP-Adapter weights ({len(cpu_sd)} tensors) to: {out_path}")
+
+    def load_ip_adapter_weights(self, sidecar_path: str) -> None:
+        """Load clip_proj + image_proj from a saved sidecar (for resume/inference)."""
+        from safetensors.torch import load_file
+
+        sd = load_file(sidecar_path)
+        for prefix, mod in (
+            ("clip_proj", self.clip_proj),
+            ("ccip_proj", self.ccip_proj),
+            ("lsnet_proj", self.lsnet_proj),
+            ("image_proj", self.image_proj),
+        ):
+            if mod is None:
+                continue
+            sub = {k[len(prefix) + 1:]: v for k, v in sd.items() if k.startswith(prefix + ".")}
+            if sub:
+                mod.load_state_dict(sub)
+        logger.info(f"Loaded IP-Adapter weights from: {sidecar_path}")
 
     # ── training setup ─────────────────────────────────────────
 
     def get_trainable_params(self):
+        lr = float(getattr(self.args, "learning_rate", 1e-4))
         params = []
 
-        if self.clip_proj is not None:
-            params.append({
-                "params": list(self.clip_proj.parameters()),
-                "lr": float(getattr(args, "learning_rate", 1e-4)),
-            })
+        for proj in (self.clip_proj, self.ccip_proj, self.lsnet_proj):
+            if proj is not None:
+                params.append({"params": list(proj.parameters()), "lr": lr})
 
         if isinstance(self.image_proj, MultiStreamProj):
             for proj in self.image_proj.projs:
-                params.append({
-                    "params": list(proj.parameters()),
-                    "lr": float(getattr(args, "learning_rate", 1e-4)),
-                })
-        else:
-            params.append({
-                "params": list(self.image_proj.parameters()),
-                "lr": float(getattr(args, "learning_rate", 1e-4)),
-            })
+                params.append({"params": list(proj.parameters()), "lr": lr})
+        elif self.image_proj is not None:
+            params.append({"params": list(self.image_proj.parameters()), "lr": lr})
 
         return params
 
     # ── forward: multi-encoder IP tokens ────────────────────────
+
+    def _encode_images_to_ip_tokens(self, images01, device, weight_dtype):
+        """Encode a batch of [0,1] RGB images into IP tokens for every stream.
+
+        Shared by training (`get_noise_pred_and_target`) and sampling
+        (`_encode_reference_image`) to guarantee identical preprocessing.
+
+        Args:
+            images01: (B, 3, H, W) float pixels in [0, 1].
+
+        Returns:
+            ``(ip_tokens_clip, ip_tokens_ccip, ip_tokens_lsnet)`` — aux entries
+            are ``None`` when the corresponding encoder is disabled.
+        """
+        from torch.nn.functional import interpolate
+
+        self._ensure_encoders_on_device(device)
+        images01 = images01.to(device=device, dtype=weight_dtype).clamp(0, 1)
+
+        # Frozen backbones run in weight_dtype; the trainable projections are
+        # fp32, so raw features are cast to fp32 before projection.
+        # ── CLIP (224×224, CLIP normalization) → 768 ─────────
+        clip_input = interpolate(images01, size=(224, 224), mode="bilinear", align_corners=False)
+        clip_input = _clip_normalize(clip_input)
+        with torch.no_grad():
+            clip_outputs = self.clip_image_encoder(clip_input)
+        clip_embeds = self.clip_proj(clip_outputs.image_embeds.detach().float())
+
+        # ── CCIP (384×384, CLIP norm inside encoder) → 768 ───
+        ccip_embeds = None
+        if self.ccip_encoder is not None:
+            ccip_input = interpolate(images01, size=(384, 384), mode="bilinear", align_corners=False)
+            with torch.no_grad():
+                ccip_feat = self.ccip_encoder(ccip_input)
+            ccip_embeds = self.ccip_proj(ccip_feat.float())
+
+        # ── LSNet (448×448, ImageNet norm inside encoder) → 768
+        lsnet_embeds = None
+        if self.lsnet_encoder is not None:
+            lsnet_input = interpolate(images01, size=(448, 448), mode="bilinear", align_corners=False)
+            with torch.no_grad():
+                lsnet_feat = self.lsnet_encoder(lsnet_input)
+            lsnet_embeds = self.lsnet_proj(lsnet_feat.float())
+
+        # ── Project to IP tokens (image_proj is fp32) ────────
+        ip_tokens = ip_tokens_ccip = ip_tokens_lsnet = None
+        if isinstance(self.image_proj, MultiStreamProj):
+            embeds_list = [clip_embeds]
+            if ccip_embeds is not None:
+                embeds_list.append(ccip_embeds)
+            if lsnet_embeds is not None:
+                embeds_list.append(lsnet_embeds)
+            ip_list = self.image_proj(embeds_list)
+            ip_tokens = ip_list[0]
+            for i, name in enumerate(self._aux_encoders):
+                if name == "ccip":
+                    ip_tokens_ccip = ip_list[1 + i]
+                elif name == "lsnet":
+                    ip_tokens_lsnet = ip_list[1 + i]
+        else:
+            ip_tokens = self.image_proj(clip_embeds)
+
+        # Cast to the model dtype so concat with the (bf16) text context works.
+        def _cast(t):
+            return t.to(dtype=weight_dtype) if t is not None else None
+
+        return _cast(ip_tokens), _cast(ip_tokens_ccip), _cast(ip_tokens_lsnet)
 
     def _encode_reference_image(self, args, accelerator, weight_dtype):
         """Load and encode the sample reference image into cached IP tokens.
@@ -254,60 +515,17 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             return None, None, None, None
 
         from PIL import Image
-        from torch.nn.functional import interpolate
         from torchvision.transforms import functional as tvf
 
         device = accelerator.device
-        self._ensure_encoders_on_device(device)
 
         pil_img = Image.open(ref_path).convert("RGB")
+        # to_tensor → [0,1]; same range the training path feeds the encoders.
+        images01 = tvf.to_tensor(pil_img).unsqueeze(0)
 
-        # ── CLIP encoding (224x224) ─────────────────────────
-        clip_tensor = tvf.to_tensor(pil_img).unsqueeze(0).to(device=device, dtype=weight_dtype)
-        clip_tensor = interpolate(clip_tensor, size=(224, 224), mode="bilinear", align_corners=False)
-        with torch.no_grad():
-            clip_outputs = self.clip_image_encoder(clip_tensor, output_hidden_states=True)
-        clip_embeds = self.clip_proj(clip_outputs.image_embeds)  # (1, 768) → (1, 1024)
-
-        # ── CCIP encoding (384x384) ──────────────────────────
-        ccip_embeds = None
-        if self.ccip_encoder is not None:
-            ccip_tensor = tvf.to_tensor(pil_img).unsqueeze(0).to(device=device, dtype=weight_dtype)
-            ccip_tensor = interpolate(ccip_tensor, size=(384, 384), mode="bilinear", align_corners=False)
-            with torch.no_grad():
-                ccip_embeds = self.ccip_encoder(ccip_tensor)
-
-        # ── LSNet encoding (448x448) ─────────────────────────
-        lsnet_embeds = None
-        if self.lsnet_encoder is not None:
-            lsnet_tensor = tvf.to_tensor(pil_img).unsqueeze(0).to(device=device, dtype=weight_dtype)
-            lsnet_tensor = interpolate(lsnet_tensor, size=(448, 448), mode="bilinear", align_corners=False)
-            with torch.no_grad():
-                lsnet_embeds = self.lsnet_encoder(lsnet_tensor)
-
-        ip_tokens = None
-        ip_tokens_ccip = None
-        ip_tokens_lsnet = None
-
-        if isinstance(self.image_proj, MultiStreamProj):
-            embeds_list = [clip_embeds]
-            if ccip_embeds is not None:
-                embeds_list.append(ccip_embeds)
-            if lsnet_embeds is not None:
-                embeds_list.append(lsnet_embeds)
-            proj_dtype = next(self.image_proj.parameters()).dtype
-            embeds_list = [e.to(dtype=proj_dtype) for e in embeds_list]
-            ip_list = self.image_proj(embeds_list)
-            ip_tokens = ip_list[0]
-            aux = list(self._aux_encoders)
-            for i, name in enumerate(aux):
-                if name == "ccip":
-                    ip_tokens_ccip = ip_list[1 + i]
-                elif name == "lsnet":
-                    ip_tokens_lsnet = ip_list[1 + i]
-        else:
-            ip_tokens = self.image_proj(clip_embeds)
-
+        ip_tokens, ip_tokens_ccip, ip_tokens_lsnet = self._encode_images_to_ip_tokens(
+            images01, device, weight_dtype
+        )
         return ip_tokens, None, ip_tokens_ccip, ip_tokens_lsnet
 
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
@@ -378,10 +596,9 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             clip_dev = next(self.clip_image_encoder.parameters()).device
             if clip_dev != device:
                 self.clip_image_encoder.to(device=device)
-        if self.clip_proj is not None:
-            proj_dev = next(self.clip_proj.parameters()).device
-            if proj_dev != device:
-                self.clip_proj.to(device=device)
+        for proj in (self.clip_proj, self.ccip_proj, self.lsnet_proj):
+            if proj is not None and next(proj.parameters()).device != device:
+                proj.to(device=device)
         if self.ccip_encoder is not None:
             ccip_dev = next(self.ccip_encoder.parameters()).device
             if ccip_dev != device:
@@ -414,61 +631,33 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         unet, network, weight_dtype,
         train_unet=True, is_train=True,
     ):
-        from torch.nn.functional import interpolate
-
-        images = batch.get("images")  # (B, C, H, W) raw pixels
+        # Prefer the dedicated IP reference (may be a paired, same-identity image);
+        # fall back to the VAE-target image if the reference field is absent.
+        images = batch.get("ip_reference_images")
+        if images is None:
+            images = batch.get("images")  # (B, C, H, W), normalized to [-1, 1]
 
         ip_tokens = None
         ip_tokens_fine = None
         ip_tokens_ccip = None
         ip_tokens_lsnet = None
 
+        if self.clip_image_encoder is not None and images is None:
+            raise RuntimeError(
+                "IP-Adapter: no conditioning image — both batch['ip_reference_images'] "
+                "and batch['images'] are None. The trainer patches the dataset to load "
+                "reference images; if you see this, the __getitem__ patch failed to apply "
+                "(check that the dataset subclasses library.train_util.BaseDataset)."
+            )
+
         if images is not None and self.clip_image_encoder is not None:
             device = accelerator.device
-            self._ensure_encoders_on_device(device)
-
-            # ── CLIP encoding ────────────────────────────────
-            clip_input = interpolate(images, size=(224, 224), mode="bilinear", align_corners=False)
-            clip_input = clip_input.to(device=device, dtype=weight_dtype)
-            with torch.no_grad():
-                clip_outputs = self.clip_image_encoder(clip_input)
-            clip_embeds = self.clip_proj(clip_outputs.image_embeds.detach())  # (B, 1024)
-
-            # ── CCIP encoding (GPU-native, 384×384) ─────────
-            ccip_embeds = None
-            if self.ccip_encoder is not None:
-                ccip_input = interpolate(images, size=(384, 384), mode="bilinear", align_corners=False)
-                ccip_input = ccip_input.to(device=device, dtype=weight_dtype)
-                with torch.no_grad():
-                    ccip_embeds = self.ccip_encoder(ccip_input)
-
-            # ── LSNet encoding (if enabled) ──────────────────
-            lsnet_embeds = None
-            if self.lsnet_encoder is not None:
-                lsnet_input = interpolate(images, size=(448, 448), mode="bilinear", align_corners=False)
-                lsnet_input = lsnet_input.to(device=device, dtype=weight_dtype)
-                with torch.no_grad():
-                    lsnet_embeds = self.lsnet_encoder(lsnet_input)
-
-            # ── Project to IP tokens ─────────────────────────
-            if isinstance(self.image_proj, MultiStreamProj):
-                embeds_list = [clip_embeds]
-                if ccip_embeds is not None:
-                    embeds_list.append(ccip_embeds)
-                if lsnet_embeds is not None:
-                    embeds_list.append(lsnet_embeds)
-                proj_dtype = next(self.image_proj.parameters()).dtype
-                embeds_list = [e.to(dtype=proj_dtype) for e in embeds_list]
-                ip_list = self.image_proj(embeds_list)
-                ip_tokens = ip_list[0]
-                aux = list(self._aux_encoders)
-                for i, name in enumerate(aux):
-                    if name == "ccip":
-                        ip_tokens_ccip = ip_list[1 + i]
-                    elif name == "lsnet":
-                        ip_tokens_lsnet = ip_list[1 + i]
-            else:
-                ip_tokens = self.image_proj(clip_embeds)
+            # Reference images are normalized to [-1, 1]; all encoders expect
+            # [0, 1] before their own normalization.
+            images01 = images.float() * 0.5 + 0.5
+            ip_tokens, ip_tokens_ccip, ip_tokens_lsnet = self._encode_images_to_ip_tokens(
+                images01, device, weight_dtype
+            )
 
         # Stash IP tokens before DiT forward
         self._stash_ip_tokens(ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet)
@@ -546,6 +735,26 @@ def setup_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="IP cross-attention output multiplier",
+    )
+    parser.add_argument(
+        "--ip_cond_size",
+        type=int,
+        default=512,
+        help="Square resize (px) for the reference image fed to the IP vision "
+             "encoders. Encoders downsample to 224/384/448 anyway, so a small "
+             "value keeps per-step IO cheap.",
+    )
+    parser.add_argument(
+        "--ip_pair_by",
+        type=str,
+        default="self",
+        choices=["self", "folder"],
+        help="IP reference selection. 'self' = use the training image itself as "
+             "the reference (copy-prone; behaves LoRA-like on single-identity "
+             "data). 'folder' = sample a DIFFERENT image from the same identity "
+             "folder (N_name) as the reference — required to learn a transferable "
+             "character/style adapter. Organize the dataset as one folder per "
+             "identity for this to work.",
     )
     parser.add_argument(
         "--ipa_mode",

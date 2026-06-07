@@ -11,6 +11,11 @@ class AnimaIPAConverter:
             if mod.__class__.__name__ == "Block":
                 adapters[name] = AnimaIPCrossAttention(mod.cross_attn)
                 mod.cross_attn = adapters[name]
+        if not adapters:
+            raise RuntimeError(
+                "AnimaIPAConverter found no DiT 'Block' modules to wrap — the "
+                "IP-Adapter would be inert. Check the model architecture."
+            )
         return adapters
 
     @classmethod

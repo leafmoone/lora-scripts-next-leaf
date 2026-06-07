@@ -142,6 +142,31 @@ def _normalize_kv_arg_list(values) -> list[str]:
     return ordered
 
 
+def _parse_custom_param_value(v: str):
+    """Parse a custom_params textarea value into a typed Python value.
+
+    Handles bools, ints/floats/lists via literal_eval, quoted strings, and
+    falls back to the raw string.
+    """
+    import ast as _ast
+
+    v = v.strip()
+    low = v.lower()
+    if low == "true":
+        return True
+    if low == "false":
+        return False
+    if low in ("none", "null"):
+        return None
+    # Strip matching surrounding quotes (e.g. output_name="ipa")
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+        return v[1:-1]
+    try:
+        return _ast.literal_eval(v)
+    except (ValueError, SyntaxError):
+        return v
+
+
 def normalize_custom_args(config: dict) -> None:
     """
     Apply generic arg normalization for all training types.
@@ -163,6 +188,22 @@ def normalize_custom_args(config: dict) -> None:
         else:
             config.pop(base_key, None)
         config.pop(custom_key, None)
+
+    # Expand the free-form `custom_params` textarea (one `key=value` per line)
+    # into first-class config keys so they actually reach the trainer's argparse.
+    # Without this, params like sample_every_n_steps / cache_latents typed in the
+    # UI textarea are silently dropped for non-differential training types.
+    raw_custom = config.pop("custom_params", "")
+    if isinstance(raw_custom, str) and raw_custom.strip():
+        for line in raw_custom.replace("\r\n", "\n").split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if not key:
+                continue
+            config[key] = _parse_custom_param_value(value)
 
 
 def _is_invalid_value(value) -> bool:

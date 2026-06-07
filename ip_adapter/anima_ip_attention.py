@@ -28,6 +28,7 @@ class AnimaIPCrossAttention(nn.Module):
                  aux_encoders: tuple[str, ...] = ()):
         super().__init__()
         self.orig = original_attn
+        self.ip_scale = ip_scale
         for p in self.orig.parameters():
             p.requires_grad = False
 
@@ -51,11 +52,28 @@ class AnimaIPCrossAttention(nn.Module):
         if context is not None and context.numel() > 0:
             concat_parts.append(context)
 
+        # Target batch for IP tokens — match the text context (or x as fallback).
+        target_bs = concat_parts[0].shape[0] if concat_parts else x.shape[0]
+
         for attr in ("_ip_tokens", "_ip_tokens_fine",
                      "_ip_tokens_ccip", "_ip_tokens_lsnet"):
             tk = getattr(self, attr, None)
-            if tk is not None and tk.numel() > 0:
-                concat_parts.append(tk)
+            if tk is None or tk.numel() == 0:
+                continue
+            # Broadcast a single reference image's tokens across the batch
+            # (e.g. CFG sampling where context batch > 1).
+            if tk.shape[0] != target_bs:
+                if tk.shape[0] == 1:
+                    tk = tk.expand(target_bs, -1, -1)
+                else:
+                    continue  # batch mismatch we cannot resolve; skip safely
+            if self.ip_scale != 1.0:
+                tk = tk * self.ip_scale
+            if concat_parts and tk.dtype != concat_parts[0].dtype:
+                tk = tk.to(dtype=concat_parts[0].dtype)
+            concat_parts.append(tk)
 
+        if not concat_parts:
+            return self.orig(x, attn_params, context=context, rope_emb=rope_emb)
         full_ctx = torch.cat(concat_parts, dim=1) if len(concat_parts) > 1 else concat_parts[0]
         return self.orig(x, attn_params, context=full_ctx, rope_emb=rope_emb)
