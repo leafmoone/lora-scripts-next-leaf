@@ -67,29 +67,27 @@ AnimaIPCrossAttention.forward(x, context=text):
 
 ## 3. 融合方案: Concat（原版 IP-Adapter）
 
-**不使用独立 k_proj/v_proj + gate 融合**，改用原版 IP-Adapter 的 concat 方式:
+IP tokens 直接 concat 到 text context 上，让图像和文本条件共享同一组预训练的 `k_proj` / `v_proj`，在同一 softmax 中竞争注意力权重：
 
 ```
-# 之前 (gated, 已废弃)
-Q → cross_attn(K_text, V_text)               ← 冻结
-Q → cross_attn(ip_k_proj, ip_v_proj)         ← 226M 新参数
-
-# 现在 (concat)
-Q → cross_attn(concat([K_text, K_ip_clip, K_ip_ccip, K_ip_lsnet]),
-               concat([V_text, V_ip_clip, V_ip_ccip, V_ip_lsnet]))  ← 复用原生 k_proj/v_proj
+Q → cross_attn(
+  K = concat([k_proj(text), k_proj(ip_clip), k_proj(ip_ccip), k_proj(ip_lsnet)]),
+  V = concat([v_proj(text), v_proj(ip_clip), v_proj(ip_ccip), v_proj(ip_lsnet)])
+)
 ```
+
+`Attention` 模块本身不引入任何新参数——所有可训练参数集中在投影层和 `ImageProjModel`，总计 ~8.4M。
 
 ### 为什么选 concat
 
-| | 独立投影 + gate | Concat |
-|--|---------------|--------|
-| 每 Block 新增参数 | `ip_k_proj` + `ip_v_proj` × 3 流 | 0 |
-| 总可训练参数 | ~226M | ~8.4M (仅投影+ImageProj) |
-| 过拟合风险 (小数据) | 极高 | 低 |
-| 泛化能力 (百万数据) | 从头学图像→内容映射 | 借力 DiT 预训练知识 |
-| spawner 反馈 | "效果很烂" | 论文验证标准做法 |
+| | Concat |
+|--|--------|
+| 每 Block 新增参数 | 0 |
+| 总可训练参数 | ~8.4M (仅投影+ImageProj) |
+| 过拟合风险 | 低 |
+| 泛化能力 | 借力 DiT 预训练知识（k_proj/v_proj 学过几亿图文对） |
 
-### Concat 的本质优势
+### 本质优势
 
 `ImageProjModel` 只需要把图像特征对齐到文本 embedding 空间，原生的 `k_proj`/`v_proj` 在 Anima 预训练时已经见过几亿图文对，自动知道如何处理对齐后的输入。这就是 **最小假设、最大复用** ——用 8.4M 参数撬动 11.3B DiT 的全部知识。
 
