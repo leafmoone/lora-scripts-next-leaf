@@ -104,6 +104,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
     def __init__(self):
         super().__init__()
         self.clip_image_encoder: Optional[nn.Module] = None
+        self.clip_proj: Optional[nn.Module] = None  # 768→1024 projection
         self.ccip_encoder: Optional[nn.Module] = None
         self.lsnet_encoder: Optional[nn.Module] = None
         self.image_proj: Optional[ImageProjModel | MultiStreamProj] = None
@@ -121,6 +122,11 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         self.clip_image_encoder = load_clip_vision_model(
             args.clip_model, device="cpu", dtype=weight_dtype
         )
+        # CLIP 768→1024 projection (trainable, matches training dtype)
+        self.clip_proj = nn.Sequential(
+            nn.Linear(768, 1024),
+            nn.LayerNorm(1024),
+        ).to(dtype=weight_dtype)
 
         # Parse auxiliary encoders
         self._aux_encoders = _parse_aux_encoders(
@@ -183,45 +189,37 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         """Override train() to inject ImageProjModel params into the LoRA network
         param collection, since IP-Adapter trains ImageProjModel instead of LoRA.
         """
-        import types
+        import networks.lora
 
-        original_prepare = None
-        network_for_patch = None
-
+        cls = networks.lora.LoRANetwork
+        _orig_prepare = cls.prepare_optimizer_params
         _trainer_ref = self
 
-        def _patched_prepare_optimizer_params(self_network, *a, **kw):
-            results = original_prepare(*a, **kw)
+        def _patched_prepare(self_network, *a, **kw):
+            results = _orig_prepare(self_network, *a, **kw)
             if isinstance(results, tuple):
-                params_list, lr_descs = results
+                params_list, lr_descs = results if len(results) == 2 else (results[0], None)
             else:
                 params_list, lr_descs = results, None
-
-            # Inject IP-Adapter proj parameters
-            proj_params = _trainer_ref.get_trainable_params()
-            params_list = list(params_list) + proj_params
+            params_list = list(params_list) + _trainer_ref.get_trainable_params()
             return (params_list, lr_descs) if lr_descs is not None else params_list
 
-        def _patched_get_trainable_params(self_network):
-            return []
-
-        import importlib, networks.lora
-        cls = networks.lora.LoRANetwork
-        original_prepare = getattr(cls, "prepare_optimizer_params", None)
-
-        if original_prepare is not None:
-            cls.prepare_optimizer_params = _patched_prepare_optimizer_params
-
+        cls.prepare_optimizer_params = _patched_prepare
         try:
             super().train(args)
         finally:
-            if original_prepare is not None:
-                cls.prepare_optimizer_params = original_prepare
+            cls.prepare_optimizer_params = _orig_prepare
 
     # ── training setup ─────────────────────────────────────────
 
     def get_trainable_params(self):
         params = []
+
+        if self.clip_proj is not None:
+            params.append({
+                "params": list(self.clip_proj.parameters()),
+                "lr": float(getattr(args, "learning_rate", 1e-4)),
+            })
 
         if isinstance(self.image_proj, MultiStreamProj):
             for proj in self.image_proj.projs:
@@ -269,7 +267,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         clip_tensor = interpolate(clip_tensor, size=(224, 224), mode="bilinear", align_corners=False)
         with torch.no_grad():
             clip_outputs = self.clip_image_encoder(clip_tensor, output_hidden_states=True)
-        clip_embeds = clip_outputs.image_embeds  # (1, 1024)
+        clip_embeds = self.clip_proj(clip_outputs.image_embeds)  # (1, 768) → (1, 1024)
 
         # ── CCIP encoding (384x384) ──────────────────────────
         ccip_embeds = None
@@ -297,6 +295,8 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
                 embeds_list.append(ccip_embeds)
             if lsnet_embeds is not None:
                 embeds_list.append(lsnet_embeds)
+            proj_dtype = next(self.image_proj.parameters()).dtype
+            embeds_list = [e.to(dtype=proj_dtype) for e in embeds_list]
             ip_list = self.image_proj(embeds_list)
             ip_tokens = ip_list[0]
             aux = list(self._aux_encoders)
@@ -311,29 +311,43 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         return ip_tokens, None, ip_tokens_ccip, ip_tokens_lsnet
 
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
-        """Override to inject IP tokens via callbacks during sampling.
-
-        Encodes the reference image once and stashes IP tokens before
-        each prompt's DiT forward.  Tokens are cleared after each prompt.
+        """Override to inject IP tokens during genuine samples only.
+        
+        Encoding is deferred to on_prompt_start so we don't waste
+        encoder forward time when sample_images returns early.
         """
-        import functools
+        import os
 
-        ip_tokens, _, ip_tokens_ccip, ip_tokens_lsnet = (
-            self._encode_reference_image(args, accelerator, 
-                                         self.clip_image_encoder.dtype 
-                                         if self.clip_image_encoder is not None 
-                                         else torch.bfloat16)
-        )
+        ref_path = getattr(args, "sample_reference_image", "") or ""
+        has_ref = bool(ref_path and os.path.isfile(ref_path))
+        if not has_ref:
+            super().sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
+            return
 
-        has_ip = ip_tokens is not None
+        _trainer_ref = self
+        _ip_cached = {}
 
         def _on_prompt_start(prompt_dict, accel):
-            if has_ip:
-                self._stash_ip_tokens(ip_tokens, None, ip_tokens_ccip, ip_tokens_lsnet)
+            if not _ip_cached:
+                tokens, _, t_ccip, t_lsnet = _trainer_ref._encode_reference_image(
+                    args, accel,
+                    _trainer_ref.clip_image_encoder.dtype if _trainer_ref.clip_image_encoder else torch.bfloat16,
+                )
+                _ip_cached.update(ip=tokens, ccip=t_ccip, lsnet=t_lsnet)
+                if tokens is not None:
+                    logger.info(
+                        f"IP-Adapter sample: injecting IP tokens "
+                        f"(shape={tokens.shape}"
+                        f"{', +ccip' if t_ccip is not None else ''}"
+                        f"{', +lsnet' if t_lsnet is not None else ''})"
+                    )
+            _trainer_ref._stash_ip_tokens(
+                _ip_cached.get("ip"), None,
+                _ip_cached.get("ccip"), _ip_cached.get("lsnet"),
+            )
 
         def _on_prompt_end(prompt_dict):
-            if has_ip:
-                self._stash_ip_tokens(None, None, None, None)
+            _trainer_ref._stash_ip_tokens(None, None, None, None)
 
         from library import anima_train_utils, strategy_base
         text_encoders = text_encoder if isinstance(text_encoder, list) else [text_encoder]
@@ -342,15 +356,6 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         text_encoding_strategy = strategy_base.TextEncodingStrategy.get_strategy()
         tokenize_strategy = strategy_base.TokenizeStrategy.get_strategy()
-
-        if has_ip:
-            logger.info(
-                f"IP-Adapter sample: injecting IP tokens ("
-                f"shape={ip_tokens.shape if ip_tokens is not None else 'none'}"
-                f"{', +ccip' if ip_tokens_ccip is not None else ''}"
-                f"{', +lsnet' if ip_tokens_lsnet is not None else ''}"
-                f")"
-            )
 
         anima_train_utils.sample_images(
             accelerator,
@@ -363,12 +368,20 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             tokenize_strategy,
             text_encoding_strategy,
             self.sample_prompts_te_outputs,
-            on_prompt_start=_on_prompt_start if has_ip else None,
-            on_prompt_end=_on_prompt_end if has_ip else None,
+            on_prompt_start=_on_prompt_start,
+            on_prompt_end=_on_prompt_end,
         )
 
     def _ensure_encoders_on_device(self, device):
         """Lazily move auxiliary encoders to the training device."""
+        if self.clip_image_encoder is not None:
+            clip_dev = next(self.clip_image_encoder.parameters()).device
+            if clip_dev != device:
+                self.clip_image_encoder.to(device=device)
+        if self.clip_proj is not None:
+            proj_dev = next(self.clip_proj.parameters()).device
+            if proj_dev != device:
+                self.clip_proj.to(device=device)
         if self.ccip_encoder is not None:
             ccip_dev = next(self.ccip_encoder.parameters()).device
             if ccip_dev != device:
@@ -377,6 +390,10 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             lsnet_dev = next(self.lsnet_encoder.parameters()).device
             if lsnet_dev != device:
                 self.lsnet_encoder.to(device=device)
+        if self.image_proj is not None:
+            proj_dev = next(self.image_proj.parameters()).device
+            if proj_dev != device:
+                self.image_proj.to(device=device)
 
     def _stash_ip_tokens(self, ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet):
         """Stash IP tokens on every AnimaIPCrossAttention module before DiT forward.
@@ -414,8 +431,8 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             clip_input = interpolate(images, size=(224, 224), mode="bilinear", align_corners=False)
             clip_input = clip_input.to(device=device, dtype=weight_dtype)
             with torch.no_grad():
-                clip_outputs = self.clip_image_encoder(clip_input, output_hidden_states=True)
-            clip_embeds = clip_outputs.image_embeds  # (B, 1024)
+                clip_outputs = self.clip_image_encoder(clip_input)
+            clip_embeds = self.clip_proj(clip_outputs.image_embeds.detach())  # (B, 1024)
 
             # ── CCIP encoding (GPU-native, 384×384) ─────────
             ccip_embeds = None
@@ -440,6 +457,8 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
                     embeds_list.append(ccip_embeds)
                 if lsnet_embeds is not None:
                     embeds_list.append(lsnet_embeds)
+                proj_dtype = next(self.image_proj.parameters()).dtype
+                embeds_list = [e.to(dtype=proj_dtype) for e in embeds_list]
                 ip_list = self.image_proj(embeds_list)
                 ip_tokens = ip_list[0]
                 aux = list(self._aux_encoders)
