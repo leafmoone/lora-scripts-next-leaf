@@ -213,12 +213,19 @@ class AnimaIPAdapter:
 
         image_proj_resampler = None
         if ipa_mode in ("resampler", "double"):
-            nq = int(metadata.get("ipa_num_queries", str(num_ip_tokens)))
             from .anima_ip_image_proj import Resampler
+            nq_clip = int(metadata.get("ipa_num_queries_clip", metadata.get("ipa_num_queries", str(num_ip_tokens))))
+            nq_ccip = int(metadata.get("ipa_num_queries_ccip", str(nq_clip)))
+            nq_lsnet = int(metadata.get("ipa_num_queries_lsnet", str(nq_clip)))
+            queries_per_stream = [nq_clip]
+            if "ccip" in aux_encoders:
+                queries_per_stream.append(nq_ccip)
+            if "lsnet" in aux_encoders:
+                queries_per_stream.append(nq_lsnet)
             modules = [
                 Resampler(dim=1024, depth=4, dim_head=64, heads=16,
                           num_queries=nq, output_dim=1024)
-                for _ in range(num_streams)
+                for nq in queries_per_stream
             ]
             if ipa_mode == "resampler":
                 image_proj = MultiStreamProj.from_modules(modules)

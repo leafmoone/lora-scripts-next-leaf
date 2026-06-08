@@ -440,11 +440,16 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             metadata["ipa_resampler_depth"] = str(4)
             metadata["ipa_resampler_heads"] = str(16)
             metadata["ipa_resampler_dim_head"] = str(64)
-            metadata["ipa_num_queries"] = str(
-                self.image_proj_resampler.projs[0].num_queries
-                if self.image_proj_resampler is not None
-                else getattr(self.image_proj.projs[0], "num_queries", getattr(self.args, "num_ip_tokens", 16))
-            )
+            # Per-stream num_queries for resampler (may differ: max(nt, 8) per stream)
+            proj = self.image_proj_resampler if self.image_proj_resampler is not None else self.image_proj
+            nq = [proj.projs[i].num_queries for i in range(min(len(proj.projs), 3))]
+            metadata["ipa_num_queries_clip"] = str(nq[0])
+            if len(nq) > 1:
+                metadata["ipa_num_queries_ccip"] = str(nq[1])
+            if len(nq) > 2:
+                metadata["ipa_num_queries_lsnet"] = str(nq[2])
+            # Keep compat field
+            metadata["ipa_num_queries"] = str(nq[0])
         out_path = self._ip_adapter_sidecar_path(network_file)
         save_file(cpu_sd, out_path, metadata=metadata)
         logger.info(f"Saved IP-Adapter weights ({len(cpu_sd)} tensors) to: {out_path}")
