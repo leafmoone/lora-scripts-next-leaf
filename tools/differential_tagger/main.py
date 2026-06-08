@@ -149,7 +149,6 @@ def run_simple(
             preferred_batch_size=wd14_batch_size,
             threshold=threshold,
             character_threshold=character_threshold,
-            progress_callback=progress_callback,
         )
         for raw in batch_results:
             out = _format_simple_result(raw, threshold=threshold,
