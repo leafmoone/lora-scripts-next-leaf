@@ -130,12 +130,15 @@ class Attention(torch.nn.Module):
         q, k, v = qkv.view(B, -1, H, W).split([self.nh_kd, self.nh_kd, self.dh], dim=1)
         q = self.dw(q)
         q, k, v = q.view(B, self.num_heads, -1, N), k.view(B, self.num_heads, -1, N), v.view(B, self.num_heads, -1, N)
+        bias = self.attention_biases[:, self.attention_bias_idxs]
+        if self.training:
+            bias = self.attention_biases[:, self.attention_bias_idxs]
+        elif hasattr(self, "ab"):
+            bias = self.ab
+        # else bias already set above
         attn = (
             (q.transpose(-2, -1) @ k) * self.scale
-            +
-            (self.attention_biases[:, self.attention_bias_idxs]
-             if self.training else getattr(self, "ab", None) or
-             self.attention_biases[:, self.attention_bias_idxs])
+            + bias
         )
         attn = attn.softmax(dim=-1)
         x = (v @ attn.transpose(-2, -1)).reshape(B, -1, H, W)
