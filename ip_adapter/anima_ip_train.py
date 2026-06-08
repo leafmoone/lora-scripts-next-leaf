@@ -550,8 +550,15 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         ip_tokens_fine = None
         if self.image_proj_resampler is not None and clip_patches is not None:
             patches_list = [clip_patches]
-            if ccip_patches is not None: patches_list.append(ccip_patches)
-            if lsnet_patches is not None: patches_list.append(lsnet_patches)
+            # Project 768-dim patches → 1024-dim via the encoder proj
+            if ccip_patches is not None:
+                B, L, D = ccip_patches.shape
+                ccip_patches = self.ccip_proj(ccip_patches.reshape(-1, D)).reshape(B, L, -1)
+                patches_list.append(ccip_patches)
+            if lsnet_patches is not None:
+                B, L, D = lsnet_patches.shape
+                lsnet_patches = self.lsnet_proj(lsnet_patches.reshape(-1, D)).reshape(B, L, -1)
+                patches_list.append(lsnet_patches)
             p_list = self.image_proj_resampler(patches_list)
             ip_tokens_fine = p_list[0]
 
