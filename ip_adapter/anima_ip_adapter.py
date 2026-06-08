@@ -404,9 +404,11 @@ class AnimaIPAdapter:
                 p = patch_feats.get(name)
                 if p is not None and p.numel() > 0:
                     B, L, D = p.shape
-                    p_proj = {"clip": self.clip_proj, "ccip": self.ccip_proj,
-                              "lsnet": self.lsnet_proj}[name](p.reshape(-1, D)).reshape(B, L, -1)
-                    tokens[f"{name}_fine"] = self.image_proj_resampler.projs[i](p_proj).to(self.dtype)
+                    if D != 1024:
+                        # CCIP/LSNet patches are 768-dim → project via encoder proj
+                        proj = {"ccip": self.ccip_proj, "lsnet": self.lsnet_proj}[name]
+                        p = proj(p.reshape(-1, D)).reshape(B, L, -1)
+                    tokens[f"{name}_fine"] = self.image_proj_resampler.projs[i](p).to(self.dtype)
 
         return tokens
 
