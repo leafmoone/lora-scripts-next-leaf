@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.ico?v=20260525-nt" sizes="any">
+<title>Differential LoRA | Next Trainer</title>
+<style>
+:root{--c-bg:#fff;--c-text:#2c3e50;--c-border:#e2e2e2;--c-brand:#3eaf7c;--c-danger:#f56c6c;--c-group:#f5f7fa}
+html.dark{--c-bg:#1e1e1e;--c-text:#ccc;--c-border:#444;--c-group:#2a2a2a}
+html,body{background:var(--c-bg);color:var(--c-text);font-family:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:0}
+.container{max-width:680px;margin:0 auto;padding:24px 20px}
+h1{font-size:20px;margin:0 0 4px}
+.subtitle{font-size:13px;opacity:.7;margin:0 0 16px}
+.card{background:var(--c-group);border:1px solid var(--c-border);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.card h2{font-size:14px;margin:0 0 10px;color:var(--c-brand)}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.col{flex:1;min-width:180px}
+.col label{display:block;font-size:12px;font-weight:600;margin-bottom:3px;opacity:.8}
+.col input,.col select{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text)}
+.col input:focus,.col select:focus{outline:none;border-color:var(--c-brand)}
+.input-helper{font-size:11px;opacity:.5;margin-top:2px}
+.btn{padding:8px 18px;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:500}
+.btn-primary{background:var(--c-brand);color:#fff}
+.btn-secondary{background:var(--c-border);color:var(--c-text)}
+.btn-block{display:block;width:100%;margin-top:8px}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.progress-bar{height:4px;border-radius:2px;background:var(--c-border);overflow:hidden;margin:8px 0 0}
+.progress-bar .fill{height:100%;background:var(--c-brand);transition:width .3s}
+.status{font-size:12px;opacity:.85;margin-top:6px}
+.foot{text-align:center;font-size:11px;opacity:.4;margin-top:20px}
+.back-home{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--c-brand);text-decoration:none;margin-bottom:16px}
+.back-home:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" target="_self" class="back-home">← 返回 Next Trainer 主页</a>
+  <h1>🔀 Differential LoRA · 差分训练</h1>
+  <p class="subtitle">双步 LoRA 训练策略 — 捕捉配对图片之间的风格/特征差异。推理时加上触发词激活目标风格。</p>
+
+  <div class="card">
+    <h2>📁 训练目录</h2>
+    <div class="row">
+      <div class="col"><label>原风格图片目录 (folder A)</label><input type="text" id="folderA" placeholder="/data/before/"><div class="input-helper">图片需与 folder B 同名配对</div></div>
+      <div class="col"><label>目标风格图片目录 (folder B)</label><input type="text" id="folderB" placeholder="/data/after/"></div>
+    </div>
+    <div class="row">
+      <div class="col"><label>标签目录</label><input type="text" id="tagDir" placeholder="留空与 folder A 相同"><div class="input-helper">每张图 cat.jpg 对应 cat.txt</div></div>
+      <div class="col"><label>输出目录</label><input type="text" id="outputDir" value="./models/differential_lora"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎯 差分参数</h2>
+    <div class="row">
+      <div class="col"><label>触发词</label><input type="text" id="triggerWord" value="Character_Splitting"><div class="input-helper">推理时加上此词激活差分效果</div></div>
+      <div class="col"><label>删除词</label><input type="text" id="removeTokens" placeholder="逗号分隔, 如 boots,gloves"><div class="input-helper">Step2 从基础标签中删除 (可选)</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🏗️ 基础模型</h2>
+    <div class="row">
+      <div class="col"><label>Anima DiT 模型</label><input type="text" id="modelPath" value="./sd-models/anima/anima-base-v1.0.safetensors"></div>
+      <div class="col"><label>VAE</label><input type="text" id="vaePath" value="./sd-models/anima/qwen_image_vae.safetensors"></div>
+      <div class="col"><label>Qwen3</label><input type="text" id="qwen3Path" value="./sd-models/anima/qwen_3_06b_base.safetensors"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ 训练超参数</h2>
+    <div class="row">
+      <div class="col"><label>LoRA Rank</label><input type="number" id="loraRank" value="32" min="1" max="256"></div>
+      <div class="col"><label>学习率</label><input type="text" id="learningRate" value="1e-4"></div>
+      <div class="col"><label>训练 Epochs</label><input type="number" id="numEpochs" value="5" min="1"></div>
+      <div class="col"><label>单图重复</label><input type="number" id="datasetRepeat" value="1000" min="1"></div>
+    </div>
+    <div class="row">
+      <div class="col"><label>分辨率</label><input type="text" id="resolution" value="1024,1024"></div>
+      <div class="col"><label>混合精度</label><select id="mixedPrecision"><option value="bf16" selected>bf16</option><option value="fp16">fp16</option><option value="no">no</option></select></div>
+      <div class="col"><label>随机种子</label><input type="number" id="seed" value="42"></div>
+      <div class="col"><label>保存精度</label><select id="savePrecision"><option value="fp16" selected>fp16</option><option value="bf16">bf16</option><option value="float">float32</option></select></div>
+    </div>
+    <div class="row" style="margin-top:4px;cursor:pointer;user-select:none" onclick="toggleAdv('diff')">
+      <span style="font-size:13px;opacity:.7;font-weight:600">⚙️ 高级参数 <small style="font-weight:400">(优化器、调度器、噪声等)</small> <span id="advArrow_diff" style="font-size:11px">▶</span></span>
+    </div>
+    <div id="advSection_diff" style="display:none;margin-top:6px">
+      <div class="row">
+        <div class="col"><label>优化器</label><select id="optimizer">
+          <option value="AdamW8bit" selected>AdamW8bit</option><option value="AdamW">AdamW</option><option value="Lion">Lion</option><option value="Lion8bit">Lion8bit</option>
+          <option value="SGDNesterov">SGDNesterov</option><option value="SGDNesterov8bit">SGDNesterov8bit</option>
+          <option value="DAdaptation">DAdaptation</option><option value="DAdaptAdam">DAdaptAdam</option>
+          <option value="DAdaptAdaGrad">DAdaptAdaGrad</option><option value="DAdaptAdanIP">DAdaptAdanIP</option>
+          <option value="DAdaptLion">DAdaptLion</option><option value="DAdaptSGD">DAdaptSGD</option>
+          <option value="Prodigy">Prodigy</option><option value="prodigyplus.ProdigyPlusScheduleFree">ProdigyPlusScheduleFree</option>
+          <option value="AdaFactor">AdaFactor</option><option value="PagedAdamW8bit">PagedAdamW8bit</option>
+          <option value="PagedLion8bit">PagedLion8bit</option><option value="RAdamScheduleFree">RAdamScheduleFree</option>
+          <option value="Automagic">Automagic</option>
+        </select></div>
+        <div class="col"><label>学习率调度器</label><select id="lrScheduler">
+          <option value="constant" selected>constant</option><option value="cosine_with_restarts">cosine_with_restarts</option>
+          <option value="cosine">cosine</option><option value="linear">linear</option><option value="constant_with_warmup">constant_with_warmup</option>
+        </select></div>
+        <div class="col"><label>预热步数</label><input type="number" id="lrWarmupSteps" value="0" min="0"></div>
+        <div class="col"><label>梯度累加</label><input type="number" id="gradAccum" value="1" min="1"></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Attention 加速</label><select id="attnMode"><option value="" selected>自动</option><option value="torch">torch</option><option value="xformers">xformers</option><option value="flash">flash</option></select></div>
+        <div class="col"><label>噪声偏移</label><input type="number" id="noiseOffset" value="0" min="0" step="0.01"></div>
+        <div class="col"><label>Discrete Flow Shift</label><input type="number" id="discreteFlowShift" value="3.0" step="0.1"></div>
+        <div class="col"><label>梯度检查点</label><select id="gradientCheckpoint"><option value="false" selected>关闭</option><option value="true">开启</option></select></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="col" style="flex:3"><label>自定义 TOML 参数 <small>(一行一个 key=value，直接覆盖上述选项)</small></label><textarea id="customParams" rows="10" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:14px;background:var(--c-bg);color:var(--c-text);resize:vertical;font-family:"Microsoft YaHei","PingFang SC",monospace" spellcheck="false" placeholder="如: optimizer_args=[&quot;betas=0.9,0.999&quot;]">full_bf16=true
+shuffle_caption=false
+cache_latents=false</textarea></div>
+      </div>
+      <details style="margin-top:10px;font-size:11px;opacity:.7">
+        <summary style="cursor:pointer;font-weight:600">📖 可用参数列表（Kohya Anima 训练参数）</summary>
+        <div style="margin-top:6px;line-height:1.8;max-height:300px;overflow:auto;padding:4px 0">
+<b>基础:</b> pretrained_model_name_or_path, vae, qwen3, train_data_dir, output_dir, output_name, logging_dir<br>
+<b>数据集:</b> resolution, enable_bucket, caption_extension, shuffle_caption, keep_tokens, max_token_length<br>
+<b>训练:</b> learning_rate, max_train_epochs, max_train_steps, train_batch_size, mixed_precision, seed<br>
+<b>网络:</b> network_module, network_dim, network_alpha, network_dropout, network_args, network_weights<br>
+<b>优化器:</b> optimizer_type, lr_scheduler, lr_warmup_steps, optimizer_args<br>
+<b>梯度:</b> gradient_accumulation_steps, gradient_checkpointing, max_grad_norm<br>
+<b>采样:</b> sample_prompts, sample_every_n_steps, sample_sampler, sample_at_first<br>
+<b>加速:</b> attn_mode, xformers, sdpa, cache_latents, cache_text_encoder_outputs<br>
+<b>Anima:</b> discrete_flow_shift, timestep_sampling, qwen3_max_token_length, t5_tokenizer_path, compile_mode, static_token_count, blocks_to_swap
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🏷️ 自动标注 <small style="font-weight:400;opacity:.7">(DiffSynth Tagger)</small></h2>
+    <div class="row">
+      <div class="col"><label>标注模型</label><select id="taggerModel"><option value="wd-eva02-large-tagger-v3">wd-eva02-large (最高精度)</option><option value="wd-swinv2-tagger-v3">wd-swinv2</option><option value="wd-convnext-tagger-v3">wd-convnext</option><option value="wd-vit-tagger-v3">wd-vit (轻量)</option></select></div>
+      <div class="col"><label>阈值</label><input type="number" id="taggerThreshold" value="0.35" min="0" max="1" step="0.05"></div>
+      <div class="col"><label>VLM 目的</label><select id="taggerPurpose"><option value="character" selected>角色</option><option value="style">风格</option><option value="general">通用</option><option value="concept">概念</option></select></div>
+    </div>
+    <div class="row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="autoTag" style="transform:scale(1.2)"> 训练前自动标注</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="useVLM" checked style="transform:scale(1.2)"> 启用 VLM 自然语言</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📦 后处理 & 采样</h2>
+    <div class="row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="comfyuiConvert" checked style="transform:scale(1.2)"> 转换为 ComfyUI 格式</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="svdMerge" checked style="transform:scale(1.2)"> SVD 合并所有 LoRA</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none"><input type="checkbox" id="keepTemp" style="transform:scale(1.2)"> 保留临时文件</label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none" onclick="toggleSample()"><input type="checkbox" id="enableSample" style="transform:scale(1.2)"> 🖼️ 启用训练时采样</label>
+    </div>
+    <div id="sampleSection" style="display:none;margin-top:8px">
+      <div class="row">
+        <div class="col"><label>采样步数间隔 <small>(0=禁用)</small></label><input type="number" id="sampleEvery" value="10000" min="0"><div class="input-helper">每 N 步采样一次</div></div>
+        <div class="col"><label>采样器</label><select id="sampleSampler"><option value="euler" selected>euler</option><option value="k_euler">k_euler</option></select></div>
+        <div class="col"><label>噪声偏移</label><input type="number" id="noiseOffset" value="0" min="0" step="0.01"></div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:2"><label>采样提示词 <small>(多行, 留空自动使用训练提示词)</small></label><textarea id="samplePrompts" rows="2" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text);resize:vertical"></textarea></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary btn-block" id="btnRun" onclick="startTraining()">🚀 开始差分训练</button>
+  <div style="display:flex;gap:8px;margin-top:6px">
+    <button class="btn btn-secondary btn-sm" onclick="saveParams()" style="flex:1">💾 保存参数</button>
+    <span class="status" id="saveStatus" style="margin-top:0;font-size:11px"></span>
+  </div>
+  <div id="progress" style="display:none;margin-top:12px">
+    <div class="progress-bar"><div class="fill" id="progressFill" style="width:0"></div></div>
+    <div class="status" id="progressText"></div>
+  </div>
+
+  <p class="foot">训练引擎: Anima / Kohya sd-scripts · 差分算法: DiffSynth-Studio · 合并: SVD</p>
+</div>
+
+<script>
+// ===== 参数保存/加载 =====
+const STORAGE_KEY = 'mikazuki_diff_lora_v2';
+function saveParams() {
+  const els = document.querySelectorAll('input[id], select[id], textarea[id]');
+  var data = {};
+  els.forEach(function(el) {
+    if (el.type === 'checkbox') data[el.id] = el.checked;
+    else data[el.id] = el.value;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  document.getElementById('saveStatus').textContent='已保存 ✓';
+  setTimeout(function(){ document.getElementById('saveStatus').textContent=''; }, 2000);
+}
+(function loadParams() {
+  var raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try { var data = JSON.parse(raw); } catch(e) { return; }
+  Object.keys(data).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = data[id];
+    else el.value = data[id];
+  });
+})();
+
+let pollId = null;
+
+function toggleSample() {
+  const on = document.getElementById('enableSample').checked;
+  document.getElementById('sampleSection').style.display = on ? '' : 'none';
+}
+
+function toggleAdv(prefix) {
+  var s = document.getElementById('advSection_'+prefix);
+  var a = document.getElementById('advArrow_'+prefix);
+  if (s.style.display === 'none' || s.style.display === '') {
+    s.style.display = s.style.display === '' ? 'block' : '';
+    a.textContent = '▼';
+  } else {
+    s.style.display = 'none';
+    a.textContent = '▶';
+  }
+}
+
+function startTraining() {
+  const config = {
+    folder_a: document.getElementById('folderA').value.trim(),
+    folder_b: document.getElementById('folderB').value.trim(),
+    tag_dir: document.getElementById('tagDir').value.trim(),
+    output_dir: document.getElementById('outputDir').value.trim(),
+    trigger_word: document.getElementById('triggerWord').value.trim(),
+    remove_tokens: document.getElementById('removeTokens').value.trim(),
+    pretrained_model_name_or_path: document.getElementById('modelPath').value.trim(),
+    vae: document.getElementById('vaePath').value.trim(),
+    qwen3: document.getElementById('qwen3Path').value.trim(),
+    lora_rank: parseInt(document.getElementById('loraRank').value)||32,
+    learning_rate: document.getElementById('learningRate').value.trim(),
+    num_epochs: parseInt(document.getElementById('numEpochs').value)||5,
+    dataset_repeat: parseInt(document.getElementById('datasetRepeat').value)||1000,
+    resolution: document.getElementById('resolution').value.trim(),
+    mixed_precision: document.getElementById('mixedPrecision').value,
+    optimizer_type: document.getElementById('optimizer').value,
+    lr_scheduler: document.getElementById('lrScheduler').value,
+    lr_warmup_steps: parseInt(document.getElementById('lrWarmupSteps').value)||0,
+    gradient_accumulation_steps: parseInt(document.getElementById('gradAccum').value)||1,
+    gradient_checkpointing: document.getElementById('gradientCheckpoint').value==='true',
+    seed: parseInt(document.getElementById('seed').value)||42,
+    save_precision: document.getElementById('savePrecision').value,
+    attn_mode: document.getElementById('attnMode').value,
+    discrete_flow_shift: parseFloat(document.getElementById('discreteFlowShift').value)||3.0,
+    auto_tag: document.getElementById('autoTag').checked,
+    tagger_model: document.getElementById('taggerModel').value,
+    tagger_threshold: parseFloat(document.getElementById('taggerThreshold').value)||0.35,
+    tagger_char_threshold: 0.85,
+    tagger_use_vlm: document.getElementById('useVLM').checked,
+    tagger_purpose: document.getElementById('taggerPurpose').value,
+    tagger_mode: 'smart',
+    postprocess_comfyui: document.getElementById('comfyuiConvert').checked,
+    postprocess_svd: document.getElementById('svdMerge').checked,
+    keep_temp: document.getElementById('keepTemp').checked,
+    enable_sample: document.getElementById('enableSample').checked,
+    sample_every: parseInt(document.getElementById('sampleEvery').value)||0,
+    sample_prompts: document.getElementById('samplePrompts').value.trim(),
+    sample_sampler: document.getElementById('sampleSampler').value,
+    noise_offset: parseFloat(document.getElementById('noiseOffset').value)||0,
+    custom_params: document.getElementById('customParams').value.trim(),
+  };
+
+  if (!config.folder_a || !config.folder_b) { alert('请填写 folder A 和 folder B'); return; }
+
+  document.getElementById('progress').style.display='';
+  document.getElementById('btnRun').disabled=true;
+  document.getElementById('progressText').textContent='提交中...';
+
+  fetch('/api/differential-lora/run', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(config)
+  }).then(r=>r.json()).then(d=>{
+    if (d.status==='success') {
+      document.getElementById('progressText').textContent='训练已启动，共 '+d.data.total_pairs+' 组配对';
+      startPolling();
+    } else {
+      document.getElementById('progressText').textContent='失败: '+(d.message||'未知');
+      document.getElementById('btnRun').disabled=false;
+    }
+  }).catch(e=>{
+    document.getElementById('progressText').textContent='请求失败: '+e.message;
+    document.getElementById('btnRun').disabled=false;
+  });
+}
+
+function startPolling() {
+  if (pollId) clearInterval(pollId);
+  pollId = setInterval(()=>{
+    fetch('/api/differential-lora/status').then(r=>r.json()).then(d=>{
+      if (d.status!=='success') return;
+      const s = d.data;
+      const pct = s.total_pairs>0?Math.round(s.completed_pairs/s.total_pairs*100):0;
+      document.getElementById('progressFill').style.width=pct+'%';
+      document.getElementById('progressText').textContent=pct+'% — '+s.completed_pairs+'/'+s.total_pairs+' 完成';
+      if (s.status==='error'||s.status==='done') {
+        clearInterval(pollId); pollId=null;
+        document.getElementById('btnRun').disabled=false;
+        document.getElementById('progressText').textContent=s.status==='done'?'✅ 训练完成! 输出: '+s.output_dir:'❌ 失败: '+(s.error_message||'');
+      }
+    }).catch(()=>{});
+  },3000);
+}
+</script>
+</body>
+</html>

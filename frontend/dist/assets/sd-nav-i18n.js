@@ -57,6 +57,8 @@
     "帮助 → 新手上路": "Help → Getting started",
     "秋叶用户迁移说明": "Migration from Akiba lora-scripts",
     参数释义: "Parameter glossary",
+    "Differential LoRA训练": "Differential LoRA Training",
+    "Tagger-leaf": "Tagger-leaf",
   };
 
   const EN_TO_ZH = Object.fromEntries(
@@ -236,6 +238,77 @@
       legacy.classList.remove("active");
     }
     setSidebarAnchorLabel(native, "原生标签编辑");
+  }
+
+  function ensureNewFeatureLinks() {
+    const sidebar = document.querySelector(".sidebar .sidebar-items");
+    if (!sidebar) return;
+
+    // Differential LoRA训练 → 挂到 "训练" 分组，与 LoRA训练 同级，作为最后一项
+    if (!sidebar.querySelector('a[href="/lora/differential-lora.html"]')) {
+      var trainChildren = null;
+      sidebar.querySelectorAll("li").forEach(function (li) {
+        if (trainChildren) return;
+        var heading = li.querySelector(":scope > p.sidebar-item.sidebar-heading");
+        if (!heading) return;
+        var text = normalize(heading.textContent);
+        if (text === "训练" || text === "Training") {
+          trainChildren = li.querySelector(":scope > ul.sidebar-item-children");
+        }
+      });
+      if (trainChildren) {
+        var diffLi = document.createElement("li");
+        var diffA = document.createElement("a");
+        diffA.href = "/lora/differential-lora.html";
+        diffA.className = "sidebar-item";
+        diffA.target = "_self";
+        diffA.setAttribute("aria-label", "Differential LoRA训练");
+        diffA.appendChild(document.createTextNode(" Differential LoRA训练 "));
+        diffLi.appendChild(diffA);
+        trainChildren.appendChild(diffLi);
+      }
+    }
+
+    // Anima IP-Adapter → 挂到 "训练" 分组，在 Differential LoRA 下方
+    if (!sidebar.querySelector('a[href="/lora/anima-ipa.html"]')) {
+      var diffLi = sidebar.querySelector('a[href="/lora/differential-lora.html"]');
+      if (diffLi) {
+        var ipaLi = document.createElement("li");
+        var ipaA = document.createElement("a");
+        ipaA.href = "/lora/anima-ipa.html";
+        ipaA.className = "sidebar-item";
+        ipaA.target = "_self";
+        ipaA.setAttribute("aria-label", "Anima IP-Adapter");
+        ipaA.appendChild(document.createTextNode(" Anima IP-Adapter "));
+        ipaLi.appendChild(ipaA);
+        diffLi.closest("li")?.after(ipaLi);
+      }
+    }
+
+    // Tagger-leaf → 挂到 "工具与调试" 分组的第一行
+    if (!sidebar.querySelector('a[href="/tag-edit-leaf.html"]')) {
+      var toolsChildren = null;
+      sidebar.querySelectorAll("li").forEach(function (li) {
+        if (toolsChildren) return;
+        var heading = li.querySelector(":scope > p.sidebar-item.sidebar-heading");
+        if (!heading) return;
+        var text = normalize(heading.textContent);
+        if (text === "工具与调试" || text === "Tools") {
+          toolsChildren = li.querySelector(":scope > ul.sidebar-item-children");
+        }
+      });
+      if (toolsChildren) {
+        var leafLi = document.createElement("li");
+        var leafA = document.createElement("a");
+        leafA.href = "/tag-edit-leaf.html";
+        leafA.className = "sidebar-item";
+        leafA.target = "_self";
+        leafA.setAttribute("aria-label", "Tagger-leaf");
+        leafA.appendChild(document.createTextNode(" Tagger-leaf "));
+        leafLi.appendChild(leafA);
+        toolsChildren.insertBefore(leafLi, toolsChildren.firstChild);
+      }
+    }
   }
 
   function ensureTerminalStyle() {
@@ -789,6 +862,7 @@
     const map = english ? ZH_TO_EN : EN_TO_ZH;
     ensureSidebarTerminalLink();
     ensureTagEditorLinks();
+    ensureNewFeatureLinks();
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (sidebar) replaceInElement(sidebar, map);
 
@@ -842,7 +916,7 @@
       applyNavLocale();
       hookLanguageToggle();
       ensureTerminalPanel();
-    }, 60);
+    }, 150);
   }
 
   function boot() {

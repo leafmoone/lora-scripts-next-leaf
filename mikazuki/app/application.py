@@ -120,6 +120,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(proxy_router)
 
+# Differential LoRA API
+from mikazuki.app.differential_lora_api import router as differential_lora_router
+app.include_router(differential_lora_router)
+
+# Tag-Edit-Leaf API (DiffSynth Tagger)
+from mikazuki.app.tag_edit_leaf_api import router as tag_edit_leaf_router
+app.include_router(tag_edit_leaf_router)
+
 
 cors_config = os.environ.get("MIKAZUKI_APP_CORS", "")
 if cors_config != "":

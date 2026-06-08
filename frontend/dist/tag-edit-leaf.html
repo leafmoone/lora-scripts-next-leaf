@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.ico?v=20260525-nt" sizes="any">
+<link rel="icon" href="/assets/icon.65fd68ba.webp?v=20260525-nt" type="image/webp" sizes="512x512">
+<meta name="generator" content="VuePress 2.0.0-beta.49">
+<title>DiffSynth Tagger | Tag-Edit-Leaf</title>
+<style>
+:root{--c-bg:#fff;--c-text:#2c3e50;--c-border:#e2e2e2;--c-brand:#3eaf7c;--c-danger:#f56c6c;--c-tip:#e6f7ff;--c-warning:#fff7e6}
+html.dark{--c-bg:#22272e;--c-text:#adbac7;--c-border:#373e47;--c-brand:#57b883;--c-tip:#1a2a3a;--c-warning:#2a2218}
+html,body{background:var(--c-bg);color:var(--c-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:0}
+.container{max-width:960px;margin:0 auto;padding:24px 20px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:15px;margin:20px 0 8px;color:var(--c-brand)}
+.subtitle{font-size:13px;opacity:.7;margin:0 0 20px}
+.card{background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+.col{flex:1;min-width:200px}
+.col label{display:block;font-size:12px;font-weight:600;margin-bottom:4px;opacity:.8}
+.col input,.col select{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text)}
+.col input:focus,.col select:focus{outline:none;border-color:var(--c-brand);box-shadow:0 0 0 3px rgba(62,175,124,.12)}
+.chip{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;margin:2px;background:var(--c-tip);border:1px solid var(--c-border);cursor:pointer;user-select:none}
+.chip.active{background:var(--c-brand);color:#fff;border-color:var(--c-brand)}
+.chip-inline{margin:2px}
+.toggle{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}
+.toggle-switch{width:36px;height:20px;border-radius:10px;background:var(--c-border);position:relative;transition:background .2s}
+.toggle-switch.on{background:var(--c-brand)}
+.toggle-switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:9px;background:#fff;transition:left .2s}
+.toggle-switch.on::after{left:18px}
+.btn{padding:8px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer;transition:all .15s;font-weight:500}
+.btn-primary{background:var(--c-brand);color:#fff}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-danger{background:var(--c-danger);color:#fff}
+.btn-danger:hover{filter:brightness(1.1)}
+.btn-secondary{background:var(--c-border);color:var(--c-text)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.progress-bar{height:6px;border-radius:3px;background:var(--c-border);overflow:hidden;margin:10px 0}
+.progress-bar .fill{height:100%;background:var(--c-brand);transition:width .3s;border-radius:3px}
+.status{font-size:13px;opacity:.85}
+.result-preview{max-height:400px;overflow:auto;font-size:12px;background:var(--c-tip);border-radius:6px;padding:10px}
+.result-item{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--c-border)}
+.result-item:last-child{border:none}
+.result-item .name{font-weight:600;font-size:13px}
+.result-item .tags{opacity:.8;margin-top:2px;line-height:1.5}
+.tag-cat{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;margin-right:4px;vertical-align:2px}
+.cat-char{background:#ffe0e0;color:#c04040;margin-right:2px}
+.cat-copy{background:#e0e0ff;color:#4040c0;margin-right:2px}
+.cat-general{background:#e0e8e0;color:#406040}
+.input-helper{font-size:11px;opacity:.5;margin-top:2px}
+.section-header{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+.section-header .arrow{transition:transform .2s;font-size:11px}
+.section-header.open .arrow{transform:rotate(90deg)}
+.section-body{display:none;margin-top:8px}
+.section-body.show{display:block}
+mark{background:#ffe58f;padding:0 2px;border-radius:2px}
+.back-home{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--c-brand);text-decoration:none;margin-bottom:12px}
+.back-home:hover{text-decoration:underline}
+.gallery-item{width:180px;border:1px solid var(--c-border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.gallery-item:hover{border-color:var(--c-brand)}
+.gallery-item img{width:100%;height:180px;object-fit:cover;display:block;background:var(--c-tip)}
+.gallery-item .caption-preview{padding:8px;font-size:11px;line-height:1.4;opacity:.8;max-height:60px;overflow:hidden;white-space:pre-wrap;word-break:break-all}
+.gallery-item .caption-preview.empty{opacity:.4;font-style:italic}
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" target="_self" class="back-home">← 返回 Next Trainer 主页</a>
+  <h1>🏷️ DiffSynth Tagger <small style="font-weight:400;font-size:14px;opacity:.7">Tag-Edit-Leaf</small></h1>
+  <p class="subtitle">独立 AI 图片标注器 — 支持 WD14 booru 标签 + ToriiGate VLM 自然语言（需要当前项目为 DiffSynth 标注器安装依赖）。适用于任意图片文件夹。</p>
+
+  <!-- Section 1: 输入 -->
+  <div class="card">
+    <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')">
+      <span class="arrow">▶</span> <span>📁 输入设置</span>
+    </div>
+    <div class="section-body show">
+      <div class="row">
+        <div class="col" style="flex:2">
+          <label>图片目录</label>
+          <input type="text" id="inputDir" placeholder="输入图片文件夹路径（如 /data/images/）">
+          <div class="input-helper">支持 .png .jpg .jpeg .webp .bmp .gif .tiff</div>
+        </div>
+        <div class="col">
+          <label>输出目录</label>
+          <input type="text" id="outputDir" placeholder="留空则与输入目录相同">
+          <div class="input-helper">生成 results.json 和 .txt 文件</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <label class="toggle" onclick="toggleSwitch('recursive')">
+          <span class="toggle-switch" id="recursive-sw"></span> 递归扫描子目录
+        </label>
+        <label class="toggle" onclick="toggleSwitch('saveCaptions')">
+          <span class="toggle-switch on" id="saveCaptions-sw"></span> 保存 .txt 标题文件
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: 模式与模型 -->
+  <div class="card">
+    <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')">
+      <span class="arrow">▶</span> <span>🧠 模式与模型</span>
+    </div>
+    <div class="section-body show">
+      <div class="row">
+        <div class="col">
+          <label>标注模式</label>
+          <select id="mode" onchange="updateMode()">
+            <option value="smart">Smart Tag（多阶段 + VLM 自然语言）</option>
+            <option value="simple">Simple（仅 WD14 booru 标签）</option>
+            <option value="api">☁️ 第三方 API 反推（OpenAI / Anthropic）</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>WD14 标注模型</label>
+          <select id="model" onchange="if(this.value==='oppai-oracle-v1.1')document.getElementById('mode').value='smart';updateMode()">
+            <option value="wd-eva02-large-tagger-v3">wd-eva02-large (最高精度)</option>
+            <option value="wd-swinv2-tagger-v3">wd-swinv2</option>
+            <option value="wd-convnext-tagger-v3">wd-convnext</option>
+            <option value="wd-vit-tagger-v3">wd-vit (轻量)</option>
+            <option value="wd-vit-large-tagger-v3">wd-vit-large</option>
+            <option value="camie-tagger-v2">camie-tagger-v2</option>
+            <option value="pixai-tagger-v0.9">pixai-tagger-v0.9</option>
+            <option value="oppai-oracle-v1.1">oppai-oracle-v1.1</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>通用标签阈值</label>
+          <input type="number" id="threshold" value="0.35" min="0" max="1" step="0.05">
+        </div>
+        <div class="col">
+          <label>角色标签阈值</label>
+          <input type="number" id="charThreshold" value="0.85" min="0" max="1" step="0.05">
+        </div>
+        <div class="col">
+          <label>每图最大标签数 <small>(0=不限)</small></label>
+          <input type="number" id="maxTags" value="0" min="0" max="200">
+        </div>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <label class="toggle" onclick="toggleSwitch('useGPU')">
+          <span class="toggle-switch on" id="useGPU-sw"></span> 使用 GPU（关闭则仅 CPU）
+        </label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="col" style="flex:3">
+          <label>模型目录 <small>(可选，留空=./models 自动下载)</small></label>
+          <input type="text" id="dataDir" placeholder="指定已下载模型的目录路径">
+          <div class="input-helper">留空则使用默认 ./models（不存在时自动下载）；填写路径则从该目录加载已有模型。</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="col">
+          <label>WD14 批量大小 <small>(1=逐张, 8=推荐)</small></label>
+          <input type="number" id="wd14Batch" value="1" min="1" max="32">
+          <div class="input-helper">多张图一批推理，更高吞吐（需足够显存）</div>
+        </div>
+        <div class="col">
+          <label>VLM 并行数 <small>(1=串行, 2-4=流水线)</small></label>
+          <input type="number" id="vlmWorkers" value="1" min="1" max="4">
+          <div class="input-helper">并行 ToriiGate VLM 实例数（需 ~10GB VRAM / 实例）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Smart Tag 高级选项 -->
+  <div class="card" id="smartSection">
+    <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')">
+      <span class="arrow">▶</span> <span>✨ Smart Tag 高级选项</span>
+    </div>
+    <div class="section-body show">
+      <div class="row">
+        <div class="col">
+          <label>训练目的</label>
+          <select id="purpose">
+            <option value="character">角色 (character)</option>
+            <option value="style">风格 (style)</option>
+            <option value="general">通用 (general)</option>
+            <option value="concept">概念 (concept)</option>
+          </select>
+          <div class="input-helper">影响 VLM 自然语言描述方向</div>
+        </div>
+        <div class="col">
+          <label>触发词 <small>(可选)</small></label>
+          <input type="text" id="trigger" placeholder="如：my_character">
+          <div class="input-helper">注入到每张图的 caption 最前面</div>
+        </div>
+      </div>
+      <div class="row">
+        <label class="toggle" onclick="toggleSwitch('useVLM')">
+          <span class="toggle-switch on" id="useVLM-sw"></span> 启用 ToriiGate VLM 自然语言描述 <small style="opacity:.6">（需 ~10GB VRAM）</small>
+        </label>
+      </div>
+      <label style="font-size:12px;font-weight:600;margin:10px 0 4px;display:block;opacity:.8">多标签器共识 <small style="font-weight:400">（选择 2+ 模型，投票决定最终标签）</small></label>
+      <div id="consensusModels" style="margin-bottom:4px"></div>
+      <div class="row">
+        <div class="col" style="flex:0 0 80px">
+          <label>最少投票</label>
+          <input type="number" id="consensus" value="2" min="2" max="10">
+        </div>
+        <div class="col">
+          <label>黑名单标签 <small>(空格分隔)</small></label>
+          <input type="text" id="blacklist" placeholder="watermark signature artist_name">
+          <div class="input-helper">这些标签会被自动过滤</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: 操作 -->
+  <div class="card">
+    <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')" id="apiSection" style="display:none">
+      <span class="arrow">▶</span> <span>☁️ 第三方 API 设置</span>
+    </div>
+    <div class="section-body" id="apiBody">
+      <div class="row">
+        <div class="col"><label>API 提供商</label><select id="apiProvider"><option value="openai" selected>OpenAI 兼容</option><option value="anthropic">Anthropic 兼容</option></select></div>
+        <div class="col"><label>API Base URL</label><input type="text" id="apiBaseUrl" value="https://api.openai.com/v1"><div class="input-helper">OpenAI: https://api.openai.com/v1 | Anthropic: https://api.anthropic.com</div></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>API Key</label><input type="password" id="apiKey" placeholder="sk-..."><div class="input-helper">仅用于本次请求，不会存储</div></div>
+        <div class="col"><label>模型</label><input type="text" id="apiModel" value="gpt-4o"><div class="input-helper">如 gpt-4o, claude-3-5-sonnet, etc.</div></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>系统提示词</label><textarea id="apiSystemPrompt" rows="3" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text);resize:vertical">You are an AI image tagging assistant. Given an image, describe it in a comma-separated list of booru-style tags focusing on: character features (gender, hair color, eye color, clothing), scene elements (background, lighting, weather), artistic attributes (style, angle, composition). Return ONLY the tags, no explanations.</textarea></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>最大 Token</label><input type="number" id="apiMaxTokens" value="256" min="16" max="4096"></div>
+        <div class="col"><label>温度</label><input type="number" id="apiTemperature" value="0.3" min="0" max="2" step="0.1"><div class="input-helper">越低越确定，越高越随机</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: 操作 -->
+  <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnRun" onclick="runTagger()">🚀 开始标注</button>
+      <button class="btn btn-secondary btn-sm" onclick="scanDir()">🔍 预览目录</button>
+      <button class="btn btn-secondary btn-sm" onclick="saveParams()">💾 保存参数</button>
+      <span class="status" id="saveStatus" style="margin-top:0;font-size:11px"></span>
+      <span class="status" id="scanResult"></span>
+    </div>
+    <div id="progressSection" style="display:none;margin-top:12px">
+      <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="status" id="progressText"></span>
+        <button class="btn btn-danger btn-sm" style="display:none" id="btnClear" onclick="clearTask()">清除</button>
+      </div>
+    </div>
+
+    <!-- Image+caption preview gallery -->
+    <div id="gallerySection" style="display:none;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <label style="font-size:13px;font-weight:600">📸 图文预览 <span id="galleryCount" style="font-weight:400;opacity:.7"></span></label>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="startTagging()">🚀 开始标注</button>
+          <button class="btn btn-secondary btn-sm" onclick="hideGallery()" style="margin-left:6px">✕ 关闭</button>
+        </div>
+      </div>
+      <div id="galleryContainer" style="display:flex;flex-wrap:wrap;gap:12px;max-height:70vh;overflow:auto;padding:4px 0"></div>
+    </div>
+
+    <div id="resultSection" style="display:none;margin-top:12px">
+      <label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">📋 标注结果预览（前 20 张）</label>
+      <div class="result-preview" id="resultContainer"></div>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:11px;opacity:.4;margin-top:20px">
+    标注引擎: DiffSynth Tagger (tools/differential_tagger) · 首次运行自动下载模型
+  </p>
+</div>
+
+<script>
+// ===== 参数保存/加载 =====
+const STORAGE_KEY = 'mikazuki_tagger_v2';
+const state = {
+  recursive: false,
+  useGPU: true,
+  useVLM: true,
+  saveCaptions: true,
+  consensusModels: [],
+  currentScan: null,
+  pollingId: null,
+};
+function saveParams() {
+  const els = document.querySelectorAll('input[id], select[id], textarea[id]');
+  var data = {};
+  els.forEach(function(el) {
+    if (el.type === 'checkbox') data[el.id] = el.checked;
+    else data[el.id] = el.value;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  document.getElementById('saveStatus').textContent='已保存 ✓';
+  setTimeout(function(){ document.getElementById('saveStatus').textContent=''; }, 2000);
+}
+(function loadParams() {
+  var raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try { var data = JSON.parse(raw); } catch(e) { return; }
+  Object.keys(data).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = data[id];
+    else el.value = data[id];
+  });
+  if (data.recursive_sw) state.recursive = !!data.recursive_sw;
+  if (data.useGPU_sw !== undefined) state.useGPU = data.useGPU_sw;
+  if (data.useVLM_sw !== undefined) state.useVLM = data.useVLM_sw;
+  if (data.saveCaptions_sw !== undefined) state.saveCaptions = data.saveCaptions_sw;
+  // Update toggle switches
+  ['recursive','useGPU','useVLM','saveCaptions'].forEach(function(k){
+    var sw = document.getElementById(k+'-sw');
+    if (sw) sw.classList.toggle('on', state[k]);
+  });
+})();
+
+// Consensus model selector
+function renderConsensusModels() {
+  const models = [
+    "wd-eva02-large-tagger-v3", "wd-swinv2-tagger-v3",
+    "wd-convnext-tagger-v3", "wd-vit-tagger-v3", "wd-vit-large-tagger-v3",
+    "camie-tagger-v2", "pixai-tagger-v0.9"
+  ];
+  const container = document.getElementById('consensusModels');
+  container.innerHTML = models.map(m => {
+    const active = state.consensusModels.includes(m);
+    return `<span class="chip ${active?'active':''}" onclick="toggleModel('${m}')">${m.replace('wd-','').replace('-tagger','')}</span>`;
+  }).join('<br>');
+}
+
+function toggleModel(model) {
+  const idx = state.consensusModels.indexOf(model);
+  if (idx >= 0) state.consensusModels.splice(idx, 1);
+  else state.consensusModels.push(model);
+  renderConsensusModels();
+}
+
+function toggleSwitch(id) {
+  const map = {
+    recursive: 'recursive', saveCaptions: 'saveCaptions',
+    useGPU: 'useGPU', useVLM: 'useVLM',
+  };
+  state[map[id]] = !state[map[id]];
+  document.getElementById(id+'-sw').classList.toggle('on', state[map[id]]);
+}
+
+function updateMode() {
+  const mode = document.getElementById('mode').value;
+  document.getElementById('smartSection').style.display = mode==='smart'?'':'none';
+  const apiMode = mode === 'api';
+  document.getElementById('apiSection').style.display = apiMode ? '' : 'none';
+  document.getElementById('apiBody').classList.toggle('show', apiMode);
+}
+
+async function scanDir() {
+  const dir = document.getElementById('inputDir').value.trim();
+  if (!dir) { document.getElementById('scanResult').textContent='请先输入图片目录'; return; }
+  document.getElementById('scanResult').textContent='扫描中...';
+  try {
+    const resp = await fetch('/api/tag-edit-leaf/scan', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({path:dir, recursive:state.recursive})
+    });
+    const data = await resp.json();
+    if (data.status==='success') {
+      state.currentScan = {root: data.data.path, images: data.data.preview};
+      document.getElementById('scanResult').innerHTML=`找到 <b>${data.data.count}</b> 张图片 · 显示前 ${Math.min(data.data.count,50)} 张`;
+      showGallery(state.currentScan.images, state.currentScan.root);
+    } else {
+      document.getElementById('scanResult').textContent=data.message||'扫描失败';
+    }
+  } catch(e) {
+    document.getElementById('scanResult').textContent='请求失败: '+e.message;
+  }
+}
+
+function showGallery(images, root) {
+  document.getElementById('gallerySection').style.display='';
+  document.getElementById('galleryCount').textContent=`(${images.length} 张)`;
+  const container = document.getElementById('galleryContainer');
+  container.innerHTML = images.map(img => {
+    const cap = img.caption || '';
+    const capClass = cap ? '' : 'empty';
+    const capDisplay = cap || '（无标注文件）';
+    const imgUrl = `/api/tag-edit-leaf/image?root=${encodeURIComponent(root)}&img=${encodeURIComponent(img.relative_path)}`;
+    return `<div class="gallery-item" onclick="this.querySelector('input').checked^=1">
+      <img src="${imgUrl}" alt="${img.name}" loading="lazy">
+      <input type="checkbox" style="display:none" checked>
+      <div class="caption-preview ${capClass}">${escapeHtml(capDisplay)}</div>
+    </div>`;
+  }).join('');
+  // Show "start" button
+  document.getElementById('btnRun').style.display='none';
+}
+
+function startTagging() {
+  hideGallery();
+  runTagger();
+}
+
+function hideGallery() {
+  document.getElementById('gallerySection').style.display='none';
+  document.getElementById('btnRun').style.display='';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function collectConfig() {
+  const config = {
+    input_dir: document.getElementById('inputDir').value.trim(),
+    output_dir: document.getElementById('outputDir').value.trim(),
+    mode: document.getElementById('mode').value,
+    model: document.getElementById('model').value,
+    threshold: parseFloat(document.getElementById('threshold').value)||0.35,
+    char_threshold: parseFloat(document.getElementById('charThreshold').value)||0.85,
+    max_tags: parseInt(document.getElementById('maxTags').value)||0,
+    use_cpu: !state.useGPU,
+    recursive: state.recursive,
+    save_captions: state.saveCaptions,
+    purpose: document.getElementById('purpose').value,
+    trigger: document.getElementById('trigger').value.trim(),
+    use_vlm: state.useVLM,
+    taggers: state.consensusModels,
+    consensus: parseInt(document.getElementById('consensus').value)||2,
+    blacklist: document.getElementById('blacklist').value.trim().split(/\s+/).filter(Boolean),
+    data_dir: document.getElementById('dataDir').value.trim() || '',
+    wd14_batch: parseInt(document.getElementById('wd14Batch').value)||1,
+    vlm_workers: parseInt(document.getElementById('vlmWorkers').value)||1,
+  };
+  // API mode extra fields
+  if (config.mode === 'api') {
+    config.api_mode = true;
+    config.api_provider = document.getElementById('apiProvider').value;
+    config.api_base_url = document.getElementById('apiBaseUrl').value.trim();
+    config.api_key = document.getElementById('apiKey').value.trim();
+    config.api_model = document.getElementById('apiModel').value.trim();
+    config.api_system_prompt = document.getElementById('apiSystemPrompt').value.trim();
+    config.api_max_tokens = parseInt(document.getElementById('apiMaxTokens').value)||256;
+    config.api_temperature = parseFloat(document.getElementById('apiTemperature').value)||0.3;
+  }
+  return config;
+}
+
+async function runTagger() {
+  const config = collectConfig();
+  if (!config.input_dir) { alert('请输入图片目录'); return; }
+
+  document.getElementById('progressSection').style.display='';
+  document.getElementById('btnRun').disabled=true;
+  document.getElementById('progressText').textContent='提交中...';
+  document.getElementById('progressFill').style.width='0%';
+
+  try {
+    const resp = await fetch('/api/tag-edit-leaf/run', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(config)
+    });
+    const data = await resp.json();
+    if (data.status==='success') {
+      document.getElementById('progressText').textContent='标注中...';
+      startPolling();
+    } else {
+      document.getElementById('progressText').textContent='失败: '+(data.message||'未知错误');
+      document.getElementById('btnRun').disabled=false;
+      document.getElementById('btnClear').style.display='';
+    }
+  } catch(e) {
+    document.getElementById('progressText').textContent='请求失败: '+e.message;
+    document.getElementById('btnRun').disabled=false;
+  }
+}
+
+function startPolling() {
+  if (state.pollingId) clearInterval(state.pollingId);
+  state.pollingId = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/tag-edit-leaf/status');
+      const data = await resp.json();
+      if (data.status!=='success') return;
+      const s = data.data;
+      document.getElementById('progressFill').style.width = s.progress+'%';
+      document.getElementById('progressText').textContent = s.progress+'% — '+s.message;
+
+      if (s.status === 'done' || s.status === 'error') {
+        clearInterval(state.pollingId);
+        state.pollingId = null;
+        document.getElementById('btnRun').disabled = false;
+        document.getElementById('btnClear').style.display = '';
+        if (s.status==='done') showResults(s.results);
+        renderConsensusModels(); updateMode();
+      }
+    } catch(e) {}
+  }, 2000);
+}
+
+function showResults(results) {
+  const section = document.getElementById('resultSection');
+  const container = document.getElementById('resultContainer');
+  if (!results||!results.length) {
+    section.style.display='none'; return;
+  }
+  section.style.display='';
+
+  const categoryColors = {
+    character: 'cat-char', copyright: 'cat-copy', general: 'cat-general'
+  };
+
+  container.innerHTML = results.slice(0,20).map((r,i) => {
+    const fname = r.image_path ? r.image_path.split(/[/\\]/).pop() : ('image_'+i);
+    let tagsHtml = '';
+    if (r.all_tags) {
+      r.all_tags.forEach(t => {
+        const cat = t.category||'general';
+        tagsHtml += `<span class="tag-cat ${categoryColors[cat]||'cat-general'}">${cat}</span>${t.tag} `;
+      });
+    } else if (r.tags) {
+      tagsHtml = r.tags;
+    } else if (r.caption) {
+      tagsHtml = `<b>Caption:</b> ${r.caption}`;
+    } else {
+      tagsHtml = '<span style="opacity:.5">(无标签)</span>';
+    }
+    return `<div class="result-item"><div class="name">${fname}</div><div class="tags">${tagsHtml}</div></div>`;
+  }).join('');
+
+  if (results.length > 20) {
+    container.innerHTML += `<div style="opacity:.5;margin-top:8px">... 还有 ${results.length-20} 张图片</div>`;
+  }
+}
+
+function clearTask() {
+  if (state.pollingId) clearInterval(state.pollingId);
+  state.pollingId = null;
+  document.getElementById('progressSection').style.display = 'none';
+  document.getElementById('resultSection').style.display = 'none';
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnClear').style.display = 'none';
+}
+
+// Init
+renderConsensusModels();
+updateMode();
+</script>
+</body>
+</html>

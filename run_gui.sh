@@ -1,27 +1,34 @@
 #!/bin/bash
-# Linux/macOS GUI launcher. China mirrors: USE_CN_MIRROR=1 bash run_gui.sh
+cd "$(dirname "$0")"
 
-export HF_HOME=huggingface
-export PYTHONUTF8=1
+PORT=12346
+TENSORBOARD_PORT=12348
+MONITOR_PORT=12347
 
-if [[ "${USE_CN_MIRROR:-}" == "1" ]]; then
-  export HF_ENDPOINT=https://hf-mirror.com
-  export PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
-fi
+cleanup() {
+    echo ""
+    echo "正在停止服务..."
+    # 杀掉所有相关子进程（孤儿进程）
+    pkill -P $$ 2>/dev/null
+    # 释放端口
+    fuser -k ${PORT}/tcp ${TENSORBOARD_PORT}/tcp ${MONITOR_PORT}/tcp 2>/dev/null
+    # 兜底：按进程名清理
+    pkill -f "tensorboard.main.*${TENSORBOARD_PORT}" 2>/dev/null
+    pkill -f "train_monitor/server.py" 2>/dev/null
+    echo "服务已停止，端口已释放"
+    exit 0
+}
 
-if [[ -f "./venv/bin/activate" ]]; then
-  # shellcheck source=/dev/null
-  source "./venv/bin/activate"
-fi
+trap cleanup SIGINT SIGTERM EXIT
 
-if [ ! -f "vendor/sd-scripts/anima_train_network.py" ]; then
-    echo -e "\033[36m首次运行：正在初始化必要组件，请稍候...\033[0m"
-    git submodule update --init --recursive
-    if [ $? -ne 0 ]; then
-        echo -e "\033[31m组件初始化失败，请检查网络连接后重新运行。\033[0m"
-        exit 1
-    fi
-    echo -e "\033[32m初始化完成，继续启动...\033[0m"
-fi
+echo "启动 GUI 服务..."
+echo "  Frontend: http://0.0.0.0:${PORT}"
+echo "  TensorBoard: http://0.0.0.0:${TENSORBOARD_PORT}"
+echo "  Train Monitor: http://0.0.0.0:${MONITOR_PORT}"
+echo "按 Ctrl+C 停止服务"
+echo ""
 
-python gui.py "$@"
+python gui.py --port ${PORT} &
+GUI_PID=$!
+wait $GUI_PID
+cleanup
