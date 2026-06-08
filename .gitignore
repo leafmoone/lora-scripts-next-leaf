@@ -86,3 +86,4 @@ models/
 # Cursor / Claude / local tool configs
 .claude/
 .cursor/
+cursor_docs/
