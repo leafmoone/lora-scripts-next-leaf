@@ -710,6 +710,8 @@ def run_smart_tag_pipeline(
     consensus_min: int = 2,
     consensus_skip_categories: Optional[List[str]] = None,
     progress_callback=None,
+    wd14_batch_size: int = 1,
+    vlm_workers: int = 1,
 ) -> List[SmartTagResult]:
     """Run the full Smart Tag pipeline on a list of image paths.
 

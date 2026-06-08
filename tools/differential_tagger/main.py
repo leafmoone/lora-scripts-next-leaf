@@ -120,6 +120,7 @@ def run_simple(
     blacklist: Optional[List[str]] = None,
     max_tags: int = 0,
     progress_callback=None,
+    wd14_batch_size: int = 1,
 ) -> List[Dict[str, Any]]:
     """Run simple WD14 tagging on a list of images."""
     from tagger import get_tagger
@@ -141,6 +142,23 @@ def run_simple(
     results = []
     total = len(image_paths)
 
+    # ── Batch path ──────────────────────────────────────────
+    if wd14_batch_size > 1 and hasattr(tagger, "tag_batch"):
+        batch_results = tagger.tag_batch(
+            image_paths,
+            preferred_batch_size=wd14_batch_size,
+            threshold=threshold,
+            character_threshold=character_threshold,
+            progress_callback=progress_callback,
+        )
+        for raw in batch_results:
+            out = _format_simple_result(raw, threshold=threshold,
+                                        character_threshold=character_threshold,
+                                        blacklist=blacklist_lower, max_tags=max_tags)
+            results.append(out)
+        return results
+
+    # ── Sequential fallback ─────────────────────────────────
     for idx, path in enumerate(image_paths):
         if progress_callback:
             progress_callback(idx + 1, total, f"Tagging {idx + 1}/{total}")
@@ -200,6 +218,8 @@ def run_smart(
     taggers: Optional[List[Dict[str, Any]]] = None,
     consensus_min: int = 2,
     progress_callback=None,
+    wd14_batch_size: int = 1,
+    vlm_workers: int = 1,
 ) -> List[Dict[str, Any]]:
     """Run Smart Tag pipeline."""
     from smart_tag import run_smart_tag_pipeline
@@ -219,6 +239,8 @@ def run_smart(
         taggers=taggers,
         consensus_min=consensus_min,
         progress_callback=progress_callback,
+        wd14_batch_size=wd14_batch_size,
+        vlm_workers=vlm_workers,
     )
 
     results: List[Dict[str, Any]] = []
@@ -354,6 +376,17 @@ def main():
         "--verbose", "-v", action="store_true",
         help="Verbose logging",
     )
+    # Parallelism
+    parser.add_argument(
+        "--wd14-batch", type=int, default=1,
+        help="Batch size for WD14 ONNX inference (default: 1 = sequential). "
+             "Higher values trade VRAM for speed (8 recommended for RTX) "
+    )
+    parser.add_argument(
+        "--vlm-workers", type=int, default=1,
+        help="Number of parallel VLM workers in smart mode (default: 1 = sequential). "
+             "Set > 1 to pipeline WD14 ahead of VLM (e.g., 2-4 recommended)"
+    )
     parser.add_argument(
         "--data-dir", default=None,
         help="Override models/data directory (default: tools/differential_tagger/data/). "
@@ -432,6 +465,8 @@ def main():
             taggers=tagger_configs,
             consensus_min=args.consensus,
             progress_callback=progress,
+            wd14_batch_size=args.wd14_batch,
+            vlm_workers=args.vlm_workers,
         )
     else:
         print(f"Simple mode: model={args.model}, threshold={args.threshold}")
@@ -444,6 +479,7 @@ def main():
             blacklist=args.blacklist if args.blacklist else None,
             max_tags=args.max_tags,
             progress_callback=progress,
+            wd14_batch_size=args.wd14_batch,
         )
 
     elapsed = time.time() - start_time
