@@ -592,7 +592,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         # to_tensor → [0,1]; same range the training path feeds the encoders.
         images01 = tvf.to_tensor(pil_img).unsqueeze(0)
 
-        ip_tokens, ip_tokens_ccip, ip_tokens_lsnet = self._encode_images_to_ip_tokens(
+        ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet = self._encode_images_to_ip_tokens(
             images01, device, weight_dtype
         )
         return ip_tokens, None, ip_tokens_ccip, ip_tokens_lsnet
