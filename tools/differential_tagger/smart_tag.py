@@ -908,7 +908,6 @@ def run_smart_tag_pipeline(
                 threshold=req.general_threshold,
                 character_threshold=req.character_threshold,
                 copyright_threshold=req.copyright_threshold,
-                progress_callback=progress_callback,
             )
 
         # ── VLM pipeline ─────────────────────────────────────
