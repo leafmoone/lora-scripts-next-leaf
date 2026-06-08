@@ -169,17 +169,22 @@ h1{font-size:20px;margin:0 0 4px}
       <div class="row" style="margin-top:10px">
         <div class="col" style="flex:3"><label>自定义 TOML 参数 <small>(一行一个 key=value，直接覆盖上述选项)</small></label><textarea id="customParams" rows="20" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--c-border);border-radius:6px;font-size:14px;background:var(--c-bg);color:var(--c-text);resize:vertical;font-family:"Microsoft YaHei","PingFang SC",monospace" spellcheck="false" placeholder="如: optimizer_args=[&quot;betas=0.9,0.999&quot;]">max_train_steps=0
 dataset_repeat=1
-vae_batch_size=1
+vae_batch_size=2
 full_bf16=true
-output_name="ipa"
+output_name="ipa_char"
 save_every_n_epochs=1
-full_bf16=true
+save_every_n_steps=1000
 shuffle_caption=false
+caption_dropout_rate=0.1
+caption_tag_dropout_rate=0.1
 cache_latents=false
-sample_every_n_steps=1000
+sample_every_n_steps=500
 sample_prompts="./sample_prompts.txt"
 torch_compile=false
-logging_dir="./log"</textarea></div>
+logging_dir="./logs"
+caption_extension=.txt
+save_last_n_steps=5000
+save_last_n_epochs=3</textarea></div>
       </div>
       <details style="margin-top:10px;font-size:11px;opacity:.7">
         <summary style="cursor:pointer;font-weight:600">📖 可用参数列表（Kohya Anima 训练参数）</summary>

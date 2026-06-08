@@ -1,1 +1,1 @@
-1girl, solo --n lowres, bad anatomy, bad hands, missing fingers, cropped, worst quality, low quality, jpeg artifacts --w 1024 --h 1024 --l 4.5 --s 40 --d 42
+1girl, masterpiece,sleeping,smile,bedroom,sunlight --n lowres, bad anatomy, bad hands, missing fingers, cropped, worst quality, low quality, jpeg artifacts --w 1024 --h 1024 --l 4.5 --s 40 --d 42
