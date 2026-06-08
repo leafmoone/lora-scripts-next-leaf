@@ -673,6 +673,10 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             proj_dev = next(self.image_proj.parameters()).device
             if proj_dev != device:
                 self.image_proj.to(device=device)
+        if self.image_proj_resampler is not None:
+            resamp_dev = next(self.image_proj_resampler.parameters()).device
+            if resamp_dev != device:
+                self.image_proj_resampler.to(device=device)
 
     def _stash_ip_tokens(self, ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet):
         """Stash IP tokens on every AnimaIPCrossAttention module before DiT forward.

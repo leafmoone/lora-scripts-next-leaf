@@ -134,7 +134,8 @@ class Attention(torch.nn.Module):
             (q.transpose(-2, -1) @ k) * self.scale
             +
             (self.attention_biases[:, self.attention_bias_idxs]
-             if self.training else self.ab)
+             if self.training else getattr(self, "ab", None) or
+             self.attention_biases[:, self.attention_bias_idxs])
         )
         attn = attn.softmax(dim=-1)
         x = (v @ attn.transpose(-2, -1)).reshape(B, -1, H, W)

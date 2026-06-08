@@ -267,7 +267,8 @@ class AnimaIPAdapter:
             if m is not None:
                 m.to(self.device)
         # Projections stay in fp32 for numerical parity with training.
-        for m in (self.clip_proj, self.ccip_proj, self.lsnet_proj, self.image_proj):
+        for m in (self.clip_proj, self.ccip_proj, self.lsnet_proj, self.image_proj,
+                  self.image_proj_resampler):
             if m is not None:
                 m.to(self.device).float()
 
