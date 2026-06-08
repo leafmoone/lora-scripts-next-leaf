@@ -209,9 +209,9 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         # Per-stream token counts (CLIP, then aux in order)
         _nt = args.num_ip_tokens
-        _nt_clip = getattr(args, "num_ip_tokens_clip", _nt)
-        _nt_ccip = getattr(args, "num_ip_tokens_ccip", _nt)
-        _nt_lsnet = getattr(args, "num_ip_tokens_lsnet", _nt)
+        _nt_clip = getattr(args, "num_ip_tokens_clip", None) or _nt
+        _nt_ccip = getattr(args, "num_ip_tokens_ccip", None) or _nt
+        _nt_lsnet = getattr(args, "num_ip_tokens_lsnet", None) or _nt
         _tokens = [_nt_clip]
         if "ccip" in self._aux_encoders:
             _tokens.append(_nt_ccip)
