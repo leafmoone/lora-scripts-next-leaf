@@ -152,6 +152,10 @@ async def run_tagger(request: Request):
         cmd.append("--save-captions")
     if trigger:
         cmd.extend(["--trigger", trigger])
+    if data.get("wd14_batch", 1) > 1:
+        cmd.extend(["--wd14-batch", str(max(1, int(data["wd14_batch"])))])
+    if data.get("vlm_workers", 1) > 1:
+        cmd.extend(["--vlm-workers", str(max(1, int(data["vlm_workers"])))])
 
     if mode == "smart":
         cmd.extend(["--purpose", purpose])

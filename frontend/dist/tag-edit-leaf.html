@@ -155,6 +155,18 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
           <div class="input-helper">留空则使用默认 ./models（不存在时自动下载）；填写路径则从该目录加载已有模型。</div>
         </div>
       </div>
+      <div class="row" style="margin-top:8px">
+        <div class="col">
+          <label>WD14 批量大小 <small>(1=逐张, 8=推荐)</small></label>
+          <input type="number" id="wd14Batch" value="1" min="1" max="32">
+          <div class="input-helper">多张图一批推理，更高吞吐（需足够显存）</div>
+        </div>
+        <div class="col">
+          <label>VLM 并行数 <small>(1=串行, 2-4=流水线)</small></label>
+          <input type="number" id="vlmWorkers" value="1" min="1" max="4">
+          <div class="input-helper">并行 ToriiGate VLM 实例数（需 ~10GB VRAM / 实例）</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -419,6 +431,8 @@ function collectConfig() {
     consensus: parseInt(document.getElementById('consensus').value)||2,
     blacklist: document.getElementById('blacklist').value.trim().split(/\s+/).filter(Boolean),
     data_dir: document.getElementById('dataDir').value.trim() || '',
+    wd14_batch: parseInt(document.getElementById('wd14Batch').value)||1,
+    vlm_workers: parseInt(document.getElementById('vlmWorkers').value)||1,
   };
   // API mode extra fields
   if (config.mode === 'api') {

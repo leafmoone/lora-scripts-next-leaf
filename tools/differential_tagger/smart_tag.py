@@ -899,31 +899,89 @@ def run_smart_tag_pipeline(
                 ))
     else:
         # Single-tagger or no-tagger mode
-        for idx, path in enumerate(image_paths):
-            if progress_callback:
-                progress_callback(idx + 1, total, f"Processing {idx + 1}/{total}")
-            try:
-                raw = _process_one_image(
-                    image_path=path,
-                    req=req,
-                    tagger=tagger,
-                    nl_tagger=nl_tagger,
-                )
-                results.append(SmartTagResult(
-                    image_path=path,
-                    caption=raw.get("caption", ""),
-                    general_tags=raw.get("general_tags", []),
-                    copyright_tags=raw.get("copyright_tags", []),
-                    character_tags=raw.get("character_tags", []),
-                    rating=raw.get("rating"),
-                    nl_text=raw.get("nl_text", ""),
-                    noise_stripped_count=raw.get("noise_stripped_count", 0),
-                ))
-            except Exception as exc:
-                logger.error("Smart tag failed on %s: %s", path, exc)
-                results.append(SmartTagResult(
-                    image_path=path,
-                    error=str(exc),
-                ))
+        # ── WD14 batch pass ──────────────────────────────────
+        wd14_outputs = None
+        if wd14_batch_size > 1 and tagger is not None and hasattr(tagger, "tag_batch"):
+            wd14_outputs = tagger.tag_batch(
+                image_paths,
+                preferred_batch_size=wd14_batch_size,
+                threshold=req.general_threshold,
+                character_threshold=req.character_threshold,
+                copyright_threshold=req.copyright_threshold,
+                progress_callback=progress_callback,
+            )
+
+        # ── VLM pipeline ─────────────────────────────────────
+        if vlm_workers > 1 and nl_tagger is not None and wd14_outputs is not None:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            wd14_map = {r.get("image_path", ""): r for r in wd14_outputs}
+
+            def _vlm_task(path):
+                try:
+                    pre = [wd14_map.get(path)] if wd14_map.get(path) else None
+                    raw = _process_one_image(
+                        image_path=path,
+                        req=req,
+                        tagger=tagger,
+                        nl_tagger=nl_tagger,
+                        precomputed_tagger_outputs=pre,
+                    )
+                    return SmartTagResult(
+                        image_path=path,
+                        caption=raw.get("caption", ""),
+                        general_tags=raw.get("general_tags", []),
+                        copyright_tags=raw.get("copyright_tags", []),
+                        character_tags=raw.get("character_tags", []),
+                        rating=raw.get("rating"),
+                        nl_text=raw.get("nl_text", ""),
+                        noise_stripped_count=raw.get("noise_stripped_count", 0),
+                    )
+                except Exception as exc:
+                    logger.error("Smart tag failed on %s: %s", path, exc)
+                    return SmartTagResult(image_path=path, error=str(exc))
+
+            with ThreadPoolExecutor(max_workers=vlm_workers) as pool:
+                futures = {pool.submit(_vlm_task, p): p for p in image_paths}
+                for future in as_completed(futures):
+                    results.append(future.result())
+                    if progress_callback:
+                        progress_callback(len(results), total, f"VLM {len(results)}/{total}")
+        else:
+            # Sequential fallback
+            _process_sequentially(image_paths, results, req, tagger, nl_tagger,
+                                   wd14_outputs, progress_callback, total)
 
     return results
+
+
+def _process_sequentially(image_paths, results, req, tagger, nl_tagger,
+                           wd14_outputs, progress_callback, total):
+    """Sequential fallback: loop one image at a time."""
+    wd14_map = {}
+    if wd14_outputs is not None:
+        wd14_map = {r.get("image_path", ""): r for r in wd14_outputs}
+    for idx, path in enumerate(image_paths):
+        if progress_callback:
+            progress_callback(idx + 1, total, f"Processing {idx + 1}/{total}")
+        try:
+            pre = [wd14_map[path]] if path in wd14_map else None
+            raw = _process_one_image(
+                image_path=path,
+                req=req,
+                tagger=tagger,
+                nl_tagger=nl_tagger,
+                precomputed_tagger_outputs=pre,
+            )
+            results.append(SmartTagResult(
+                image_path=path,
+                caption=raw.get("caption", ""),
+                general_tags=raw.get("general_tags", []),
+                copyright_tags=raw.get("copyright_tags", []),
+                character_tags=raw.get("character_tags", []),
+                rating=raw.get("rating"),
+                nl_text=raw.get("nl_text", ""),
+                noise_stripped_count=raw.get("noise_stripped_count", 0),
+            ))
+        except Exception as exc:
+            logger.error("Smart tag failed on %s: %s", path, exc)
+            results.append(SmartTagResult(image_path=path, error=str(exc)))
