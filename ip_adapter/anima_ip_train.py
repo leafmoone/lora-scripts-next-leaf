@@ -728,7 +728,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             # Reference images are normalized to [-1, 1]; all encoders expect
             # [0, 1] before their own normalization.
             images01 = images.float() * 0.5 + 0.5
-            ip_tokens, ip_tokens_ccip, ip_tokens_lsnet = self._encode_images_to_ip_tokens(
+            ip_tokens, ip_tokens_fine, ip_tokens_ccip, ip_tokens_lsnet = self._encode_images_to_ip_tokens(
                 images01, device, weight_dtype
             )
 
