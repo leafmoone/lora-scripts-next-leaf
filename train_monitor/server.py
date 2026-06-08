@@ -1181,6 +1181,7 @@ def preview_image_path(raw_path: str) -> Path | None:
         train_out = _training_output_dir()
         if train_out is not None:
             allowed_roots.append(train_out.resolve())
+            allowed_roots.append((train_out / "sample").resolve())
         if not any(candidate == root or root in candidate.parents for root in allowed_roots):
             return None
         if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_EXTENSIONS:
