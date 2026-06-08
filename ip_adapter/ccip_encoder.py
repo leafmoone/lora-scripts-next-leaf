@@ -225,11 +225,16 @@ class CaFormerBackbone(nn.Module):
         for i in range(4):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
-        # x: (B, 768, 12, 12) — pre-pool feature map
-        feat = x.mean(dim=(1, 2))  # global average pool → (B, 768)
+        # x may be NCHW (B,768,12,12) or NHWC (B,12,12,768) depending on stage format
+        is_nchw = x.shape[1] == 768 and x.dim() == 4
+        feat = x.mean(dim=(2, 3)) if is_nchw else x.reshape(x.shape[0], -1, x.shape[-1]).mean(dim=1)
         feat = self.norm(feat)
         if return_patches:
-            patches = x.flatten(2).transpose(1, 2).contiguous()  # (B, 144, 768)
+            if is_nchw:
+                patches = x.flatten(2).transpose(1, 2).contiguous()  # (B, 144, 768)
+            else:
+                B, H, W, C = x.shape
+                patches = x.reshape(B, H * W, C).contiguous()  # (B, 144, 768)
             return feat, patches
         return feat
 
