@@ -137,7 +137,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
     @staticmethod
     def _make_stream_projectors(num_streams: int, mode: str, num_queries: int | list[int]) -> MultiStreamProj:
-        from .anima_ip_image_proj import Resampler
+        from ip_adapter.anima_ip_image_proj import Resampler
         if isinstance(num_queries, int):
             num_queries = [num_queries] * num_streams
         if mode == "resampler":
