@@ -23,6 +23,7 @@ git
 wd14_tagger_model
 
 train/*
+log/*
 logs/*
 !logs/.keep
 logs/anima_fast/*
