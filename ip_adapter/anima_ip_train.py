@@ -136,17 +136,19 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         self._identity_index: dict[int, dict[str, list[str]]] = {}
 
     @staticmethod
-    def _make_stream_projectors(num_streams: int, mode: str, num_queries: int) -> MultiStreamProj:
+    def _make_stream_projectors(num_streams: int, mode: str, num_queries: int | list[int]) -> MultiStreamProj:
         from .anima_ip_image_proj import Resampler
+        if isinstance(num_queries, int):
+            num_queries = [num_queries] * num_streams
         if mode == "resampler":
             return MultiStreamProj.from_modules([
                 Resampler(dim=1024, depth=4, dim_head=64, heads=16,
-                          num_queries=num_queries, output_dim=1024)
-                for _ in range(num_streams)
+                          num_queries=nq, output_dim=1024)
+                for nq in num_queries
             ])
         return MultiStreamProj(
             num_streams=num_streams, cross_attention_dim=1024,
-            embed_dim=1024, tokens_per_stream=[num_queries] * num_streams,
+            embed_dim=1024, tokens_per_stream=num_queries,
         )
 
     # ── model loading ──────────────────────────────────────────
@@ -204,28 +206,39 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         self.ip_adapters = AnimaIPAConverter.create(dit)
         num_streams = 1 + len(self._aux_encoders)
         self._ipa_mode = getattr(args, "ipa_mode", "simple")
+
+        # Per-stream token counts (CLIP, then aux in order)
         _nt = args.num_ip_tokens
+        _nt_clip = getattr(args, "num_ip_tokens_clip", _nt)
+        _nt_ccip = getattr(args, "num_ip_tokens_ccip", _nt)
+        _nt_lsnet = getattr(args, "num_ip_tokens_lsnet", _nt)
+        _tokens = [_nt_clip]
+        if "ccip" in self._aux_encoders:
+            _tokens.append(_nt_ccip)
+        if "lsnet" in self._aux_encoders:
+            _tokens.append(_nt_lsnet)
 
         if self._ipa_mode == "simple":
             if num_streams > 1:
                 self.image_proj = MultiStreamProj(
                     num_streams=num_streams,
                     cross_attention_dim=1024, embed_dim=1024,
-                    tokens_per_stream=[_nt] * num_streams,
+                    tokens_per_stream=_tokens,
                 )
             else:
                 self.image_proj = ImageProjModel(
                     cross_attention_dim=1024, clip_embeddings_dim=1024,
-                    clip_extra_context_tokens=_nt,
+                    clip_extra_context_tokens=_nt_clip,
                 )
 
         elif self._ipa_mode == "resampler":
-            self.image_proj = self._make_stream_projectors(num_streams, "resampler", _nt)
+            self.image_proj = self._make_stream_projectors(num_streams, "resampler", _tokens)
 
         elif self._ipa_mode == "double":
-            self.image_proj = self._make_stream_projectors(num_streams, "simple", _nt)
+            self.image_proj = self._make_stream_projectors(num_streams, "simple", _tokens)
+            _tokens_double = [max(n, 8) for n in _tokens]
             self.image_proj_resampler = self._make_stream_projectors(
-                num_streams, "resampler", max(_nt, 8)
+                num_streams, "resampler", _tokens_double
             )
 
         else:
@@ -777,7 +790,25 @@ def setup_parser() -> argparse.ArgumentParser:
         "--num_ip_tokens",
         type=int,
         default=4,
-        help="Number of IP tokens per encoder stream (shared across CLIP and aux)",
+        help="Number of IP tokens per encoder stream (shared default)",
+    )
+    parser.add_argument(
+        "--num_ip_tokens_clip",
+        type=int,
+        default=None,
+        help="IP tokens for CLIP stream (defaults to num_ip_tokens)",
+    )
+    parser.add_argument(
+        "--num_ip_tokens_ccip",
+        type=int,
+        default=None,
+        help="IP tokens for CCIP stream (defaults to num_ip_tokens)",
+    )
+    parser.add_argument(
+        "--num_ip_tokens_lsnet",
+        type=int,
+        default=None,
+        help="IP tokens for LSNet stream (defaults to num_ip_tokens)",
     )
     parser.add_argument(
         "--ip_scale",
