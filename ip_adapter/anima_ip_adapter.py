@@ -454,7 +454,11 @@ class AnimaIPAdapter:
         ip = _scaled("clip", scale)
         ccip = _scaled("ccip", scale)
         lsnet = _scaled("lsnet", scale)
-        ip_fine = _scaled("clip_fine", scale) if self.image_proj_resampler is not None else None
+        ip_fine = tokens.get("clip_fine")
+        if ip_fine is not None:
+            s = clip_scale if clip_scale is not None else scale
+            if s != 1.0:
+                ip_fine = ip_fine * s
         self._stash(ip, ccip, lsnet, ip_fine)
 
     def _stash(self, ip, ccip, lsnet, ip_fine=None):
