@@ -163,9 +163,19 @@ class AnimaIPAdapter:
         aux_encoders = tuple(a for a in aux_str.split(",") if a in ("ccip", "lsnet"))
         num_streams = 1 + len(aux_encoders)
         num_ip_tokens = int(metadata.get("ipa_num_ip_tokens", "4"))
+        nt_clip = int(metadata.get("ipa_num_ip_tokens_clip", str(num_ip_tokens)))
+        nt_ccip = int(metadata.get("ipa_num_ip_tokens_ccip", str(num_ip_tokens)))
+        nt_lsnet = int(metadata.get("ipa_num_ip_tokens_lsnet", str(num_ip_tokens)))
         cad = int(metadata.get("ipa_cross_attention_dim", "1024"))
         ipa_mode = metadata.get("ipa_mode", "simple")
         need_patches = ipa_mode != "simple"
+
+        # Per-stream token list: [CLIP, CCIP?, LSNet?]
+        tokens_per_stream = [nt_clip]
+        if "ccip" in aux_encoders:
+            tokens_per_stream.append(nt_ccip)
+        if "lsnet" in aux_encoders:
+            tokens_per_stream.append(nt_lsnet)
 
         # CLIP (always present)
         clip_image_encoder = cls._load_clip(clip_model, device, dtype)
@@ -192,13 +202,13 @@ class AnimaIPAdapter:
                 num_streams=num_streams,
                 cross_attention_dim=cad,
                 embed_dim=cad,
-                tokens_per_stream=[num_ip_tokens] * num_streams,
+                tokens_per_stream=tokens_per_stream,
             )
         else:
             image_proj = ImageProjModel(
                 cross_attention_dim=cad,
                 clip_embeddings_dim=cad,
-                clip_extra_context_tokens=num_ip_tokens,
+                clip_extra_context_tokens=tokens_per_stream[0],
             )
 
         image_proj_resampler = None
