@@ -287,32 +287,62 @@ class AnimaIPAdapter:
         clip_image: Optional[ImageLike] = None,
         ccip_image: Optional[ImageLike] = None,
         lsnet_image: Optional[ImageLike] = None,
+        *,
+        clip_images: Optional[list[ImageLike]] = None,
+        ccip_images: Optional[list[ImageLike]] = None,
+        lsnet_images: Optional[list[ImageLike]] = None,
     ) -> Dict[str, Optional[torch.Tensor]]:
         """Encode per-stream reference images into IP tokens.
 
-        Any stream left as ``None`` is skipped (its tokens become ``None``).
+        Each stream accepts a single image or a list.  When a list is given,
+        each image is encoded independently and the resulting **1024-dim
+        projected features are averaged** before projection to IP tokens.
+        This fuses multiple viewpoints into one set of IP tokens.
+
+        Any stream left as ``None`` is skipped.
         Returns ``{"clip": tokens, "ccip": tokens|None, "lsnet": tokens|None}``.
         """
+
+        def _resolve(single, multi) -> list[torch.Tensor]:
+            sources: list[ImageLike] = []
+            if single is not None:
+                sources.append(single)
+            if multi:
+                sources.extend(multi)
+            return [_to_image01(s).to(self.device, self.dtype) for s in sources]
+
         clip_embeds = ccip_embeds = lsnet_embeds = None
 
-        if clip_image is not None:
-            x = _to_image01(clip_image).to(self.device, self.dtype)
-            x = interpolate(x, size=(224, 224), mode="bilinear", align_corners=False)
-            x = _clip_normalize(x)
-            feat = self.clip_image_encoder(x).image_embeds.float()
-            clip_embeds = self.clip_proj(feat)
+        # ── CLIP ─────────────────────────────────────────────
+        clip_sources = _resolve(clip_image, clip_images)
+        if clip_sources:
+            feats = []
+            for x in clip_sources:
+                x = interpolate(x, size=(224, 224), mode="bilinear", align_corners=False)
+                x = _clip_normalize(x)
+                f = self.clip_image_encoder(x).image_embeds.float()
+                feats.append(self.clip_proj(f))
+            clip_embeds = torch.stack(feats).mean(dim=0)  # (1, 1024)
 
-        if ccip_image is not None and self.ccip_encoder is not None:
-            x = _to_image01(ccip_image).to(self.device, self.dtype)
-            x = interpolate(x, size=(384, 384), mode="bilinear", align_corners=False)
-            feat = self.ccip_encoder(x).float()
-            ccip_embeds = self.ccip_proj(feat)
+        # ── CCIP ─────────────────────────────────────────────
+        ccip_sources = _resolve(ccip_image, ccip_images)
+        if ccip_sources and self.ccip_encoder is not None:
+            feats = []
+            for x in ccip_sources:
+                x = interpolate(x, size=(384, 384), mode="bilinear", align_corners=False)
+                f = self.ccip_encoder(x).float()
+                feats.append(self.ccip_proj(f))
+            ccip_embeds = torch.stack(feats).mean(dim=0)
 
-        if lsnet_image is not None and self.lsnet_encoder is not None:
-            x = _to_image01(lsnet_image).to(self.device, self.dtype)
-            x = interpolate(x, size=(448, 448), mode="bilinear", align_corners=False)
-            feat = self.lsnet_encoder(x).float()
-            lsnet_embeds = self.lsnet_proj(feat)
+        # ── LSNet ────────────────────────────────────────────
+        lsnet_sources = _resolve(lsnet_image, lsnet_images)
+        if lsnet_sources and self.lsnet_encoder is not None:
+            feats = []
+            for x in lsnet_sources:
+                x = interpolate(x, size=(448, 448), mode="bilinear", align_corners=False)
+                f = self.lsnet_encoder(x).float()
+                feats.append(self.lsnet_proj(f))
+            lsnet_embeds = torch.stack(feats).mean(dim=0)
 
         tokens = {"clip": None, "ccip": None, "lsnet": None}
         if isinstance(self.image_proj, MultiStreamProj):
