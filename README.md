@@ -38,6 +38,56 @@
 
 ---
 
+## What's New in This Fork
+
+This fork adds **multi-encoder IP-Adapter training**, a **resampler pipeline**, **Differential LoRA**, a **DiffSynth smart tagger**, and a **parallel tagger backend** on top of the upstream v2.7.0 codebase. All features are accessible from the WebUI homepage or via direct URLs.
+
+### 🖼️ Anima IP-Adapter (Multi-Encoder)
+
+Train an IP-Adapter that injects image conditions into Anima DiT cross-attention. Supports **CLIP** (content) + **CCIP** (character identity) + **LSNet** (artist style) as parallel encoder streams with per-stream token control.
+
+- **Page**: Homepage card → IP-Adapter, or `/lora/anima-ipa.html`
+- **CLI**: `accelerate launch ip_adapter/anima_ip_train.py --aux_encoders clip_ccip_lsnet ...`
+- **Design doc**: [`cursor_docs/ipa-lsnet-design.md`](cursor_docs/ipa-lsnet-design.md)
+
+### 🎯 Three Projection Modes
+
+| Mode | Mechanism | Best for |
+|------|-----------|----------|
+| **Simple** | Global embedding → `ImageProjModel` | Fast, lightweight, general-purpose |
+| **Resampler** | Patch features → Perceiver Resampler | Fine detail (face texture, clothing patterns) |
+| **Double** | Simple + Resampler in parallel | Maximum quality |
+
+Each encoder stream gets its **own token count** (e.g. `--num_ip_tokens_clip=8 --num_ip_tokens_ccip=4`).
+
+### 🖌️ Differential LoRA Training
+
+Character-splitting LoRA that trains a "difference" between two character folders. Two-stage Kohya training:
+
+- **Page**: Homepage card → Differential LoRA, or `/lora/differential-lora.html`
+- **Tools**: `tools/merge_lora_to_base.py`, `tools/average_lora.py`, `tools/convert_differential_to_comfyui.py`
+
+### 🏷️ DiffSynth Smart Tagger (Tag-Edit-Leaf)
+
+Two-mode AI image tagger with WD14 booru tags (*simple*) and ToriiGate VLM natural-language captions (*smart*). Supports multi-tagger consensus voting and blacklist filtering.
+
+- **Page**: Homepage card → DiffSynth Tagger, or `/tag-edit-leaf.html`
+- **API**: `POST /api/tag-edit-leaf/scan`, `POST /api/tag-edit-leaf/run`
+- **Parallelism**: Set `--wd14-batch 8 --vlm-workers 2` for WD14 batched inference + VLM pipeline
+- **Design doc**: [`cursor_docs/ipa-lsnet-review.md`](cursor_docs/ipa-lsnet-review.md)
+
+### 🔗 Multi-Stream vs Auxiliary Encoders
+
+| Encoder | Purpose | Model | When to enable |
+|---------|---------|-------|----------------|
+| **CLIP** | Visual content (pose, composition, objects) | ViT-L/14 | Always (required) |
+| **CCIP** | Character identity (who) | CaFormer 96M | Character training |
+| **LSNet** | Artist style (how it looks) | LSNet-XL 102M | Style-transfer training |
+
+CCIP and LSNet are complementary—they provide orthogonal signals that the IP-Adapter learns to fuse alongside CLIP.
+
+---
+
 ## Get Started in 3 Steps
 
 ```
