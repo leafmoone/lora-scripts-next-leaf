@@ -300,11 +300,6 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             return (params_list, lr_descs) if lr_descs is not None else params_list
 
         def _patched_save(self_network, file, dtype, metadata, *a, **kw):
-            # IP-Adapter trains no LoRA modules, so the network state dict is
-            # empty. Skip writing that empty placeholder checkpoint and only
-            # persist the real IP-Adapter sidecar. (save_model only calls
-            # save_weights + optional HF upload, and remove_model checks
-            # existence, so skipping the file is safe.)
             if len(self_network.state_dict()) == 0:
                 _trainer_ref._save_ip_adapter_weights(file, dtype)
                 return None
@@ -312,13 +307,33 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             _trainer_ref._save_ip_adapter_weights(file, dtype)
             return result
 
+        # ── Clean up stale sidecar when Kohya removes old checkpoints ──
+        _orig_remove = os.remove
+        import functools
+
+        @functools.wraps(_orig_remove)
+        def _patched_remove(path, **kw):
+            result = _orig_remove(path, **kw)
+            sidecar = os.path.splitext(path)[0] + ".ipadapter.safetensors"
+            if os.path.isfile(sidecar):
+                try:
+                    _orig_remove(sidecar)
+                    logger.info(f"Removed stale IP-Adapter sidecar: {sidecar}")
+                except OSError:
+                    pass
+            return result
+
+        os.remove = _patched_remove
+
         cls.prepare_optimizer_params = _patched_prepare
         cls.save_weights = _patched_save
+        os.remove = _patched_remove
         try:
             super().train(args)
         finally:
             cls.prepare_optimizer_params = _orig_prepare
             cls.save_weights = _orig_save
+            os.remove = _orig_remove
             _BaseDataset.__getitem__ = _orig_getitem
 
     def _ensure_identity_index(self, dataset):
