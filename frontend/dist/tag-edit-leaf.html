@@ -281,6 +281,15 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
 <script>
 // ===== 参数保存/加载 =====
 const STORAGE_KEY = 'mikazuki_tagger_v2';
+const state = {
+  recursive: false,
+  useGPU: true,
+  useVLM: true,
+  saveCaptions: true,
+  consensusModels: [],
+  currentScan: null,
+  pollingId: null,
+};
 function saveParams() {
   const els = document.querySelectorAll('input[id], select[id], textarea[id]');
   var data = {};
@@ -312,12 +321,6 @@ function saveParams() {
     if (sw) sw.classList.toggle('on', state[k]);
   });
 })();
-
-// State
-const state = {
-  recursive: false, saveCaptions: true, useGPU: true,
-  useVLM: true, consensusModels: [], pollingId: null,
-};
 
 // Consensus model selector
 function renderConsensusModels() {
