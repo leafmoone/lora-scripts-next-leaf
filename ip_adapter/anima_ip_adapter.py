@@ -313,42 +313,61 @@ class AnimaIPAdapter:
             return [_to_image01(s).to(self.device, self.dtype) for s in sources]
 
         clip_embeds = ccip_embeds = lsnet_embeds = None
+        clip_patches = ccip_patches = lsnet_patches = None
+        need_patches = self.ipa_mode != "simple"
 
         # ── CLIP ─────────────────────────────────────────────
         clip_sources = _resolve(clip_image, clip_images)
         if clip_sources:
-            feats = []
+            feats, patch_feats = [], []
             for x in clip_sources:
                 x = interpolate(x, size=(224, 224), mode="bilinear", align_corners=False)
                 x = _clip_normalize(x)
-                f = self.clip_image_encoder(x).image_embeds.float()
-                feats.append(self.clip_proj(f))
-            clip_embeds = torch.stack(feats).mean(dim=0)  # (1, 1024)
+                out = self.clip_image_encoder(x, output_hidden_states=need_patches)
+                feats.append(self.clip_proj(out.image_embeds.float()))
+                if need_patches:
+                    patch_feats.append(out.hidden_states[-1][:, 1:, :].float())  # (1, 256, 1024)
+            clip_embeds = torch.stack(feats).mean(dim=0)
+            if need_patches:
+                clip_patches = torch.cat(patch_feats).mean(dim=0, keepdim=True)
 
         # ── CCIP ─────────────────────────────────────────────
         ccip_sources = _resolve(ccip_image, ccip_images)
         if ccip_sources and self.ccip_encoder is not None:
-            feats = []
+            feats, patch_feats = [], []
             for x in ccip_sources:
                 x = interpolate(x, size=(384, 384), mode="bilinear", align_corners=False)
-                f = self.ccip_encoder(x).float()
-                feats.append(self.ccip_proj(f))
+                result = self.ccip_encoder(x, return_patches=need_patches)
+                if need_patches:
+                    f, p = result
+                    patch_feats.append(p.float())  # (1, 144, 768)
+                else:
+                    f = result
+                feats.append(self.ccip_proj(f.float()))
             ccip_embeds = torch.stack(feats).mean(dim=0)
+            if need_patches:
+                ccip_patches = torch.cat(patch_feats).mean(dim=0, keepdim=True)
 
         # ── LSNet ────────────────────────────────────────────
         lsnet_sources = _resolve(lsnet_image, lsnet_images)
         if lsnet_sources and self.lsnet_encoder is not None:
-            feats = []
+            feats, patch_feats = [], []
             for x in lsnet_sources:
                 x = interpolate(x, size=(448, 448), mode="bilinear", align_corners=False)
-                f = self.lsnet_encoder(x).float()
-                feats.append(self.lsnet_proj(f))
+                result = self.lsnet_encoder(x, return_patches=need_patches)
+                if need_patches:
+                    f, p = result
+                    patch_feats.append(p.float())  # (1, 196, 768)
+                else:
+                    f = result
+                feats.append(self.lsnet_proj(f.float()))
             lsnet_embeds = torch.stack(feats).mean(dim=0)
+            if need_patches:
+                lsnet_patches = torch.cat(patch_feats).mean(dim=0, keepdim=True)
 
-        tokens = {"clip": None, "ccip": None, "lsnet": None}
+        tokens = {"clip": None, "ccip": None, "lsnet": None, "clip_fine": None}
         if isinstance(self.image_proj, MultiStreamProj):
             # MultiStreamProj projects positionally: index 0 = clip, then aux order.
-            # We project each present stream with its own proj index.
             stream_order = ["clip", *self.aux_encoders]
             embeds_by_name = {"clip": clip_embeds, "ccip": ccip_embeds, "lsnet": lsnet_embeds}
             for i, name in enumerate(stream_order):
@@ -358,6 +377,19 @@ class AnimaIPAdapter:
         else:
             if clip_embeds is not None:
                 tokens["clip"] = self.image_proj(clip_embeds).to(self.dtype)
+
+        # ── Fine IP tokens (resampler / double mode) ─────────
+        if self.image_proj_resampler is not None:
+            # Encode patch features per stream, project to 1024, then resample
+            patch_feats = {"clip": clip_patches, "ccip": ccip_patches, "lsnet": lsnet_patches}
+            stream_order = ["clip", *self.aux_encoders]
+            for i, name in enumerate(stream_order):
+                p = patch_feats.get(name)
+                if p is not None and p.numel() > 0:
+                    B, L, D = p.shape
+                    p_proj = {"clip": self.clip_proj, "ccip": self.ccip_proj,
+                              "lsnet": self.lsnet_proj}[name](p.reshape(-1, D)).reshape(B, L, -1)
+                    tokens[f"{name}_fine"] = self.image_proj_resampler.projs[i](p_proj).to(self.dtype)
 
         return tokens
 
@@ -403,13 +435,14 @@ class AnimaIPAdapter:
         ip = _scaled("clip", scale)
         ccip = _scaled("ccip", scale)
         lsnet = _scaled("lsnet", scale)
-        self._stash(ip, ccip, lsnet)
+        ip_fine = _scaled("clip_fine", scale) if self.image_proj_resampler is not None else None
+        self._stash(ip, ccip, lsnet, ip_fine)
 
-    def _stash(self, ip, ccip, lsnet):
+    def _stash(self, ip, ccip, lsnet, ip_fine=None):
         for attn in self.ip_adapters.values():
             attn.ip_scale = 1.0  # per-stream scale already baked into the tokens
             attn._ip_tokens = ip
-            attn._ip_tokens_fine = None
+            attn._ip_tokens_fine = ip_fine
             attn._ip_tokens_ccip = ccip
             attn._ip_tokens_lsnet = lsnet
 
