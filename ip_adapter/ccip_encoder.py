@@ -220,14 +220,18 @@ class CaFormerBackbone(nn.Module):
 
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, return_patches: bool = False):
         # x: (B, 3, H, W) channels-first input
         for i in range(4):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
-        x = x.mean(dim=(1, 2))  # global average pool over H, W -> (B, C)
-        x = self.norm(x)
-        return x
+        # x: (B, 768, 12, 12) — pre-pool feature map
+        feat = x.mean(dim=(1, 2))  # global average pool → (B, 768)
+        feat = self.norm(feat)
+        if return_patches:
+            patches = x.flatten(2).transpose(1, 2).contiguous()  # (B, 144, 768)
+            return feat, patches
+        return feat
 
 
 class CCIPIdentityEncoder(nn.Module):
@@ -272,12 +276,19 @@ class CCIPIdentityEncoder(nn.Module):
                            device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
         return (x - mean) / std
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """(B, 3, 384, 384) in [0,1] → (B, 768) raw identity feature."""
+    def forward(self, x: torch.Tensor, return_patches: bool = False):
+        """(B, 3, 384, 384) in [0,1] → (B, 768) raw identity feature.
+
+        If ``return_patches=True``, also returns pre-pool spatial features
+        (B, 144, 768) for Resampler projection.
+        """
         x = self.normalize(x)
         with torch.no_grad():
-            feat = self.backbone(x)
-        return feat
+            result = self.backbone(x, return_patches=return_patches)
+        if return_patches:
+            feat, patches = result
+            return feat, patches
+        return result
 
 
 def load_ccip_encoder(ckpt_path: str = DEFAULT_CKPT, device: str = "cpu",

@@ -43,23 +43,29 @@ class ImageProjModel(nn.Module):
 
 
 class PerceiverAttention(nn.Module):
-    """Cross-attention: latent queries attend to key-value pairs."""
+    """Cross-attention: learnable latents (queries) attend to patch features (key/value).
+
+    Standard Perceiver Resampler pattern:
+      q = to_q(latents)    ← learnable queries read from image patches
+      kv = to_kv(patches)  ← patch features provide key/value
+    """
 
     def __init__(self, dim: int, dim_head: int = 64, heads: int = 8):
         super().__init__()
         self.heads = heads
         self.scale = dim_head ** -0.5
         inner_dim = dim_head * heads
-        self.norm = nn.LayerNorm(dim)
+        self.norm_latents = nn.LayerNorm(dim)
+        self.norm_patches = nn.LayerNorm(dim)
         self.to_q = nn.Linear(dim, inner_dim, bias=False)
         self.to_kv = nn.Linear(dim, inner_dim * 2, bias=False)
         self.to_out = nn.Linear(inner_dim, dim, bias=False)
 
-    def forward(self, x: torch.Tensor, latents: torch.Tensor) -> torch.Tensor:
-        x = self.norm(x)
-        latents = self.norm(latents)
-        q = self.to_q(x)
-        kv = self.to_kv(latents)
+    def forward(self, latents: torch.Tensor, patches: torch.Tensor) -> torch.Tensor:
+        latents = self.norm_latents(latents)
+        patches = self.norm_patches(patches)
+        q = self.to_q(latents)                     # (B, N_q, inner_dim)
+        kv = self.to_kv(patches)                   # (B, N_p, inner_dim * 2)
         k, v = kv.chunk(2, dim=-1)
         q = q.reshape(q.shape[0], q.shape[1], self.heads, -1).transpose(1, 2)
         k = k.reshape(k.shape[0], k.shape[1], self.heads, -1).transpose(1, 2)
@@ -67,7 +73,7 @@ class PerceiverAttention(nn.Module):
         attn = (q * self.scale) @ k.transpose(-2, -1)
         attn = attn.softmax(dim=-1)
         out = attn @ v
-        out = out.transpose(1, 2).reshape(x.shape[0], x.shape[1], -1)
+        out = out.transpose(1, 2).reshape(latents.shape[0], latents.shape[1], -1)
         return self.to_out(out)
 
 
@@ -156,11 +162,21 @@ class MultiStreamProj(nn.Module):
             for i in range(num_streams)
         ])
 
+    @classmethod
+    def from_modules(cls, modules: list[nn.Module]) -> "MultiStreamProj":
+        """Construct from a list of pre-built modules (e.g. Resamplers)."""
+        inst = cls.__new__(cls)
+        nn.Module.__init__(inst)
+        inst.num_streams = len(modules)
+        inst.projs = nn.ModuleList(modules)
+        return inst
+
     def forward(self, embeddings: list[torch.Tensor]) -> list[torch.Tensor]:
         """Project each encoder's embedding to IP tokens.
 
         Args:
-            embeddings: list of (B, 1024) tensors, one per enabled stream.
+            embeddings: list of either (B, 1024) global embeds or
+                       (B, L, 1024) patch features, one per enabled stream.
 
         Returns:
             list of (B, N_i, 1024) IP token tensors, one per stream.

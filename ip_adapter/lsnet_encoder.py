@@ -93,13 +93,14 @@ class LSNetStyleEncoder(nn.Module):
             )
         self.backbone.load_state_dict({k: state_dict[k] for k in our_state}, strict=True)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, return_patches: bool = False):
         """
         Args:
             x: (B, 3, 448, 448) float images in [0, 1]
 
         Returns:
-            (B, 768) raw artist-style backbone feature
+            (B, 768) raw artist-style backbone feature, or (feat, patches) if
+            return_patches=True (patches: B, 196, 768).
         """
         mean = torch.tensor([0.485, 0.456, 0.406], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
         std = torch.tensor([0.229, 0.224, 0.225], device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
@@ -110,9 +111,12 @@ class LSNetStyleEncoder(nn.Module):
             x = self.backbone.blocks1(x)
             x = self.backbone.blocks2(x)
             x = self.backbone.blocks3(x)
-            x = self.backbone.blocks4(x)
-            x = F.adaptive_avg_pool2d(x, 1).flatten(1)
-        return x
+            x = self.backbone.blocks4(x)                    # (B, 768, 14, 14)
+            feat = F.adaptive_avg_pool2d(x, 1).flatten(1)  # (B, 768)
+        if return_patches:
+            patches = x.flatten(2).transpose(1, 2).contiguous()  # (B, 196, 768)
+            return feat, patches
+        return feat
 
 
 def load_lsnet_encoder(

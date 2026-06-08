@@ -108,6 +108,8 @@ class AnimaIPAdapter:
         ccip_proj: Optional[nn.Module] = None,
         lsnet_encoder: Optional[nn.Module] = None,
         lsnet_proj: Optional[nn.Module] = None,
+        image_proj_resampler: Optional[MultiStreamProj] = None,
+        ipa_mode: str = "simple",
         device: Union[str, torch.device] = "cuda",
         dtype: torch.dtype = torch.bfloat16,
     ):
@@ -124,6 +126,8 @@ class AnimaIPAdapter:
         self.lsnet_encoder = lsnet_encoder
         self.lsnet_proj = lsnet_proj
         self.image_proj = image_proj
+        self.image_proj_resampler = image_proj_resampler
+        self.ipa_mode = ipa_mode
 
         # Inject concat-fusion cross-attention into every DiT Block.
         self.ip_adapters: Dict[str, AnimaIPCrossAttention] = AnimaIPAConverter.create(dit)
@@ -160,6 +164,8 @@ class AnimaIPAdapter:
         num_streams = 1 + len(aux_encoders)
         num_ip_tokens = int(metadata.get("ipa_num_ip_tokens", "4"))
         cad = int(metadata.get("ipa_cross_attention_dim", "1024"))
+        ipa_mode = metadata.get("ipa_mode", "simple")
+        need_patches = ipa_mode != "simple"
 
         # CLIP (always present)
         clip_image_encoder = cls._load_clip(clip_model, device, dtype)
@@ -195,12 +201,28 @@ class AnimaIPAdapter:
                 clip_extra_context_tokens=num_ip_tokens,
             )
 
+        image_proj_resampler = None
+        if ipa_mode in ("resampler", "double"):
+            nq = int(metadata.get("ipa_num_queries", str(num_ip_tokens)))
+            from .anima_ip_image_proj import Resampler
+            modules = [
+                Resampler(dim=1024, depth=4, dim_head=64, heads=16,
+                          num_queries=nq, output_dim=1024)
+                for _ in range(num_streams)
+            ]
+            if ipa_mode == "resampler":
+                image_proj = MultiStreamProj.from_modules(modules)
+            else:
+                # double mode: keep image_proj as global, resampler for fine
+                image_proj_resampler = MultiStreamProj.from_modules(modules)
+
         # Load trained weights into each module by prefix.
         for prefix, mod in (
             ("clip_proj", clip_proj),
             ("ccip_proj", ccip_proj),
             ("lsnet_proj", lsnet_proj),
             ("image_proj", image_proj),
+            ("image_proj_resampler", image_proj_resampler),
         ):
             if mod is None:
                 continue
@@ -217,9 +239,11 @@ class AnimaIPAdapter:
             dit,
             aux_encoders=aux_encoders,
             num_ip_tokens=num_ip_tokens,
+            ipa_mode=ipa_mode,
             clip_image_encoder=clip_image_encoder,
             clip_proj=clip_proj,
             image_proj=image_proj,
+            image_proj_resampler=image_proj_resampler,
             ccip_encoder=ccip_encoder,
             ccip_proj=ccip_proj,
             lsnet_encoder=lsnet_encoder,

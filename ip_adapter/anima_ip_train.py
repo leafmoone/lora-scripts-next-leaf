@@ -129,9 +129,25 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         self.ccip_encoder: Optional[nn.Module] = None
         self.lsnet_encoder: Optional[nn.Module] = None
         self.image_proj: Optional[ImageProjModel | MultiStreamProj] = None
+        self.image_proj_resampler: Optional[MultiStreamProj] = None  # double-mode resampler
+        self._ipa_mode: str = "simple"
         self.ip_adapters: dict[str, Any] = {}
         self._aux_encoders: tuple[str, ...] = ()
-        self._identity_index: dict[int, dict[str, list[str]]] = {}  # id(dataset) -> {identity: [paths]}
+        self._identity_index: dict[int, dict[str, list[str]]] = {}
+
+    @staticmethod
+    def _make_stream_projectors(num_streams: int, mode: str, num_queries: int) -> MultiStreamProj:
+        from .anima_ip_image_proj import Resampler
+        if mode == "resampler":
+            return MultiStreamProj.from_modules([
+                Resampler(dim=1024, depth=4, dim_head=64, heads=16,
+                          num_queries=num_queries, output_dim=1024)
+                for _ in range(num_streams)
+            ])
+        return MultiStreamProj(
+            num_streams=num_streams, cross_attention_dim=1024,
+            embed_dim=1024, tokens_per_stream=[num_queries] * num_streams,
+        )
 
     # ── model loading ──────────────────────────────────────────
 
@@ -187,20 +203,33 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         # Inject IP-Adapter layers
         self.ip_adapters = AnimaIPAConverter.create(dit)
         num_streams = 1 + len(self._aux_encoders)
+        self._ipa_mode = getattr(args, "ipa_mode", "simple")
+        _nt = args.num_ip_tokens
 
-        if num_streams > 1:
-            self.image_proj = MultiStreamProj(
-                num_streams=num_streams,
-                cross_attention_dim=1024,
-                embed_dim=1024,
-                tokens_per_stream=[args.num_ip_tokens] * num_streams,
+        if self._ipa_mode == "simple":
+            if num_streams > 1:
+                self.image_proj = MultiStreamProj(
+                    num_streams=num_streams,
+                    cross_attention_dim=1024, embed_dim=1024,
+                    tokens_per_stream=[_nt] * num_streams,
+                )
+            else:
+                self.image_proj = ImageProjModel(
+                    cross_attention_dim=1024, clip_embeddings_dim=1024,
+                    clip_extra_context_tokens=_nt,
+                )
+
+        elif self._ipa_mode == "resampler":
+            self.image_proj = self._make_stream_projectors(num_streams, "resampler", _nt)
+
+        elif self._ipa_mode == "double":
+            self.image_proj = self._make_stream_projectors(num_streams, "simple", _nt)
+            self.image_proj_resampler = self._make_stream_projectors(
+                num_streams, "resampler", max(_nt, 8)
             )
+
         else:
-            self.image_proj = ImageProjModel(
-                cross_attention_dim=1024,
-                clip_embeddings_dim=1024,
-                clip_extra_context_tokens=args.num_ip_tokens,
-            )
+            raise ValueError(f"Unknown ipa_mode: {self._ipa_mode}")
 
         return dit, text_encoders
 
@@ -351,13 +380,14 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         return torch.stack(tensors, dim=0)
 
     def _ip_adapter_state_dict(self):
-        """Collect trainable IP-Adapter weights (per-stream projections + image_proj)."""
+        """Collect trainable IP-Adapter weights (projections + image_projs)."""
         sd = {}
         for prefix, mod in (
             ("clip_proj", self.clip_proj),
             ("ccip_proj", self.ccip_proj),
             ("lsnet_proj", self.lsnet_proj),
             ("image_proj", self.image_proj),
+            ("image_proj_resampler", self.image_proj_resampler),
         ):
             if mod is not None:
                 for k, v in mod.state_dict().items():
@@ -387,8 +417,18 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             "ipa_num_streams": str(1 + len(self._aux_encoders)),
             "ipa_num_ip_tokens": str(int(getattr(self.args, "num_ip_tokens", 4))),
             "ipa_cross_attention_dim": "1024",
+            "ipa_mode": self._ipa_mode,
             "ipa_format": "anima-ipadapter-v1",
         }
+        if self._ipa_mode in ("resampler", "double"):
+            metadata["ipa_resampler_depth"] = str(4)
+            metadata["ipa_resampler_heads"] = str(16)
+            metadata["ipa_resampler_dim_head"] = str(64)
+            metadata["ipa_num_queries"] = str(
+                self.image_proj_resampler.projs[0].num_queries
+                if self.image_proj_resampler is not None
+                else getattr(self.image_proj.projs[0], "num_queries", getattr(self.args, "num_ip_tokens", 16))
+            )
         out_path = self._ip_adapter_sidecar_path(network_file)
         save_file(cpu_sd, out_path, metadata=metadata)
         logger.info(f"Saved IP-Adapter weights ({len(cpu_sd)} tensors) to: {out_path}")
@@ -403,6 +443,7 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             ("ccip_proj", self.ccip_proj),
             ("lsnet_proj", self.lsnet_proj),
             ("image_proj", self.image_proj),
+            ("image_proj_resampler", self.image_proj_resampler),
         ):
             if mod is None:
                 continue
@@ -427,61 +468,61 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         elif self.image_proj is not None:
             params.append({"params": list(self.image_proj.parameters()), "lr": lr})
 
+        if self.image_proj_resampler is not None:
+            for proj in self.image_proj_resampler.projs:
+                params.append({"params": list(proj.parameters()), "lr": lr})
+
         return params
 
     # ── forward: multi-encoder IP tokens ────────────────────────
 
     def _encode_images_to_ip_tokens(self, images01, device, weight_dtype):
-        """Encode a batch of [0,1] RGB images into IP tokens for every stream.
+        """Encode [0,1] images → IP tokens for every stream.
 
-        Shared by training (`get_noise_pred_and_target`) and sampling
-        (`_encode_reference_image`) to guarantee identical preprocessing.
-
-        Args:
-            images01: (B, 3, H, W) float pixels in [0, 1].
-
-        Returns:
-            ``(ip_tokens_clip, ip_tokens_ccip, ip_tokens_lsnet)`` — aux entries
-            are ``None`` when the corresponding encoder is disabled.
+        Returns ``(ip_clip, ip_fine, ip_ccip, ip_lsnet)``. ``ip_fine``
+        is only non-None in ``double`` mode (resampler patch-level tokens).
         """
         from torch.nn.functional import interpolate
 
         self._ensure_encoders_on_device(device)
         images01 = images01.to(device=device, dtype=weight_dtype).clamp(0, 1)
+        mode = self._ipa_mode
+        need_patches = mode != "simple"
 
-        # Frozen backbones run in weight_dtype; the trainable projections are
-        # fp32, so raw features are cast to fp32 before projection.
-        # ── CLIP (224×224, CLIP normalization) → 768 ─────────
+        # ── CLIP ─────────────────────────────────────────────
         clip_input = interpolate(images01, size=(224, 224), mode="bilinear", align_corners=False)
         clip_input = _clip_normalize(clip_input)
         with torch.no_grad():
-            clip_outputs = self.clip_image_encoder(clip_input)
-        clip_embeds = self.clip_proj(clip_outputs.image_embeds.detach().float())
+            clip_out = self.clip_image_encoder(clip_input, output_hidden_states=need_patches)
+        clip_embeds = self.clip_proj(clip_out.image_embeds.detach().float())
+        clip_patches = clip_out.hidden_states[-1][:, 1:, :].detach().float() if need_patches else None
 
-        # ── CCIP (384×384, CLIP norm inside encoder) → 768 ───
-        ccip_embeds = None
+        # ── CCIP ─────────────────────────────────────────────
+        ccip_embeds = ccip_patches = None
         if self.ccip_encoder is not None:
             ccip_input = interpolate(images01, size=(384, 384), mode="bilinear", align_corners=False)
             with torch.no_grad():
-                ccip_feat = self.ccip_encoder(ccip_input)
-            ccip_embeds = self.ccip_proj(ccip_feat.float())
+                result = self.ccip_encoder(ccip_input, return_patches=need_patches)
+            feat = result if not need_patches else result[0]
+            ccip_embeds = self.ccip_proj(feat.float())
+            ccip_patches = result[1].float() if need_patches else None
 
-        # ── LSNet (448×448, ImageNet norm inside encoder) → 768
-        lsnet_embeds = None
+        # ── LSNet ────────────────────────────────────────────
+        lsnet_embeds = lsnet_patches = None
         if self.lsnet_encoder is not None:
             lsnet_input = interpolate(images01, size=(448, 448), mode="bilinear", align_corners=False)
             with torch.no_grad():
-                lsnet_feat = self.lsnet_encoder(lsnet_input)
-            lsnet_embeds = self.lsnet_proj(lsnet_feat.float())
+                result = self.lsnet_encoder(lsnet_input, return_patches=need_patches)
+            feat = result if not need_patches else result[0]
+            lsnet_embeds = self.lsnet_proj(feat.float())
+            lsnet_patches = result[1].float() if need_patches else None
 
-        # ── Project to IP tokens (image_proj is fp32) ────────
+        # ── Global IP tokens (all modes) ─────────────────────
         ip_tokens = ip_tokens_ccip = ip_tokens_lsnet = None
         if isinstance(self.image_proj, MultiStreamProj):
             embeds_list = [clip_embeds]
-            if ccip_embeds is not None:
-                embeds_list.append(ccip_embeds)
-            if lsnet_embeds is not None:
-                embeds_list.append(lsnet_embeds)
+            if ccip_embeds is not None: embeds_list.append(ccip_embeds)
+            if lsnet_embeds is not None: embeds_list.append(lsnet_embeds)
             ip_list = self.image_proj(embeds_list)
             ip_tokens = ip_list[0]
             for i, name in enumerate(self._aux_encoders):
@@ -492,11 +533,19 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         else:
             ip_tokens = self.image_proj(clip_embeds)
 
-        # Cast to the model dtype so concat with the (bf16) text context works.
+        # ── Fine IP tokens (double mode) ─────────────────────
+        ip_tokens_fine = None
+        if self.image_proj_resampler is not None and clip_patches is not None:
+            patches_list = [clip_patches]
+            if ccip_patches is not None: patches_list.append(ccip_patches)
+            if lsnet_patches is not None: patches_list.append(lsnet_patches)
+            p_list = self.image_proj_resampler(patches_list)
+            ip_tokens_fine = p_list[0]
+
         def _cast(t):
             return t.to(dtype=weight_dtype) if t is not None else None
 
-        return _cast(ip_tokens), _cast(ip_tokens_ccip), _cast(ip_tokens_lsnet)
+        return _cast(ip_tokens), _cast(ip_tokens_fine), _cast(ip_tokens_ccip), _cast(ip_tokens_lsnet)
 
     def _encode_reference_image(self, args, accelerator, weight_dtype):
         """Load and encode the sample reference image into cached IP tokens.
