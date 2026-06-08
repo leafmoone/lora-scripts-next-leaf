@@ -92,6 +92,13 @@ class LSNetStyleEncoder(nn.Module):
                 f"keys (architecture mismatch). First few: {missing[:5]}"
             )
         self.backbone.load_state_dict({k: state_dict[k] for k in our_state}, strict=True)
+        # Attention modules have an .ab cache tensor that torch.to(device)
+        # doesn't move (it's an ad-hoc attribute, not a Parameter/buffer).
+        # Force them to re-materialise on-device by deleting any stale copies.
+        self.backbone.eval()
+        for m in self.backbone.modules():
+            if hasattr(m, "ab"):
+                del m.ab
 
     def forward(self, x: torch.Tensor, return_patches: bool = False):
         """
