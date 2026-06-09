@@ -493,21 +493,22 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
     def get_trainable_params(self):
         lr = float(getattr(self.args, "learning_rate", 1e-4))
+        ip_lr = float(getattr(self.args, "ip_adapter_lr", lr * 5.0))
         params = []
 
         for proj in (self.clip_proj, self.ccip_proj, self.lsnet_proj):
             if proj is not None:
-                params.append({"params": list(proj.parameters()), "lr": lr})
+                params.append({"params": list(proj.parameters()), "lr": ip_lr})
 
         if isinstance(self.image_proj, MultiStreamProj):
             for proj in self.image_proj.projs:
-                params.append({"params": list(proj.parameters()), "lr": lr})
+                params.append({"params": list(proj.parameters()), "lr": ip_lr})
         elif self.image_proj is not None:
-            params.append({"params": list(self.image_proj.parameters()), "lr": lr})
+            params.append({"params": list(self.image_proj.parameters()), "lr": ip_lr})
 
         if self.image_proj_resampler is not None:
             for proj in self.image_proj_resampler.projs:
-                params.append({"params": list(proj.parameters()), "lr": lr})
+                params.append({"params": list(proj.parameters()), "lr": ip_lr})
 
         return params
 
@@ -850,6 +851,14 @@ def setup_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="IP cross-attention output multiplier",
+    )
+    parser.add_argument(
+        "--ip_adapter_lr",
+        type=float,
+        default=None,
+        help="Learning rate for IP-Adapter projection layers only "
+             "(defaults to learning_rate * 5.0). Set lower than main lr "
+             "if IP path overpowers text.",
     )
     parser.add_argument(
         "--ip_cond_size",
