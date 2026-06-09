@@ -106,6 +106,13 @@ h1{font-size:20px;margin:0 0 4px}
       <div class="col"><label>IP Scale</label><input type="number" id="ipScale" value="1.0" min="0" max="2" step="0.1"><div class="input-helper">图像条件强度，推理时可调</div></div>
     </div>
     <div class="row">
+      <div class="col"><label>IP 投影层学习率 <small>(留空=5×全局lr)</small></label><input type="text" id="ipAdapterLr" placeholder="如 5e-4"><div class="input-helper">IP 投影层收敛更快，独立于全局学习率</div></div>
+      <div class="col"><label>投影模型</label><select id="adapterType">
+        <option value="linear" selected>Linear（默认，最轻量）</option>
+        <option value="mlp">MLP（FaceID 风格非线性投影）</option>
+      </select><div class="input-helper">MLP 更复杂，适合大数据集</div></div>
+    </div>
+    <div class="row">
       <div class="col"><label>参考图配对模式</label><select id="ipPairBy">
         <option value="self" selected>Self (参考图 = 训练图本身)</option>
         <option value="folder">Folder (同身份文件夹内取另一张，推荐多角色)</option>
