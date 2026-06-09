@@ -136,11 +136,18 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         self._identity_index: dict[int, dict[str, list[str]]] = {}
 
     @staticmethod
-    def _make_stream_projectors(num_streams: int, mode: str, num_queries: int | list[int]) -> MultiStreamProj:
+    def _make_stream_projectors(num_streams: int, mode: str, num_queries: int | list[int],
+                                 use_omni: bool = False) -> MultiStreamProj:
         from ip_adapter.anima_ip_image_proj import Resampler
         if isinstance(num_queries, int):
             num_queries = [num_queries] * num_streams
         if mode == "resampler":
+            if use_omni:
+                from ._adapter_modules import OmniRefinerBlock
+                return MultiStreamProj.from_modules([
+                    _build_omni_stream(nq, dim=1024, num_heads=16)
+                    for nq in num_queries
+                ])
             return MultiStreamProj.from_modules([
                 Resampler(dim=1024, depth=4, dim_head=64, heads=16,
                           num_queries=nq, output_dim=1024)
@@ -150,6 +157,37 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
             num_streams=num_streams, cross_attention_dim=1024,
             embed_dim=1024, tokens_per_stream=num_queries,
         )
+
+
+def _build_omni_stream(num_queries: int, dim: int = 1024, num_heads: int = 16) -> nn.Module:
+    """Build an Omni-Adapter stream: RMSNorm → proj → expand → 2×OmniRefinerBlock → out_proj."""
+    from ._adapter_modules import RMSNormNoAffine, OmniRefinerBlock
+    import torch.nn as nn
+
+    class OmniStream(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.num_queries = num_queries
+            self.output_dim = dim
+            self.norm = RMSNormNoAffine(dim)
+            self.proj = nn.Linear(dim, dim)
+            self.expand = nn.Linear(dim, dim * num_queries)
+            self.refiner = nn.ModuleList([OmniRefinerBlock(dim, num_heads) for _ in range(2)])
+            self.out_proj = nn.Linear(dim, dim, bias=False)
+            self.out_norm = nn.Identity()
+
+        def forward(self, x):
+            B, L, D = x.shape
+            normed = self.norm(x).to(self.proj.weight.dtype)
+            if L == 1:
+                tokens = self.expand(normed[:, 0]).reshape(B, self.num_queries, D)
+            else:
+                tokens = self.proj(normed)
+            for block in self.refiner:
+                tokens = block(tokens)
+            return self.out_norm(self.out_proj(tokens))
+
+    return OmniStream()
 
     # ── model loading ──────────────────────────────────────────
 
