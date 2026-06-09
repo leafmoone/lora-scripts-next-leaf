@@ -212,6 +212,8 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
         _nt_clip = getattr(args, "num_ip_tokens_clip", None) or _nt
         _nt_ccip = getattr(args, "num_ip_tokens_ccip", None) or _nt
         _nt_lsnet = getattr(args, "num_ip_tokens_lsnet", None) or _nt
+        _adapter_type = getattr(args, "adapter_type", "linear") or "linear"
+
         _tokens = [_nt_clip]
         if "ccip" in self._aux_encoders:
             _tokens.append(_nt_ccip)
@@ -220,22 +222,34 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         if self._ipa_mode == "simple":
             if num_streams > 1:
-                self.image_proj = MultiStreamProj(
-                    num_streams=num_streams,
-                    cross_attention_dim=1024, embed_dim=1024,
-                    tokens_per_stream=_tokens,
-                )
+                if _adapter_type == "mlp":
+                    from .anima_ip_image_proj import MLPImageProjModel
+                    modules = [MLPImageProjModel(feature_dim=1024, cross_attention_dim=1024,
+                                                  num_tokens=_tokens[i])
+                               for i in range(num_streams)]
+                    self.image_proj = MultiStreamProj.from_modules(modules)
+                else:
+                    self.image_proj = MultiStreamProj(
+                        num_streams=num_streams,
+                        cross_attention_dim=1024, embed_dim=1024,
+                        tokens_per_stream=_tokens,
+                    )
             else:
-                self.image_proj = ImageProjModel(
-                    cross_attention_dim=1024, clip_embeddings_dim=1024,
-                    clip_extra_context_tokens=_nt_clip,
-                )
+                if _adapter_type == "mlp":
+                    from .anima_ip_image_proj import MLPImageProjModel
+                    self.image_proj = MLPImageProjModel(feature_dim=1024, cross_attention_dim=1024,
+                                                         num_tokens=_nt_clip)
+                else:
+                    self.image_proj = ImageProjModel(
+                        cross_attention_dim=1024, clip_embeddings_dim=1024,
+                        clip_extra_context_tokens=_nt_clip,
+                    )
 
         elif self._ipa_mode == "resampler":
             self.image_proj = self._make_stream_projectors(num_streams, "resampler", _tokens)
 
         elif self._ipa_mode == "double":
-            self.image_proj = self._make_stream_projectors(num_streams, "simple", _tokens)
+            self.image_proj = self._make_stream_projectors(num_streams, "simple", _tokens) if _adapter_type != "mlp" else self._make_stream_projectors(num_streams, "mlp_simple", _tokens)
             _tokens_double = [max(n, 8) for n in _tokens]
             self.image_proj_resampler = self._make_stream_projectors(
                 num_streams, "resampler", _tokens_double
@@ -851,6 +865,13 @@ def setup_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="IP cross-attention output multiplier",
+    )
+    parser.add_argument(
+        "--adapter_type",
+        type=str,
+        default="linear",
+        choices=["linear", "mlp"],
+        help="ImageProj adapter: linear (default lightweight) or mlp (FaceID nonlinear)",
     )
     parser.add_argument(
         "--ip_adapter_lr",
