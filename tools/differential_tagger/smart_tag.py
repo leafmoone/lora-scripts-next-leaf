@@ -902,6 +902,7 @@ def run_smart_tag_pipeline(
         # ── WD14 batch pass ──────────────────────────────────
         wd14_outputs = None
         if wd14_batch_size > 1 and tagger is not None and hasattr(tagger, "tag_batch"):
+            logger.info(f"WD14 batch tagging {len(image_paths)} images (batch_size={wd14_batch_size})…")
             wd14_outputs = tagger.tag_batch(
                 image_paths,
                 preferred_batch_size=wd14_batch_size,

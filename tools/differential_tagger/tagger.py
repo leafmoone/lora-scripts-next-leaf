@@ -1171,22 +1171,41 @@ class WD14Tagger:
             runtime_info = self._empty_runtime_info()
             runtime_chunk_size = self._runtime_chunk_size(len(image_paths), preferred_batch_size)
 
-            chunk_start = 0
-            while chunk_start < len(image_paths):
-                chunk_end = min(len(image_paths), chunk_start + runtime_chunk_size)
-                chunk_paths = image_paths[chunk_start:chunk_end]
-                prepared_inputs: List[np.ndarray] = []
-                prepared_indices: List[int] = []
+            # ── Async preprocessing pipeline ──────────────────
+            # Preload next chunk while GPU runs current chunk,
+            # eliminating idle gaps between ONNX inference bursts.
+            from queue import Queue
+            from threading import Thread
 
-                for offset, path in enumerate(chunk_paths):
-                    source_index = chunk_start + offset
-                    try:
-                        with Image.open(path) as image:
-                            prepared_inputs.append(self._preprocess(image))
-                        prepared_indices.append(source_index)
-                    except Exception as error:
-                        logger.error("Error preprocessing %s: %s", path, error)
-                        results[source_index] = self._build_empty_result(str(error))
+            preloaded_chunks: Queue = Queue(maxsize=2)
+
+            def _preload_worker():
+                cs = 0
+                while cs < len(image_paths):
+                    ce = min(len(image_paths), cs + runtime_chunk_size)
+                    paths = image_paths[cs:ce]
+                    inputs, indices = [], []
+                    for offset, path in enumerate(paths):
+                        try:
+                            with Image.open(path) as img:
+                                inputs.append(self._preprocess(img))
+                            indices.append(cs + offset)
+                        except Exception as exc:
+                            logger.error("Error preprocessing %s: %s", path, exc)
+                            results[cs + offset] = self._build_empty_result(str(exc))
+                    if inputs:
+                        preloaded_chunks.put((inputs, indices, cs, ce))
+                    cs = ce
+
+            preload_thread = Thread(target=_preload_worker, daemon=True)
+            preload_thread.start()
+
+            processed_count = 0
+            while processed_count < len(image_paths):
+                prepared_inputs, prepared_indices, chunk_start, chunk_end = preloaded_chunks.get()
+                processed_count = chunk_end  # update once chunk is fully processed
+                if processed_count % 5000 < runtime_chunk_size:
+                    logger.info(f"  WD14 batch progress: {chunk_end}/{len(image_paths)} images tagged…")
 
                 if prepared_inputs:
                     if self._supports_true_batch and len(prepared_inputs) > 1:
@@ -1237,6 +1256,8 @@ class WD14Tagger:
                 del prepared_inputs
                 gc.collect()
                 chunk_start = chunk_end
+                if chunk_start % (runtime_chunk_size * 5) == 0 or chunk_start >= len(image_paths):
+                    logger.info(f"  WD14 batch progress: {chunk_start}/{len(image_paths)} images tagged…")
 
             finalized_results = [result or self._build_empty_result() for result in results]
             if return_runtime_info:
