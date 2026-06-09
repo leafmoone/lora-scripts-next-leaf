@@ -267,10 +267,11 @@ class AnimaIPAdapterTrainer(AnimaNetworkTrainer):
 
         def _patched_getitem(ds_self, index):
             example = _orig_getitem(ds_self, index)
-            if (
-                _trainer_ref.clip_image_encoder is not None
-                and getattr(ds_self, "caching_mode", None) is None
-            ):
+            if _trainer_ref.clip_image_encoder is not None:
+                # Always load reference images from disk (resized to ip_cond_size).
+                # In non-caching mode, the original images are also in the batch,
+                # but we need them here to support paired references (folder mode)
+                # and to ensure consistency between train/inference preprocessing.
                 example["ip_reference_images"] = _trainer_ref._load_reference_images_for_index(
                     ds_self, index
                 )

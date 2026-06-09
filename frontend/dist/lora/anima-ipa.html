@@ -75,10 +75,10 @@ h1{font-size:20px;margin:0 0 4px}
   <div class="card">
     <h2>🎯 IP-Adapter 参数</h2>
     <div class="row">
-      <div class="col"><label>IPA 模式</label><select id="ipaMode">
-        <option value="simple" selected>Simple (全局 CLIP 特征，轻量)</option>
-        <option value="resampler">Resampler (Perceiver，细粒度 patch 级)</option>
-        <option value="double">Double-Stream (全局+细粒度并行)</option>
+      <div class="col"><label>IPA 模式</label>      <select id="ipaMode">
+        <option value="simple" selected>Simple（全局投影，推荐角色/画风迁移）</option>
+        <option value="resampler">Resampler（Patch 级，推荐姿势/构图控制）</option>
+        <option value="double">Double（全局+Patch，最强还原度）</option>
       </select><div class="input-helper">选择合适的投影方案，影响特征粒度和参数量</div></div>
     </div>
     <div class="row">
@@ -202,6 +202,24 @@ save_last_n_epochs=3</textarea></div>
       </details>
     </div>
   </div>
+
+  <details style="margin-top:12px;font-size:12px;opacity:.7;border:1px solid var(--c-border);border-radius:8px;padding:10px 14px">
+    <summary style="cursor:pointer;font-weight:600;font-size:13px;opacity:.9">📖 训练任务与模式/Token 选择指南</summary>
+    <div style="margin-top:8px;line-height:1.8">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="border-bottom:1px solid var(--c-border)"><th style="text-align:left;padding:4px 6px">任务</th><th style="text-align:left;padding:4px 6px">模式</th><th style="text-align:left;padding:4px 6px">编码器</th><th style="text-align:left;padding:4px 6px">Token 建议</th></tr>
+        <tr><td style="padding:4px 6px">姿势参考</td><td>Resampler</td><td>仅 CLIP</td><td>CLIP=16</td></tr>
+        <tr><td style="padding:4px 6px">角色身份</td><td>Simple</td><td>CLIP+CCIP</td><td>CLIP=8, CCIP=4</td></tr>
+        <tr><td style="padding:4px 6px">画风迁移</td><td>Simple</td><td>CLIP+LSNet</td><td>CLIP=8, LSNet=4</td></tr>
+        <tr><td style="padding:4px 6px">角色+画风</td><td>Simple</td><td>全部</td><td>CLIP=8, CCIP=4, LSNet=4</td></tr>
+        <tr><td style="padding:4px 6px">全部（最强）</td><td>Double</td><td>全部</td><td>CLIP coarse=8, CLIP fine=16, CCIP=8, LSNet=8</td></tr>
+      </table>
+      <p style="margin:8px 0 4px"><b>Simple</b>：全局向量投影，适合不需要空间局部信息的任务（角色识别、画风判断）。参数量 ~4 万/流。</p>
+      <p style="margin:4px 0"><b>Resampler</b>：Patch 级 Perceiver 投影，从图像各区域提取独立 token。适合姿势/构图/纹理细节。参数量 ~5000 万/流。</p>
+      <p style="margin:4px 0"><b>Double</b>：Simple + Resampler 并行，兼顾全局和局部。参数量最大。</p>
+      <p style="margin:8px 0 4px"><b>数据集要求</b>：姿势任务 = 多角色多姿势；角色任务 = 同角色多图；画风任务 = 同画风不同内容；组合任务 = 同角色同画风。</p>
+    </div>
+  </details>
 
   <button class="btn btn-primary btn-block" id="btnRun" onclick="startTraining()">🚀 开始 IP-Adapter 训练</button>
   <div style="display:flex;gap:8px;margin-top:6px">

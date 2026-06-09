@@ -1181,7 +1181,12 @@ def preview_image_path(raw_path: str) -> Path | None:
         train_out = _training_output_dir()
         if train_out is not None:
             allowed_roots.append(train_out.resolve())
-            allowed_roots.append((train_out / "sample").resolve())
+        # Also allow the configured output_dir and its sample subdirectory
+        config = latest_training_config()
+        cfg_out = resolve_repo_path(str(config.get("output_dir", "")))
+        if cfg_out is not None:
+            allowed_roots.append(cfg_out.resolve())
+            allowed_roots.append((cfg_out / "sample").resolve())
         if not any(candidate == root or root in candidate.parents for root in allowed_roots):
             return None
         if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_EXTENSIONS:
