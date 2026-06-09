@@ -78,7 +78,11 @@ class PerceiverAttention(nn.Module):
 
 
 class Resampler(nn.Module):
-    """Perceiver Resampler for fine-grained IP-Adapter control."""
+    """Perceiver Resampler using LLMAdapterTransformerBlock (upgraded from anima-edit).
+
+    Uses 2-layer cross-attention + MLP with learnable queries and RoPE.
+    More stable than the original hand-written PerceiverAttention.
+    """
 
     def __init__(
         self,
@@ -94,32 +98,42 @@ class Resampler(nn.Module):
         self.num_queries = num_queries
         self.output_dim = output_dim
 
-        self.latents = nn.Parameter(torch.randn(1, num_queries, dim) * 0.02)
+        from ._adapter_modules import LLMAdapterTransformerBlock, AdapterRotaryEmbedding, LLMAdapterRMSNorm
 
-        self.layers = nn.ModuleList([])
-        for _ in range(depth):
-            self.layers.append(
-                nn.ModuleList([
-                    PerceiverAttention(dim, dim_head=dim_head, heads=heads),
-                    nn.Sequential(
-                        nn.LayerNorm(dim),
-                        nn.Linear(dim, dim * ff_mult),
-                        nn.GELU(),
-                        nn.Linear(dim * ff_mult, dim),
-                    ),
-                ])
-            )
+        actual_depth = 2  # LLMAdapterTransformerBlock is heavier, 2 layers equivalent to 4 PerceiverAttention
+        self.feature_norm = LLMAdapterRMSNorm(dim)
+        self.source_proj = nn.Linear(dim, dim)
+        self.latents = nn.Parameter(torch.randn(num_queries, dim) * 0.02)
+        self.rotary = AdapterRotaryEmbedding(dim // heads)
 
+        self.layers = nn.ModuleList([
+            LLMAdapterTransformerBlock(source_dim=dim, model_dim=dim, num_heads=heads, self_attn=True)
+            for _ in range(actual_depth)
+        ])
+        self.out_norm = LLMAdapterRMSNorm(dim)
         self.proj_out = nn.Linear(dim, output_dim) if output_dim != dim else nn.Identity()
-        self.norm_out = nn.LayerNorm(output_dim)
+        self._init_weights()
+
+    def _init_weights(self):
+        std = 1.0 / math.sqrt(1024)
+        torch.nn.init.trunc_normal_(self.source_proj.weight, std=std, a=-3 * std, b=3 * std)
+        torch.nn.init.zeros_(self.source_proj.bias)
+        torch.nn.init.trunc_normal_(self.latents, std=std, a=-3 * std, b=3 * std)
+        for layer in self.layers:
+            layer.init_weights()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """(B, L, embed_dim) patch features → (B, num_queries, output_dim) IP tokens."""
-        latents = self.latents.expand(x.shape[0], -1, -1)
-        for attn, ff in self.layers:
-            latents = attn(latents, x) + latents
-            latents = ff(latents) + latents
-        return self.norm_out(self.proj_out(latents))
+        B = x.shape[0]
+        source = self.source_proj(self.feature_norm(x))
+        tokens = self.latents.unsqueeze(0).expand(B, -1, -1).to(dtype=source.dtype, device=source.device)
+        pos_q = torch.arange(tokens.shape[1], device=tokens.device).unsqueeze(0)
+        pos_s = torch.arange(source.shape[1], device=source.device).unsqueeze(0)
+        pe_q = self.rotary(tokens, pos_q)
+        pe_s = self.rotary(source, pos_s)
+        for layer in self.layers:
+            tokens = layer(tokens, source, position_embeddings=pe_q, position_embeddings_context=pe_s)
+        return self.proj_out(self.out_norm(tokens))
 
 
 # ---------------------------------------------------------------------------
@@ -262,3 +276,8 @@ class LLMResampler(nn.Module):
         for layer in self.layers:
             tokens = layer(tokens, source, position_embeddings=pe_q, position_embeddings_context=pe_s)
         return self.out_norm(tokens)
+
+
+# ---------------------------------------------------------------------------
+# Multi-Stream Projection for auxiliary encoder fusion
+# ---------------------------------------------------------------------------
