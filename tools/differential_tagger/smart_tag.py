@@ -899,57 +899,104 @@ def run_smart_tag_pipeline(
                 ))
     else:
         # Single-tagger or no-tagger mode
-        # ── WD14 batch pass ──────────────────────────────────
-        wd14_outputs = None
-        if wd14_batch_size > 1 and tagger is not None and hasattr(tagger, "tag_batch"):
-            logger.info(f"WD14 batch tagging {len(image_paths)} images (batch_size={wd14_batch_size})…")
-            wd14_outputs = tagger.tag_batch(
-                image_paths,
-                preferred_batch_size=wd14_batch_size,
-                threshold=req.general_threshold,
-                character_threshold=req.character_threshold,
-                copyright_threshold=req.copyright_threshold,
-            )
+        # ── Chunked pipeline: overlap WD14 batch + VLM ────────
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import queue as _queue
+        import threading as _threading
 
-        # ── VLM pipeline ─────────────────────────────────────
-        if vlm_workers > 1 and nl_tagger is not None and wd14_outputs is not None:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            wd14_map = {r.get("image_path", ""): r for r in wd14_outputs}
+        CHUNK = min(2000, len(image_paths))
+        vlm_pool = None
+        vlm_futures: dict = {}
+        wd14_queue: _queue.Queue = _queue.Queue(maxsize=2)
+        use_batch = wd14_batch_size > 1 and tagger is not None and hasattr(tagger, "tag_batch")
 
-            def _vlm_task(path):
-                try:
-                    pre = [wd14_map.get(path)] if wd14_map.get(path) else None
-                    raw = _process_one_image(
-                        image_path=path,
-                        req=req,
-                        tagger=tagger,
-                        nl_tagger=nl_tagger,
-                        precomputed_tagger_outputs=pre,
+        if vlm_workers > 1 and nl_tagger is not None:
+            vlm_pool = ThreadPoolExecutor(max_workers=vlm_workers)
+
+        def _vlm_task(path, precomputed):
+            try:
+                raw = _process_one_image(image_path=path, req=req,
+                                          tagger=tagger, nl_tagger=nl_tagger,
+                                          precomputed_tagger_outputs=precomputed)
+                return SmartTagResult(
+                    image_path=path, caption=raw.get("caption", ""),
+                    general_tags=raw.get("general_tags", []),
+                    copyright_tags=raw.get("copyright_tags", []),
+                    character_tags=raw.get("character_tags", []),
+                    rating=raw.get("rating"),
+                    nl_text=raw.get("nl_text", ""),
+                    noise_stripped_count=raw.get("noise_stripped_count", 0),
+                )
+            except Exception as exc:
+                logger.error("Smart tag failed on %s: %s", path, exc)
+                return SmartTagResult(image_path=path, error=str(exc))
+
+        def _wd14_worker(img_list, batch_sz, start_idx):
+            """Process WD14 in chunks, sending results as each chunk completes."""
+            cs = 0
+            while cs < len(img_list):
+                ce = min(len(img_list), cs + CHUNK)
+                chunk = img_list[cs:ce]
+                if use_batch:
+                    chunk_results = tagger.tag_batch(
+                        chunk, preferred_batch_size=batch_sz,
+                        threshold=req.general_threshold,
+                        character_threshold=req.character_threshold,
+                        copyright_threshold=req.copyright_threshold,
                     )
-                    return SmartTagResult(
-                        image_path=path,
-                        caption=raw.get("caption", ""),
-                        general_tags=raw.get("general_tags", []),
-                        copyright_tags=raw.get("copyright_tags", []),
-                        character_tags=raw.get("character_tags", []),
-                        rating=raw.get("rating"),
-                        nl_text=raw.get("nl_text", ""),
-                        noise_stripped_count=raw.get("noise_stripped_count", 0),
-                    )
-                except Exception as exc:
-                    logger.error("Smart tag failed on %s: %s", path, exc)
-                    return SmartTagResult(image_path=path, error=str(exc))
+                else:
+                    chunk_results = [tagger.tag(p) if tagger else {} for p in chunk]
+                wd14_queue.put((chunk_results, start_idx + cs, ce - cs))
+                cs = ce
 
-            with ThreadPoolExecutor(max_workers=vlm_workers) as pool:
-                futures = {pool.submit(_vlm_task, p): p for p in image_paths}
-                for future in as_completed(futures):
-                    results.append(future.result())
-                    if progress_callback:
-                        progress_callback(len(results), total, f"VLM {len(results)}/{total}")
-        else:
-            # Sequential fallback
-            _process_sequentially(image_paths, results, req, tagger, nl_tagger,
-                                   wd14_outputs, progress_callback, total)
+        # Kick off first WD14 chunk in background
+        wd14_thread = _threading.Thread(target=_wd14_worker,
+                                         args=(image_paths, wd14_batch_size, 0), daemon=True)
+        wd14_thread.start()
+
+        start = 0
+        while start < total:
+            try:
+                wd14_res, wd14_start, wd14_count = wd14_queue.get(timeout=7200)
+            except _queue.Empty:
+                break
+
+            # Submit VLM tasks for completed WD14 chunk
+            if vlm_pool:
+                wd14_map = {}
+                for r in wd14_res:
+                    if r and "image_path" in r:
+                        wd14_map[r["image_path"]] = r
+                for j in range(wd14_count):
+                    idx = wd14_start + j
+                    if idx >= total:
+                        break
+                    path = image_paths[idx]
+                    pre = [wd14_map.get(path)] if wd14_map else None
+                    fut = vlm_pool.submit(_vlm_task, path, pre)
+                    vlm_futures[fut] = idx
+
+            # Collect done VLM futures
+            done = [f for f in vlm_futures if f.done()]
+            for f in done:
+                results.append(f.result())
+                del vlm_futures[f]
+                if progress_callback:
+                    progress_callback(len(results), total, f"VLM {len(results)}/{total}")
+
+            start = wd14_start + wd14_count
+            if progress_callback and not vlm_pool:
+                progress_callback(start, total, f"WD14 {start}/{total}")
+
+        # Final VLM collection
+        if vlm_pool:
+            for future in as_completed(vlm_futures):
+                results.append(future.result())
+                if progress_callback:
+                    progress_callback(len(results), total, f"VLM {len(results)}/{total}")
+            vlm_pool.shutdown(wait=False)
+
+        wd14_thread.join(timeout=10)
 
     return results
 

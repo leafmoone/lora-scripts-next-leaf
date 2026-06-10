@@ -156,6 +156,8 @@ async def run_tagger(request: Request):
         cmd.extend(["--wd14-batch", str(max(1, int(data["wd14_batch"])))])
     if data.get("vlm_workers", 1) > 1:
         cmd.extend(["--vlm-workers", str(max(1, int(data["vlm_workers"])))])
+    if data.get("resume", False):
+        cmd.append("--resume")
 
     if mode == "smart":
         cmd.extend(["--purpose", purpose])

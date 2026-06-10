@@ -147,6 +147,9 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         <label class="toggle" onclick="toggleSwitch('useGPU')">
           <span class="toggle-switch on" id="useGPU-sw"></span> 使用 GPU（关闭则仅 CPU）
         </label>
+        <label class="toggle" onclick="toggleSwitch('resume')">
+          <span class="toggle-switch" id="resume-sw"></span> Resume 模式（跳过已有 .txt 标签的图片）
+        </label>
       </div>
       <div class="row" style="margin-top:8px">
         <div class="col" style="flex:3">
@@ -315,6 +318,7 @@ function saveParams() {
   if (data.useGPU_sw !== undefined) state.useGPU = data.useGPU_sw;
   if (data.useVLM_sw !== undefined) state.useVLM = data.useVLM_sw;
   if (data.saveCaptions_sw !== undefined) state.saveCaptions = data.saveCaptions_sw;
+  if (data.resume_sw !== undefined) state.resume = data.resume_sw;
   // Update toggle switches
   ['recursive','useGPU','useVLM','saveCaptions'].forEach(function(k){
     var sw = document.getElementById(k+'-sw');
@@ -427,6 +431,7 @@ function collectConfig() {
     use_cpu: !state.useGPU,
     recursive: state.recursive,
     save_captions: state.saveCaptions,
+    resume: state.resume,
     purpose: document.getElementById('purpose').value,
     trigger: document.getElementById('trigger').value.trim(),
     use_vlm: state.useVLM,

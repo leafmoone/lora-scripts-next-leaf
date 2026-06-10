@@ -387,6 +387,10 @@ def main():
              "Set > 1 to pipeline WD14 ahead of VLM (e.g., 2-4 recommended)"
     )
     parser.add_argument(
+        "--resume", action="store_true",
+        help="Skip images that already have a non-empty .txt caption file",
+    )
+    parser.add_argument(
         "--data-dir", default=None,
         help="Override models/data directory (default: tools/differential_tagger/data/). "
              "Set to a custom path to reuse pre-downloaded models.",
@@ -413,6 +417,22 @@ def main():
     if not image_paths:
         print("ERROR: No images found.", file=sys.stderr)
         sys.exit(1)
+
+    # ── Resume mode: skip already-tagged images ────────────
+    if args.resume:
+        original = len(image_paths)
+        pending = []
+        for p in image_paths:
+            txt = os.path.splitext(p)[0] + ".txt"
+            if os.path.isfile(txt) and os.path.getsize(txt) > 10:
+                continue
+            pending.append(p)
+        skipped = original - len(pending)
+        print(f"Resume mode: {skipped}/{original} images already tagged, {len(pending)} remaining")
+        if not pending:
+            print("All images already tagged. Nothing to do.")
+            sys.exit(0)
+        image_paths = pending
 
     print(f"Found {len(image_paths)} image(s)")
 
