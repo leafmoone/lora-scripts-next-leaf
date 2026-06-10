@@ -1090,7 +1090,10 @@ class WD14Tagger:
         if not self._supports_true_batch:
             return 1
         learned_chunk_size = self._learned_stable_gpu_batch_size if self._session_uses_gpu() else None
-        candidates = [image_count]
+        # For large datasets, preload many images ahead so the preload thread
+        # can work while GPU is busy.  Use at least 200 to reduce GPU idle gaps.
+        MIN_PRELOAD = 200
+        candidates = [image_count, MIN_PRELOAD]
         if preferred_batch_size:
             candidates.append(max(1, int(preferred_batch_size)))
         if learned_chunk_size:
