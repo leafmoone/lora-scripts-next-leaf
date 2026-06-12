@@ -100,7 +100,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--infer_steps", type=int, default=50)
     parser.add_argument("--save_path", type=str, required=True)
     parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--flow_shift", type=float, default=5.0)
+    parser.add_argument("--flow_shift", type=float, default=3.0)
 
     parser.add_argument("--fp8", action="store_true")
     parser.add_argument("--fp8_scaled", action="store_true")

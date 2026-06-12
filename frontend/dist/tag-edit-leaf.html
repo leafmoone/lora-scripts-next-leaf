@@ -62,7 +62,8 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
 .gallery-item:hover{border-color:var(--c-brand)}
 .gallery-item img{width:100%;height:180px;object-fit:cover;display:block;background:var(--c-tip)}
 .gallery-item .caption-preview{padding:8px;font-size:11px;line-height:1.4;opacity:.8;max-height:60px;overflow:hidden;white-space:pre-wrap;word-break:break-all}
-.gallery-item .caption-preview.empty{opacity:.4;font-style:italic}
+.smart-subsection{border:1px solid var(--c-border);border-radius:8px;padding:12px;margin-top:10px;background:var(--c-tip)}
+.smart-subsection h3{font-size:13px;margin:0 0 10px;font-weight:600}
 </style>
 </head>
 <body>
@@ -112,6 +113,7 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
           <select id="mode" onchange="updateMode()">
             <option value="smart">Smart Tag（多阶段 + VLM 自然语言）</option>
             <option value="simple">Simple（仅 WD14 booru 标签）</option>
+            <option value="anima_train">Anima Train（WD14 + 两步 VLM + 训练格式）</option>
             <option value="api">☁️ 第三方 API 反推（OpenAI / Anthropic）</option>
           </select>
         </div>
@@ -161,13 +163,13 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
       <div class="row" style="margin-top:8px">
         <div class="col">
           <label>WD14 批量大小 <small>(1=逐张, 8=推荐)</small></label>
-          <input type="number" id="wd14Batch" value="1" min="1" max="32">
+          <input type="number" id="wd14Batch" value="8" min="1" max="32">
           <div class="input-helper">多张图一批推理，更高吞吐（需足够显存）</div>
         </div>
         <div class="col">
-          <label>VLM 并行数 <small>(1=串行, 2-4=流水线)</small></label>
-          <input type="number" id="vlmWorkers" value="1" min="1" max="4">
-          <div class="input-helper">并行 ToriiGate VLM 实例数（需 ~10GB VRAM / 实例）</div>
+          <label>VLM 批量大小 <small>(Transformers batch / vLLM 并发)</small></label>
+          <input type="number" id="vlmBatch" value="4" min="1" max="32">
+          <div class="input-helper" id="vlmBatchHint">Transformers：多图一次 generate；vLLM：并发 HTTP 请求数</div>
         </div>
       </div>
     </div>
@@ -179,45 +181,191 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
       <span class="arrow">▶</span> <span>✨ Smart Tag 高级选项</span>
     </div>
     <div class="section-body show">
-      <div class="row">
-        <div class="col">
-          <label>训练目的</label>
-          <select id="purpose">
-            <option value="character">角色 (character)</option>
-            <option value="style">风格 (style)</option>
-            <option value="general">通用 (general)</option>
-            <option value="concept">概念 (concept)</option>
-          </select>
-          <div class="input-helper">影响 VLM 自然语言描述方向</div>
-        </div>
-        <div class="col">
-          <label>触发词 <small>(可选)</small></label>
-          <input type="text" id="trigger" placeholder="如：my_character">
-          <div class="input-helper">注入到每张图的 caption 最前面</div>
-        </div>
-      </div>
-      <div class="row">
+      <label style="font-size:12px;font-weight:600;margin:0 0 8px;display:block;opacity:.85">流水线组件</label>
+      <div class="row" style="margin-bottom:4px">
+        <label class="toggle" onclick="toggleSwitch('useWD14')">
+          <span class="toggle-switch on" id="useWD14-sw"></span> 启用 WD14 booru 标签
+        </label>
         <label class="toggle" onclick="toggleSwitch('useVLM')">
-          <span class="toggle-switch on" id="useVLM-sw"></span> 启用 ToriiGate VLM 自然语言描述 <small style="opacity:.6">（需 ~10GB VRAM）</small>
+          <span class="toggle-switch on" id="useVLM-sw"></span> 启用 ToriiGate VLM 自然语言
+          <small style="opacity:.6">（~10GB VRAM / 实例）</small>
         </label>
       </div>
-      <label style="font-size:12px;font-weight:600;margin:10px 0 4px;display:block;opacity:.8">多标签器共识 <small style="font-weight:400">（选择 2+ 模型，投票决定最终标签）</small></label>
-      <div id="consensusModels" style="margin-bottom:4px"></div>
-      <div class="row">
-        <div class="col" style="flex:0 0 80px">
-          <label>最少投票</label>
-          <input type="number" id="consensus" value="2" min="2" max="10">
+
+      <div id="wd14Block" class="smart-subsection">
+        <h3>🏷️ WD14 标签</h3>
+        <label style="font-size:12px;font-weight:600;margin:0 0 4px;display:block;opacity:.8">多标签器共识 <small style="font-weight:400">（选择 2+ 模型投票）</small></label>
+        <div id="consensusModels" style="margin-bottom:4px"></div>
+        <div class="row">
+          <div class="col" style="flex:0 0 80px">
+            <label>最少投票</label>
+            <input type="number" id="consensus" value="2" min="2" max="10">
+          </div>
+          <div class="col">
+            <label>黑名单标签 <small>(空格分隔)</small></label>
+            <input type="text" id="blacklist" placeholder="watermark signature artist_name">
+            <div class="input-helper">这些标签会被自动过滤</div>
+          </div>
         </div>
-        <div class="col">
-          <label>黑名单标签 <small>(空格分隔)</small></label>
-          <input type="text" id="blacklist" placeholder="watermark signature artist_name">
-          <div class="input-helper">这些标签会被自动过滤</div>
+      </div>
+
+      <div id="vlmBlock" class="smart-subsection">
+        <h3>🧠 ToriiGate VLM</h3>
+        <div class="row">
+          <div class="col">
+            <label>VLM 模型</label>
+            <select id="vlmBackend" onchange="updateSmartSections()">
+              <option value="transformers" selected>本地 Transformers</option>
+              <option value="vllm">vLLM 服务（OpenAI API）</option>
+            </select>
+            <div class="input-helper">Transformers 在本机加载模型；vLLM 需先启动推理服务</div>
+          </div>
+          <div class="col">
+            <label>VLM 提示词模板</label>
+            <select id="vlmPromptMode" onchange="updateSmartSections()">
+              <option value="lora">LoRA 训练目的模板（推荐）</option>
+              <option value="official_short">ToriiGate 官方 · short</option>
+              <option value="official_long">ToriiGate 官方 · long</option>
+              <option value="official_min_structured_md">ToriiGate 官方 · min_structured_md</option>
+            </select>
+            <div class="input-helper">LoRA 模板按训练目的定制；官方模板来自 ToriiGate scripts/prompts.py</div>
+          </div>
+        </div>
+        <div class="row" id="vllmSettingsRow" style="display:none">
+          <div class="col">
+            <label>vLLM API 地址 <small>(可选)</small></label>
+            <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:18901/v1/chat/completions">
+            <div class="input-helper">留空则使用环境变量 SD_TORIIGATE_VLLM_API_URL</div>
+          </div>
+          <div class="col">
+            <label>vLLM 模型名 <small>(可选)</small></label>
+            <input type="text" id="vllmModel" placeholder="toriigate-0.5">
+            <div class="input-helper">须与 vLLM 启动时的 --served-model-name 一致</div>
+          </div>
+        </div>
+        <div class="row" id="vlmPurposeRow">
+          <div class="col">
+            <label>训练目的</label>
+            <select id="purpose">
+              <option value="character">角色 (character)</option>
+              <option value="style">风格 (style)</option>
+              <option value="general">通用 (general)</option>
+              <option value="concept">概念 (concept)</option>
+            </select>
+            <div class="input-helper">仅 LoRA 模板生效：控制 VLM 自然语言描述方向</div>
+          </div>
+        </div>
+        <div class="row" id="vlmTriggerRow">
+          <div class="col">
+            <label>触发词 <small>(可选)</small></label>
+            <input type="text" id="trigger" placeholder="如：my_character">
+            <div class="input-helper">注入到最终 caption 最前面（WD14 + VLM 拼接后）</div>
+          </div>
+        </div>
+        <div class="row">
+          <label class="toggle" onclick="toggleSwitch('injectWd14Tags')">
+            <span class="toggle-switch on" id="injectWd14Tags-sw"></span>
+            向 VLM 注入 WD14 标签
+          </label>
+        </div>
+        <div class="input-helper" id="injectWd14Hint" style="margin-top:4px">
+          开启后：每张图的 WD14 标签写入该图 VLM user prompt（Transformers 真 batch / vLLM 并发均支持）。
+          关闭后：所有图共用同一模板，不含 WD14 标签（标签仍写入最终 caption）。
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Section 4: 操作 -->
+  <!-- Section 4: Anima Train -->
+  <div class="card" id="animaTrainSection" style="display:none">
+    <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')">
+      <span class="arrow">▶</span> <span>🎓 Anima Train 设置</span>
+    </div>
+    <div class="section-body show">
+      <div class="input-helper" style="margin-bottom:10px">
+        WD14 原始标签 → VLM 两步链（extract_tags → generate_caption）→ anima_train_v1 输出（tags 行 + 空行 + caption 行）。仅使用 vLLM HTTP，无 GGUF / llama.cpp。
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>VLM 模型</label>
+          <select id="animaVlmModel" onchange="updateAnimaTrainSections().catch(function(e){setAnimaVllmStatus(e.message,'err')})">
+            <option value="toriigate-0.5">ToriiGate-0.5</option>
+            <option value="gemma-4-e4b">Gemma-4-E4B (vLLM)</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>VLM 并发数</label>
+          <input type="number" id="animaVlmWorkers" value="4" min="1" max="32">
+          <div class="input-helper">WD14 完成后并发 HTTP 请求数</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <label class="toggle" onclick="toggleAnimaAutoStartVllm()">
+          <span class="toggle-switch on" id="animaAutoStartVllm-sw"></span> 自动启动 vLLM 服务
+        </label>
+        <span class="status" id="animaVllmStatus" style="font-size:12px;margin-left:8px"></span>
+      </div>
+      <div class="input-helper" id="animaVllmAutoHint" style="margin-bottom:8px">
+        开启后：按所选 VLM 模型自动填入 API URL / served name，并尝试启动本地 vLLM（已运行则跳过）。
+      </div>
+      <div class="row" id="animaVllmRow">
+        <div class="col">
+          <label>vLLM API URL</label>
+          <input type="text" id="animaVllmApiUrl" placeholder="留空=按 VLM 模型默认端口">
+        </div>
+        <div class="col">
+          <label>vLLM served-model-name</label>
+          <input type="text" id="animaVllmModel" placeholder="留空=默认 served name">
+        </div>
+      </div>
+      <div class="row" id="animaGemmaDirRow" style="display:none">
+        <div class="col">
+          <label>本地模型目录（Gemma）</label>
+          <input type="text" id="animaGemmaLocalDir" value="./models/gemma-4-E3B-it" readonly>
+          <div class="input-helper">选中 Gemma 时按需 modelscope download；目录名 E3B 对应 ModelScope E4B 权重</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>训练目的</label>
+          <select id="animaPurpose">
+            <option value="character" selected>角色 (character)</option>
+            <option value="style">风格 (style)</option>
+            <option value="general">通用 (general)</option>
+            <option value="concept">概念 (concept)</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>风格提示 <small>(可选)</small></label>
+          <input type="text" id="animaStyleHint" placeholder="如：anime cel shading, soft lighting">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>触发词 <small>(可选)</small></label>
+          <input type="text" id="animaTrigger" placeholder="如：my_character">
+        </div>
+        <div class="col">
+          <label>VLM max tokens</label>
+          <input type="number" id="animaVlmMaxTokens" value="2048" min="256" max="8192">
+        </div>
+        <div class="col">
+          <label>温度</label>
+          <input type="number" id="animaTemperature" value="0.2" min="0" max="2" step="0.1">
+        </div>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <label class="toggle" onclick="toggleSwitch('animaUseAlias')">
+          <span class="toggle-switch on" id="animaUseAlias-sw"></span> 启用角色别名索引
+        </label>
+        <label class="toggle" onclick="toggleSwitch('animaAutoDownloadGemma')">
+          <span class="toggle-switch on" id="animaAutoDownloadGemma-sw"></span> Gemma 缺失时自动 modelscope 下载
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: API -->
   <div class="card">
     <div class="section-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('show')" id="apiSection" style="display:none">
       <span class="arrow">▶</span> <span>☁️ 第三方 API 设置</span>
@@ -238,10 +386,17 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         <div class="col"><label>最大 Token</label><input type="number" id="apiMaxTokens" value="256" min="16" max="4096"></div>
         <div class="col"><label>温度</label><input type="number" id="apiTemperature" value="0.3" min="0" max="2" step="0.1"><div class="input-helper">越低越确定，越高越随机</div></div>
       </div>
+      <div class="row">
+        <div class="col"><label>并发请求数</label><input type="number" id="apiWorkers" value="2" min="1" max="8"><div class="input-helper">同时处理的图片数（建议 2–4）</div></div>
+        <div class="col"><label>失败重试次数</label><input type="number" id="apiMaxRetries" value="2" min="0" max="5"><div class="input-helper">单张失败时自动重试，429 会退避等待</div></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>请求超时 (秒)</label><input type="number" id="apiTimeout" value="60" min="10" max="300"><div class="input-helper">大图会自动压缩至 4MB / 1536px 以内再发送</div></div>
+      </div>
     </div>
   </div>
 
-  <!-- Section 5: 操作 -->
+  <!-- Section 6: 操作 -->
   <div class="card">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnRun" onclick="runTagger()">🚀 开始标注</button>
@@ -287,9 +442,17 @@ const STORAGE_KEY = 'mikazuki_tagger_v2';
 const state = {
   recursive: false,
   useGPU: true,
+  useWD14: true,
   useVLM: true,
+  injectWd14Tags: true,
   saveCaptions: true,
+  resume: false,
+  animaUseAlias: true,
+  animaAutoDownloadGemma: true,
+  animaAutoStartVllm: true,
+  animaVllmBusy: false,
   consensusModels: [],
+  animaVlmModels: [],
   currentScan: null,
   pollingId: null,
 };
@@ -300,6 +463,16 @@ function saveParams() {
     if (el.type === 'checkbox') data[el.id] = el.checked;
     else data[el.id] = el.value;
   });
+  data.recursive_sw = state.recursive;
+  data.useGPU_sw = state.useGPU;
+  data.useWD14_sw = state.useWD14;
+  data.useVLM_sw = state.useVLM;
+  data.injectWd14Tags_sw = state.injectWd14Tags;
+  data.saveCaptions_sw = state.saveCaptions;
+  data.resume_sw = state.resume;
+  data.animaUseAlias_sw = state.animaUseAlias;
+  data.animaAutoDownloadGemma_sw = state.animaAutoDownloadGemma;
+  data.animaAutoStartVllm_sw = state.animaAutoStartVllm;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   document.getElementById('saveStatus').textContent='已保存 ✓';
   setTimeout(function(){ document.getElementById('saveStatus').textContent=''; }, 2000);
@@ -316,14 +489,19 @@ function saveParams() {
   });
   if (data.recursive_sw) state.recursive = !!data.recursive_sw;
   if (data.useGPU_sw !== undefined) state.useGPU = data.useGPU_sw;
+  if (data.useWD14_sw !== undefined) state.useWD14 = data.useWD14_sw;
   if (data.useVLM_sw !== undefined) state.useVLM = data.useVLM_sw;
+  if (data.injectWd14Tags_sw !== undefined) state.injectWd14Tags = data.injectWd14Tags_sw;
   if (data.saveCaptions_sw !== undefined) state.saveCaptions = data.saveCaptions_sw;
   if (data.resume_sw !== undefined) state.resume = data.resume_sw;
-  // Update toggle switches
-  ['recursive','useGPU','useVLM','saveCaptions'].forEach(function(k){
+  if (data.animaUseAlias_sw !== undefined) state.animaUseAlias = data.animaUseAlias_sw;
+  if (data.animaAutoDownloadGemma_sw !== undefined) state.animaAutoDownloadGemma = data.animaAutoDownloadGemma_sw;
+  if (data.animaAutoStartVllm_sw !== undefined) state.animaAutoStartVllm = data.animaAutoStartVllm_sw;
+  ['recursive','useGPU','useWD14','useVLM','injectWd14Tags','saveCaptions','resume','animaUseAlias','animaAutoDownloadGemma','animaAutoStartVllm'].forEach(function(k){
     var sw = document.getElementById(k+'-sw');
     if (sw) sw.classList.toggle('on', state[k]);
   });
+  updateSmartSections();
 })();
 
 // Consensus model selector
@@ -350,18 +528,182 @@ function toggleModel(model) {
 function toggleSwitch(id) {
   const map = {
     recursive: 'recursive', saveCaptions: 'saveCaptions',
-    useGPU: 'useGPU', useVLM: 'useVLM',
+    useGPU: 'useGPU', useWD14: 'useWD14', useVLM: 'useVLM',
+    injectWd14Tags: 'injectWd14Tags',
+    resume: 'resume',
+    animaUseAlias: 'animaUseAlias',
+    animaAutoDownloadGemma: 'animaAutoDownloadGemma',
   };
   state[map[id]] = !state[map[id]];
   document.getElementById(id+'-sw').classList.toggle('on', state[map[id]]);
+  updateSmartSections();
+}
+
+function updateSmartSections() {
+  const wd14On = !!state.useWD14;
+  const vlmOn = !!state.useVLM;
+  const wd14Block = document.getElementById('wd14Block');
+  const vlmBlock = document.getElementById('vlmBlock');
+  if (wd14Block) wd14Block.style.display = wd14On ? '' : 'none';
+  if (vlmBlock) vlmBlock.style.display = vlmOn ? '' : 'none';
+
+  const mode = document.getElementById('vlmPromptMode')?.value || 'lora';
+  const purposeRow = document.getElementById('vlmPurposeRow');
+  if (purposeRow) purposeRow.style.display = (vlmOn && mode === 'lora') ? '' : 'none';
+
+  const vlmBackend = document.getElementById('vlmBackend')?.value || 'transformers';
+  const vllmRow = document.getElementById('vllmSettingsRow');
+  if (vllmRow) vllmRow.style.display = (vlmOn && vlmBackend === 'vllm') ? '' : 'none';
+  const vlmBatchHint = document.getElementById('vlmBatchHint');
+  if (vlmBatchHint) {
+    vlmBatchHint.textContent = vlmBackend === 'vllm'
+      ? 'vLLM：并发 HTTP 请求数（类似官方 caption_distributed.py 的 NUM_WORKERS）'
+      : 'Transformers：WD14 完成后多图一次 GPU generate';
+  }
+
+  const injectHint = document.getElementById('injectWd14Hint');
+  if (injectHint) {
+    if (!vlmOn) {
+      injectHint.textContent = '';
+    } else if (!wd14On) {
+      injectHint.textContent = '当前未启用 WD14，注入列表为空（VLM 仅看图片 + 模板）。';
+    } else if (state.injectWd14Tags) {
+      injectHint.textContent = '已开启：每张图按各自 WD14 标签构建 VLM prompt（batch>1 时每图 prompt 可不同）。';
+    } else {
+      injectHint.textContent = '已关闭：VLM 使用不含 WD14 的共享模板；WD14 标签仅出现在最终 caption。';
+    }
+  }
+}
+
+function getAnimaVlmPreset(vlmModel) {
+  return (state.animaVlmModels || []).find(function(item) { return item.id === vlmModel; }) || null;
+}
+
+function applyAnimaVlmPreset(vlmModel, force) {
+  const preset = getAnimaVlmPreset(vlmModel);
+  if (!preset) return null;
+  const urlInput = document.getElementById('animaVllmApiUrl');
+  const modelInput = document.getElementById('animaVllmModel');
+  const dirInput = document.getElementById('animaGemmaLocalDir');
+  if (urlInput && (force || !urlInput.dataset.userEdited)) {
+    urlInput.value = preset.default_api_url || '';
+    delete urlInput.dataset.userEdited;
+  }
+  if (modelInput && (force || !modelInput.dataset.userEdited)) {
+    modelInput.value = preset.default_served_name || '';
+    delete modelInput.dataset.userEdited;
+  }
+  if (dirInput && preset.local_model_dir) {
+    dirInput.value = './' + String(preset.local_model_dir).replace(/^\.\//, '');
+  }
+  return preset;
+}
+
+function setAnimaVllmStatus(text, tone) {
+  const el = document.getElementById('animaVllmStatus');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = tone === 'ok' ? 'var(--c-brand)' : (tone === 'err' ? 'var(--c-danger)' : 'inherit');
+}
+
+async function refreshAnimaVllmStatus() {
+  const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
+  try {
+    const resp = await fetch('/api/tag-edit-leaf/vllm/status?vlm_model=' + encodeURIComponent(vlmModel));
+    const data = await resp.json();
+    if (data.status !== 'success') {
+      setAnimaVllmStatus(data.message || '状态查询失败', 'err');
+      return null;
+    }
+    const s = data.data || {};
+    if (s.ready) setAnimaVllmStatus('vLLM 已就绪 · ' + (s.served_name || ''), 'ok');
+    else if (s.status === 'starting') setAnimaVllmStatus('vLLM 启动中...', '');
+    else if (s.status === 'busy') setAnimaVllmStatus(s.message || '端口被占用', 'err');
+    else setAnimaVllmStatus(s.message || 'vLLM 未运行', '');
+    return s;
+  } catch (e) {
+    setAnimaVllmStatus('状态查询失败: ' + e.message, 'err');
+    return null;
+  }
+}
+
+async function ensureAnimaVllmReady(showProgress) {
+  if (state.animaVllmBusy) return false;
+  const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
+  applyAnimaVlmPreset(vlmModel, true);
+  const current = await refreshAnimaVllmStatus();
+  if (current && current.ready) return true;
+
+  state.animaVllmBusy = true;
+  setAnimaVllmStatus('正在启动 vLLM...', '');
+  if (showProgress) document.getElementById('progressText').textContent = '正在启动 vLLM 服务...';
+
+  try {
+    const resp = await fetch('/api/tag-edit-leaf/vllm/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        vlm_model: vlmModel,
+        auto_download_gemma: state.animaAutoDownloadGemma,
+        wait_ready: true,
+        timeout: 900,
+      }),
+    });
+    const data = await resp.json();
+    if (data.status === 'success') {
+      const payload = data.data || {};
+      if (payload.default_api_url) document.getElementById('animaVllmApiUrl').value = payload.default_api_url;
+      if (payload.default_served_name) document.getElementById('animaVllmModel').value = payload.default_served_name;
+      setAnimaVllmStatus(data.message || 'vLLM 已就绪', 'ok');
+      return true;
+    }
+    setAnimaVllmStatus(data.message || 'vLLM 启动失败', 'err');
+    return false;
+  } catch (e) {
+    setAnimaVllmStatus('vLLM 启动失败: ' + e.message, 'err');
+    return false;
+  } finally {
+    state.animaVllmBusy = false;
+  }
+}
+
+async function toggleAnimaAutoStartVllm() {
+  state.animaAutoStartVllm = !state.animaAutoStartVllm;
+  document.getElementById('animaAutoStartVllm-sw').classList.toggle('on', state.animaAutoStartVllm);
+  if (state.animaAutoStartVllm) {
+    const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
+    applyAnimaVlmPreset(vlmModel, true);
+    await ensureAnimaVllmReady(false);
+  } else {
+    await refreshAnimaVllmStatus();
+  }
+}
+
+async function updateAnimaTrainSections() {
+  const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
+  const isGemma = vlmModel === 'gemma-4-e4b';
+  const gemmaRow = document.getElementById('animaGemmaDirRow');
+  if (gemmaRow) gemmaRow.style.display = isGemma ? '' : 'none';
+
+  if (state.animaAutoStartVllm) {
+    applyAnimaVlmPreset(vlmModel, true);
+    await ensureAnimaVllmReady(false);
+  } else {
+    applyAnimaVlmPreset(vlmModel, false);
+    await refreshAnimaVllmStatus();
+  }
 }
 
 function updateMode() {
   const mode = document.getElementById('mode').value;
   document.getElementById('smartSection').style.display = mode==='smart'?'':'none';
+  const animaMode = mode === 'anima_train';
+  document.getElementById('animaTrainSection').style.display = animaMode ? '' : 'none';
   const apiMode = mode === 'api';
   document.getElementById('apiSection').style.display = apiMode ? '' : 'none';
   document.getElementById('apiBody').classList.toggle('show', apiMode);
+  if (mode === 'smart') updateSmartSections();
+  if (animaMode) updateAnimaTrainSections().catch(function(){});
 }
 
 async function scanDir() {
@@ -434,15 +776,36 @@ function collectConfig() {
     resume: state.resume,
     purpose: document.getElementById('purpose').value,
     trigger: document.getElementById('trigger').value.trim(),
+    use_wd14: state.useWD14,
     use_vlm: state.useVLM,
+    vlm_backend: document.getElementById('vlmBackend').value,
+    vllm_api_url: document.getElementById('vllmApiUrl').value.trim(),
+    vllm_model: document.getElementById('vllmModel').value.trim(),
+    vlm_prompt_mode: document.getElementById('vlmPromptMode').value,
+    inject_wd14_tags: state.injectWd14Tags,
     taggers: state.consensusModels,
     consensus: parseInt(document.getElementById('consensus').value)||2,
     blacklist: document.getElementById('blacklist').value.trim().split(/\s+/).filter(Boolean),
     data_dir: document.getElementById('dataDir').value.trim() || '',
-    wd14_batch: parseInt(document.getElementById('wd14Batch').value)||1,
-    vlm_workers: parseInt(document.getElementById('vlmWorkers').value)||1,
+    wd14_batch: parseInt(document.getElementById('wd14Batch').value)||8,
+    vlm_batch: parseInt(document.getElementById('vlmBatch').value)||4,
   };
   // API mode extra fields
+  if (config.mode === 'anima_train') {
+    config.vlm_model = document.getElementById('animaVlmModel').value;
+    config.vllm_api_url = document.getElementById('animaVllmApiUrl').value.trim();
+    config.vllm_model = document.getElementById('animaVllmModel').value.trim();
+    config.vlm_workers = parseInt(document.getElementById('animaVlmWorkers').value) || 4;
+    config.vlm_max_tokens = parseInt(document.getElementById('animaVlmMaxTokens').value) || 2048;
+    config.temperature = parseFloat(document.getElementById('animaTemperature').value) || 0.2;
+    config.purpose = document.getElementById('animaPurpose').value;
+    config.style_hint = document.getElementById('animaStyleHint').value.trim();
+    config.trigger = document.getElementById('animaTrigger').value.trim();
+    config.wd14_model = config.model;
+    config.use_alias_index = state.animaUseAlias;
+    config.auto_download_gemma = state.animaAutoDownloadGemma;
+    config.auto_start_vllm = state.animaAutoStartVllm;
+  }
   if (config.mode === 'api') {
     config.api_mode = true;
     config.api_provider = document.getElementById('apiProvider').value;
@@ -452,6 +815,9 @@ function collectConfig() {
     config.api_system_prompt = document.getElementById('apiSystemPrompt').value.trim();
     config.api_max_tokens = parseInt(document.getElementById('apiMaxTokens').value)||256;
     config.api_temperature = parseFloat(document.getElementById('apiTemperature').value)||0.3;
+    config.api_workers = parseInt(document.getElementById('apiWorkers').value)||2;
+    config.api_max_retries = parseInt(document.getElementById('apiMaxRetries').value)||2;
+    config.api_timeout = parseInt(document.getElementById('apiTimeout').value)||60;
   }
   return config;
 }
@@ -459,11 +825,27 @@ function collectConfig() {
 async function runTagger() {
   const config = collectConfig();
   if (!config.input_dir) { alert('请输入图片目录'); return; }
+  if (config.mode === 'smart' && !config.use_wd14 && !config.use_vlm) {
+    alert('Smart 模式至少需要启用 WD14 或 ToriiGate VLM 之一');
+    return;
+  }
 
   document.getElementById('progressSection').style.display='';
   document.getElementById('btnRun').disabled=true;
   document.getElementById('progressText').textContent='提交中...';
   document.getElementById('progressFill').style.width='0%';
+
+  if (config.mode === 'anima_train' && state.animaAutoStartVllm) {
+    const ready = await ensureAnimaVllmReady(true);
+    if (!ready) {
+      document.getElementById('progressText').textContent = 'vLLM 未就绪，已取消标注';
+      document.getElementById('btnRun').disabled = false;
+      document.getElementById('btnClear').style.display = '';
+      return;
+    }
+    config.vllm_api_url = document.getElementById('animaVllmApiUrl').value.trim();
+    config.vllm_model = document.getElementById('animaVllmModel').value.trim();
+  }
 
   try {
     const resp = await fetch('/api/tag-edit-leaf/run', {
@@ -494,7 +876,11 @@ function startPolling() {
       if (data.status!=='success') return;
       const s = data.data;
       document.getElementById('progressFill').style.width = s.progress+'%';
-      document.getElementById('progressText').textContent = s.progress+'% — '+s.message;
+      var statusLine = s.progress+'%';
+      if (s.phase) statusLine += ' ['+s.phase+']';
+      statusLine += ' — '+s.message;
+      if (s.failed_count) statusLine += ' · 失败 '+s.failed_count;
+      document.getElementById('progressText').textContent = statusLine;
 
       if (s.status === 'done' || s.status === 'error') {
         clearInterval(state.pollingId);
@@ -552,9 +938,43 @@ function clearTask() {
   document.getElementById('btnClear').style.display = 'none';
 }
 
+async function loadAnimaVlmModels() {
+  try {
+    const resp = await fetch('/api/tag-edit-leaf/models');
+    const data = await resp.json();
+    if (data.status === 'success' && data.data && data.data.anima_train) {
+      state.animaVlmModels = data.data.anima_train.vlm_models || [];
+      const select = document.getElementById('animaVlmModel');
+      if (select && state.animaVlmModels.length) {
+        const current = select.value;
+        select.innerHTML = state.animaVlmModels.map(function(item) {
+          return '<option value="'+item.id+'">'+escapeHtml(item.label || item.id)+'</option>';
+        }).join('');
+        if (state.animaVlmModels.some(function(item) { return item.id === current; })) {
+          select.value = current;
+        }
+      }
+      updateAnimaTrainSections().catch(function(){});
+    }
+  } catch (e) {}
+}
+
+['animaVllmApiUrl', 'animaVllmModel'].forEach(function(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', function() { el.dataset.userEdited = '1'; });
+});
+
 // Init
 renderConsensusModels();
+loadAnimaVlmModels();
 updateMode();
+updateSmartSections();
+if (state.animaAutoStartVllm && document.getElementById('mode').value === 'anima_train') {
+  ensureAnimaVllmReady(false).catch(function(){});
+} else {
+  refreshAnimaVllmStatus().catch(function(){});
+}
 </script>
 </body>
 </html>

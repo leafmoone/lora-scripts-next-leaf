@@ -11,6 +11,7 @@ Supports multi-tagger consensus (T-power-PR2) for booru tagging.
 """
 from __future__ import annotations
 
+import gc
 import logging
 import re
 from dataclasses import dataclass, field
@@ -297,6 +298,34 @@ def build_vlm_prompt(
     return template.replace("{tags}", ", ".join(cleaned))
 
 
+def build_vlm_user_prompt(
+    *,
+    vlm_prompt_mode: str,
+    training_purpose: str,
+    wd14_tags: list[str],
+    inject_wd14_tags: bool = True,
+) -> str:
+    """Build ToriiGate user prompt from frontend/CLI smart-tag options."""
+    mode = str(vlm_prompt_mode or "lora").strip().lower()
+    if mode == "lora":
+        return build_vlm_prompt(
+            training_purpose,
+            wd14_tags,
+            include_tags=inject_wd14_tags,
+        )
+    if mode.startswith("official_"):
+        from toriigate_prompts import build_official_user_query, resolve_official_caption_type
+
+        return build_official_user_query(
+            resolve_official_caption_type(mode),
+            wd14_tags,
+            inject_wd14_tags=inject_wd14_tags,
+        )
+    from toriigate_prompts import build_official_user_query
+
+    return build_official_user_query("short", wd14_tags, inject_wd14_tags=inject_wd14_tags)
+
+
 # ---------------------------------------------------------------------------
 # Caption assembly + trigger injection
 # ---------------------------------------------------------------------------
@@ -433,6 +462,15 @@ def _flatten_tag_names(items: List[Any]) -> List[str]:
     return out
 
 
+def _apply_blacklist_names(names: List[str], blacklist: Optional[List[str]]) -> List[str]:
+    if not blacklist:
+        return names
+    blocked = {str(t).strip().lower() for t in blacklist if str(t).strip()}
+    if not blocked:
+        return names
+    return [t for t in names if str(t).strip().lower() not in blocked]
+
+
 def _normalize_tag_rows(items: List[Any], category: str) -> List[Dict[str, Any]]:
     """Keep model confidence rows intact while accepting legacy string tags."""
     rows: List[Dict[str, Any]] = []
@@ -561,6 +599,342 @@ def _tag_image_with_thresholds(tagger, image_path: str, **kwargs) -> Dict[str, A
         return tagger.tag(image_path, **tag_kwargs)
 
 
+def _tag_batch_with_thresholds(
+    tagger,
+    image_paths: List[str],
+    *,
+    preferred_batch_size: int,
+    **kwargs,
+) -> List[Dict[str, Any]]:
+    """Call tagger.tag_batch when available, preserving output order."""
+    if not image_paths:
+        return []
+    if not hasattr(tagger, "tag_batch"):
+        return [_tag_image_with_thresholds(tagger, path, **kwargs) for path in image_paths]
+
+    import inspect
+
+    batch_kwargs: Dict[str, Any] = {
+        k: v for k, v in kwargs.items()
+        if k in ("threshold", "character_threshold", "copyright_threshold")
+    }
+    batch_kwargs["preferred_batch_size"] = max(1, int(preferred_batch_size or 1))
+
+    try:
+        params = inspect.signature(tagger.tag_batch).parameters
+        for key in list(batch_kwargs):
+            if key not in params:
+                batch_kwargs.pop(key, None)
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        outputs = tagger.tag_batch(image_paths, **batch_kwargs)
+    except TypeError:
+        batch_kwargs.pop("copyright_threshold", None)
+        outputs = tagger.tag_batch(image_paths, **batch_kwargs)
+
+    if isinstance(outputs, tuple):
+        outputs = outputs[0]
+    if not isinstance(outputs, list) or len(outputs) != len(image_paths):
+        logger.warning(
+            "Batch tagger returned %s result(s) for %s image(s); falling back to single-image tagging.",
+            len(outputs) if isinstance(outputs, list) else "non-list",
+            len(image_paths),
+        )
+        return [_tag_image_with_thresholds(tagger, path, **kwargs) for path in image_paths]
+    return outputs
+
+
+def _empty_wd14_prepared() -> Dict[str, Any]:
+    return {
+        "general_names": [],
+        "copyright_names": [],
+        "character_names": [],
+        "rating": None,
+        "noise_stripped_count": 0,
+    }
+
+
+def _finalize_wd14_field_names(
+    general_rows: List[Dict[str, Any]],
+    copyright_rows: List[Dict[str, Any]],
+    character_rows: List[Dict[str, Any]],
+    rating: Optional[str],
+    req: SmartTagRequest,
+) -> Dict[str, Any]:
+    general_rows, copyright_rows, character_rows, noise_stripped = _prepare_smart_tag_rows(
+        general_rows,
+        copyright_rows,
+        character_rows,
+        auto_strip_noise=req.auto_strip_noise,
+        max_tags_per_image=req.max_tags_per_image,
+    )
+    general_names = _flatten_tag_names(general_rows)
+    copyright_names = _flatten_tag_names(copyright_rows)
+    character_names = _flatten_tag_names(character_rows)
+    if req.blacklist:
+        general_names = _apply_blacklist_names(general_names, req.blacklist)
+        copyright_names = _apply_blacklist_names(copyright_names, req.blacklist)
+        character_names = _apply_blacklist_names(character_names, req.blacklist)
+    return {
+        "general_names": general_names,
+        "copyright_names": copyright_names,
+        "character_names": character_names,
+        "rating": rating,
+        "noise_stripped_count": noise_stripped,
+    }
+
+
+def _prepare_wd14_fields_from_raw(result: Dict[str, Any], req: SmartTagRequest) -> Dict[str, Any]:
+    general_rows = _normalize_tag_rows(result.get("general_tags") or [], "general")
+    copyright_rows = _normalize_tag_rows(result.get("copyright_tags") or [], "copyright")
+    character_rows = _normalize_tag_rows(result.get("character_tags") or [], "character")
+    rating = result.get("rating") or None
+    return _finalize_wd14_field_names(
+        general_rows, copyright_rows, character_rows, rating, req
+    )
+
+
+def _prepare_wd14_fields_from_consensus(
+    precomputed_tagger_outputs: List[Dict[str, Any]],
+    req: SmartTagRequest,
+) -> Dict[str, Any]:
+    fused = compute_consensus_tags(
+        precomputed_tagger_outputs,
+        consensus_min=req.consensus_min,
+        skip_categories=req.consensus_skip_categories,
+    )
+    general_rows = _normalize_tag_rows(fused.get("general_tags") or [], "general")
+    copyright_rows = _normalize_tag_rows(fused.get("copyright_tags") or [], "copyright")
+    character_rows = _normalize_tag_rows(fused.get("character_tags") or [], "character")
+    rating = fused.get("rating") or None
+    return _finalize_wd14_field_names(
+        general_rows, copyright_rows, character_rows, rating, req
+    )
+
+
+def _extract_nl_text(out: Dict[str, Any]) -> str:
+    nl_text = str(out.get("raw_text") or "").strip()
+    if nl_text:
+        return nl_text
+    return ", ".join(_flatten_tag_names(out.get("general_tags") or []))
+
+
+def _finalize_smart_result(
+    image_path: str,
+    wd14_fields: Dict[str, Any],
+    nl_text: str,
+    req: SmartTagRequest,
+) -> SmartTagResult:
+    caption = assemble_caption(
+        rating=wd14_fields.get("rating"),
+        general_tags=wd14_fields["general_names"] + wd14_fields["copyright_names"],
+        character_tags=wd14_fields["character_names"],
+        nl_text=nl_text,
+        trigger_word=req.trigger_word,
+        auto_strip_noise=req.auto_strip_noise,
+    )
+    return SmartTagResult(
+        image_path=image_path,
+        caption=caption,
+        general_tags=wd14_fields["general_names"],
+        copyright_tags=wd14_fields["copyright_names"],
+        character_tags=wd14_fields["character_names"],
+        rating=wd14_fields.get("rating"),
+        nl_text=nl_text,
+        noise_stripped_count=int(wd14_fields.get("noise_stripped_count") or 0),
+    )
+
+
+def _release_ai_memory() -> None:
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def _load_nl_tagger(
+    *,
+    use_gpu: bool,
+    vlm_backend: str,
+    vllm_api_url: str,
+    vllm_model: str,
+    progress_callback,
+    total: int,
+):
+    from toriigate_vllm_tagger import get_toriigate_vllm_tagger, normalize_vlm_backend
+
+    backend = normalize_vlm_backend(vlm_backend)
+    if backend == "vllm":
+        if progress_callback:
+            progress_callback(0, total, "Connecting to ToriiGate vLLM server...")
+        nl_tagger = get_toriigate_vllm_tagger(
+            api_url=vllm_api_url or None,
+            model_name=vllm_model or None,
+            use_gpu=use_gpu,
+            force_reload=False,
+        )
+    else:
+        if progress_callback:
+            progress_callback(0, total, "Loading ToriiGate natural-language model...")
+        from toriigate_tagger import get_toriigate_tagger
+
+        nl_tagger = get_toriigate_tagger(
+            model_name="toriigate-0.5",
+            use_gpu=use_gpu,
+            force_reload=False,
+        )
+    if hasattr(nl_tagger, "load"):
+        nl_tagger.load()
+    return nl_tagger
+
+
+def _run_wd14_single_tagger_phase(
+    image_paths: List[str],
+    tagger,
+    req: SmartTagRequest,
+    wd14_batch_size: int,
+    progress_callback,
+) -> List[Dict[str, Any]]:
+    prepared: List[Dict[str, Any]] = []
+    total = len(image_paths)
+    progress_chunk = min(2000, max(256, int(wd14_batch_size) * 16))
+
+    for chunk_start in range(0, total, progress_chunk):
+        chunk_end = min(total, chunk_start + progress_chunk)
+        chunk_paths = image_paths[chunk_start:chunk_end]
+        try:
+            batch_outputs = _tag_batch_with_thresholds(
+                tagger,
+                chunk_paths,
+                preferred_batch_size=wd14_batch_size,
+                threshold=req.general_threshold,
+                character_threshold=req.character_threshold,
+                copyright_threshold=req.copyright_threshold,
+            )
+        except Exception as exc:
+            logger.warning(
+                "WD14 batch failed for images %s-%s: %s",
+                chunk_start + 1,
+                chunk_end,
+                exc,
+            )
+            batch_outputs = []
+
+        if len(batch_outputs) != len(chunk_paths):
+            batch_outputs = [
+                _tag_image_with_thresholds(
+                    tagger,
+                    path,
+                    threshold=req.general_threshold,
+                    character_threshold=req.character_threshold,
+                    copyright_threshold=req.copyright_threshold,
+                )
+                for path in chunk_paths
+            ]
+
+        for out in batch_outputs:
+            prepared.append(_prepare_wd14_fields_from_raw(out or {}, req))
+
+        if progress_callback:
+            progress_callback(chunk_end, total, f"WD14 {chunk_end}/{total}")
+
+    return prepared
+
+
+def _wd14_grounding_tag_names(wd14_fields: Dict[str, Any]) -> List[str]:
+    return (
+        list(wd14_fields.get("general_names") or [])
+        + list(wd14_fields.get("copyright_names") or [])
+        + list(wd14_fields.get("character_names") or [])
+    )
+
+
+def _build_vlm_prompt_for_prep(wd14_fields: Dict[str, Any], req: SmartTagRequest) -> str:
+    grounding = _wd14_grounding_tag_names(wd14_fields) if req.inject_wd14_tags else []
+    return build_vlm_user_prompt(
+        vlm_prompt_mode=req.vlm_prompt_mode,
+        training_purpose=req.training_purpose,
+        wd14_tags=grounding,
+        inject_wd14_tags=req.inject_wd14_tags,
+    )
+
+
+def _run_vlm_batch_phase(
+    image_paths: List[str],
+    wd14_prepared: List[Dict[str, Any]],
+    nl_tagger,
+    req: SmartTagRequest,
+    vlm_batch_size: int,
+    progress_callback,
+    *,
+    phase_label: str = "VLM",
+) -> List[str]:
+    total = len(image_paths)
+    nl_texts = [""] * total
+    if nl_tagger is None or not req.enable_vlm:
+        return nl_texts
+
+    use_per_image_prompts = bool(req.inject_wd14_tags)
+    shared_prompt = ""
+    if not use_per_image_prompts:
+        shared_prompt = _build_vlm_prompt_for_prep(_empty_wd14_prepared(), req)
+
+    batch_size = max(1, int(vlm_batch_size or 1))
+
+    for start in range(0, total, batch_size):
+        chunk_end = min(total, start + batch_size)
+        chunk_paths = image_paths[start:chunk_end]
+        chunk_prompts: Optional[List[str]] = None
+        if use_per_image_prompts:
+            chunk_prompts = [
+                _build_vlm_prompt_for_prep(wd14_prepared[start + offset], req)
+                for offset in range(len(chunk_paths))
+            ]
+        try:
+            batch_kwargs: Dict[str, Any] = {"preferred_batch_size": batch_size}
+            if chunk_prompts is not None:
+                batch_kwargs["user_prompts"] = chunk_prompts
+            else:
+                batch_kwargs["user_prompt"] = shared_prompt
+
+            if hasattr(nl_tagger, "tag_batch"):
+                outputs = nl_tagger.tag_batch(chunk_paths, **batch_kwargs)
+            elif chunk_prompts is not None:
+                outputs = [
+                    nl_tagger.tag(path, user_prompt=chunk_prompts[offset])
+                    for offset, path in enumerate(chunk_paths)
+                ]
+            else:
+                outputs = [
+                    nl_tagger.tag(path, user_prompt=shared_prompt)
+                    for path in chunk_paths
+                ]
+            for offset, out in enumerate(outputs):
+                nl_texts[start + offset] = _extract_nl_text(out or {})
+        except Exception as exc:
+            logger.warning(
+                "VLM batch failed for images %s-%s: %s",
+                start + 1,
+                chunk_end,
+                exc,
+            )
+
+        if progress_callback:
+            progress_callback(
+                chunk_end,
+                total,
+                f"{phase_label} {chunk_end}/{total}",
+            )
+
+    return nl_texts
+
+
 def _process_one_image(
     *,
     image_path: str,
@@ -608,12 +982,23 @@ def _process_one_image(
     general_names = _flatten_tag_names(general_rows)
     copyright_names = _flatten_tag_names(copyright_rows)
     character_names = _flatten_tag_names(character_rows)
+    if req.blacklist:
+        general_names = _apply_blacklist_names(general_names, req.blacklist)
+        copyright_names = _apply_blacklist_names(copyright_names, req.blacklist)
+        character_names = _apply_blacklist_names(character_names, req.blacklist)
 
     # ------- Stage 2: ToriiGate VLM caption --------
     nl_text = ""
     if req.enable_vlm and nl_tagger is not None:
         try:
-            out = nl_tagger.tag(image_path)
+            grounding_tags = general_names + copyright_names + character_names
+            user_prompt = build_vlm_user_prompt(
+                vlm_prompt_mode=req.vlm_prompt_mode,
+                training_purpose=req.training_purpose,
+                wd14_tags=grounding_tags,
+                inject_wd14_tags=req.inject_wd14_tags,
+            )
+            out = nl_tagger.tag(image_path, user_prompt=user_prompt)
             nl_text = str(out.get("raw_text") or "").strip()
             if not nl_text:
                 nl_text = ", ".join(_flatten_tag_names(out.get("general_tags") or []))
@@ -666,6 +1051,12 @@ class SmartTagRequest:
     consensus_skip_categories: List[str] = field(
         default_factory=lambda: ["character", "copyright"]
     )
+    vlm_prompt_mode: str = "lora"
+    inject_wd14_tags: bool = True
+    vlm_backend: str = "transformers"
+    vllm_api_url: str = ""
+    vllm_model: str = ""
+    blacklist: List[str] = field(default_factory=list)
 
 
 def discover_images(paths: List[str], recursive: bool = False) -> List[str]:
@@ -710,8 +1101,14 @@ def run_smart_tag_pipeline(
     consensus_min: int = 2,
     consensus_skip_categories: Optional[List[str]] = None,
     progress_callback=None,
-    wd14_batch_size: int = 1,
-    vlm_workers: int = 1,
+    wd14_batch_size: int = 8,
+    vlm_batch_size: int = 4,
+    vlm_backend: str = "transformers",
+    vllm_api_url: str = "",
+    vllm_model: str = "",
+    vlm_prompt_mode: str = "lora",
+    inject_wd14_tags: bool = True,
+    blacklist: Optional[List[str]] = None,
 ) -> List[SmartTagResult]:
     """Run the full Smart Tag pipeline on a list of image paths.
 
@@ -722,6 +1119,11 @@ def run_smart_tag_pipeline(
         auto_strip_noise: Strip quality/score/safety/meta/time noise tags.
         enable_wd14: Enable local booru tagging stage.
         enable_vlm: Enable ToriiGate VLM caption stage.
+        vlm_prompt_mode: ``lora`` or ``official_*`` ToriiGate caption template.
+        inject_wd14_tags: Inject WD14 tag list into each image's VLM user prompt when enabled.
+        wd14_batch_size: Batch size for WD14 inference (default 8).
+        vlm_batch_size: Batch size / concurrency for ToriiGate VLM (default 4).
+        vlm_backend: ``transformers`` (local HF) or ``vllm`` (OpenAI-compatible server).
         tagger_model: WD14/OppaiOracle model name for single-tagger mode.
         use_gpu: Use GPU acceleration when available.
         general_threshold: Confidence threshold for general tags.
@@ -739,6 +1141,9 @@ def run_smart_tag_pipeline(
     if not image_paths:
         return []
 
+    if not enable_wd14 and not enable_vlm:
+        raise ValueError("Smart mode requires at least WD14 tagging or ToriiGate VLM.")
+
     req = SmartTagRequest(
         image_paths=image_paths,
         training_purpose=normalize_training_purpose(training_purpose),
@@ -755,57 +1160,24 @@ def run_smart_tag_pipeline(
         taggers=taggers or [],
         consensus_min=consensus_min,
         consensus_skip_categories=consensus_skip_categories or ["character", "copyright"],
+        vlm_prompt_mode=str(vlm_prompt_mode or "lora"),
+        inject_wd14_tags=bool(inject_wd14_tags),
+        vlm_backend=str(vlm_backend or "transformers"),
+        vllm_api_url=str(vllm_api_url or "").strip(),
+        vllm_model=str(vllm_model or "").strip(),
+        blacklist=list(blacklist or []),
     )
+
+    from toriigate_vllm_tagger import normalize_vlm_backend
+
+    vlm_backend_norm = normalize_vlm_backend(req.vlm_backend)
 
     results: List[SmartTagResult] = []
     total = len(image_paths)
-
-    # --- Load models ---
+    wd14_prepared: List[Dict[str, Any]] = []
     tagger = None
-    nl_tagger = None
 
-    if enable_wd14:
-        if req.taggers:
-            # Multi-tagger mode: load each one lazily during processing
-            pass
-        else:
-            if progress_callback:
-                progress_callback(0, total, "Loading local booru tagger...")
-            if tagger_model.startswith("oppai-oracle"):
-                from oppai_oracle_tagger import get_oppai_oracle_tagger
-                tagger = get_oppai_oracle_tagger(
-                    model_name=tagger_model,
-                    threshold=general_threshold,
-                    character_threshold=character_threshold,
-                    use_gpu=use_gpu,
-                    force_reload=False,
-                )
-            else:
-                from tagger import get_tagger
-                tagger = get_tagger(
-                    model_name=tagger_model or None,
-                    threshold=general_threshold,
-                    character_threshold=character_threshold,
-                    copyright_threshold=copyright_threshold,
-                    use_gpu=use_gpu,
-                    force_reload=False,
-                )
-            if hasattr(tagger, "load"):
-                tagger.load()
-
-    if enable_vlm:
-        if progress_callback:
-            progress_callback(0, total, "Loading ToriiGate natural-language model...")
-        from toriigate_tagger import get_toriigate_tagger
-        nl_tagger = get_toriigate_tagger(
-            model_name="toriigate-0.5",
-            use_gpu=use_gpu,
-            force_reload=False,
-        )
-        if hasattr(nl_tagger, "load"):
-            nl_tagger.load()
-
-    # --- Multi-tagger mode: process all images per-tagger to avoid model thrashing ---
+    # ── Phase 1: WD14 (all images) ─────────────────────────────
     if enable_wd14 and req.taggers:
         all_sources = list(enumerate(image_paths))
         per_image_outputs: List[List[Dict[str, Any]]] = [[] for _ in all_sources]
@@ -840,14 +1212,45 @@ def run_smart_tag_pipeline(
                 logger.warning("Failed to load tagger %s: %s", model_name, exc)
                 continue
 
-            for img_idx, (_, path) in enumerate(all_sources):
+            progress_chunk = min(2000, max(256, int(wd14_batch_size) * 16))
+            for chunk_start in range(0, len(all_sources), progress_chunk):
+                chunk_end = min(len(all_sources), chunk_start + progress_chunk)
+                chunk_paths = [path for _, path in all_sources[chunk_start:chunk_end]]
                 try:
-                    out = _tag_image_with_thresholds(
-                        one_tagger, path,
+                    batch_outputs = _tag_batch_with_thresholds(
+                        one_tagger,
+                        chunk_paths,
+                        preferred_batch_size=wd14_batch_size,
                         threshold=gen_th,
                         character_threshold=char_th,
                         copyright_threshold=copy_th,
                     )
+                except Exception as exc:
+                    logger.warning(
+                        "Consensus tagger %s batch failed for images %s-%s: %s",
+                        model_name,
+                        chunk_start + 1,
+                        chunk_end,
+                        exc,
+                    )
+                    batch_outputs = []
+
+                if len(batch_outputs) != len(chunk_paths):
+                    batch_outputs = [
+                        _tag_image_with_thresholds(
+                            one_tagger,
+                            path,
+                            threshold=gen_th,
+                            character_threshold=char_th,
+                            copyright_threshold=copy_th,
+                        )
+                        for path in chunk_paths
+                    ]
+
+                for offset, out in enumerate(batch_outputs):
+                    img_idx = chunk_start + offset
+                    if not out:
+                        continue
                     per_image_outputs[img_idx].append({
                         "model": model_name,
                         "weight": weight,
@@ -856,179 +1259,87 @@ def run_smart_tag_pipeline(
                         "character_tags": out.get("character_tags") or [],
                         "rating": out.get("rating"),
                     })
-                except Exception as exc:
-                    logger.warning(
-                        "Consensus tagger %s failed on %s: %s", model_name, path, exc
-                    )
+
                 if progress_callback:
                     progress_callback(
-                        img_idx + 1, len(all_sources),
-                        f"Tagging ({model_name}) {img_idx + 1}/{len(all_sources)}"
+                        chunk_end, len(all_sources),
+                        f"WD14 ({model_name}) {chunk_end}/{len(all_sources)}"
                     )
 
-        # Consensus + VLM per image
-        for img_idx, (original_idx, path) in enumerate(all_sources):
-            if progress_callback:
-                progress_callback(
-                    img_idx + 1, len(all_sources),
-                    f"Processing {img_idx + 1}/{len(all_sources)}"
-                )
-            try:
-                raw = _process_one_image(
-                    image_path=path,
-                    req=req,
-                    tagger=None,
-                    nl_tagger=nl_tagger,
-                    precomputed_tagger_outputs=per_image_outputs[img_idx] or None,
-                )
-                results.append(SmartTagResult(
-                    image_path=path,
-                    caption=raw.get("caption", ""),
-                    general_tags=raw.get("general_tags", []),
-                    copyright_tags=raw.get("copyright_tags", []),
-                    character_tags=raw.get("character_tags", []),
-                    rating=raw.get("rating"),
-                    nl_text=raw.get("nl_text", ""),
-                    noise_stripped_count=raw.get("noise_stripped_count", 0),
-                ))
-            except Exception as exc:
-                logger.error("Smart tag failed on %s: %s", path, exc)
-                results.append(SmartTagResult(
-                    image_path=path,
-                    error=str(exc),
-                ))
-    else:
-        # Single-tagger or no-tagger mode
-        # ── Chunked pipeline: overlap WD14 batch + VLM ────────
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        import queue as _queue
-        import threading as _threading
-
-        CHUNK = min(2000, len(image_paths))
-        vlm_pool = None
-        vlm_futures: dict = {}
-        wd14_queue: _queue.Queue = _queue.Queue(maxsize=2)
-        use_batch = wd14_batch_size > 1 and tagger is not None and hasattr(tagger, "tag_batch")
-
-        if vlm_workers > 1 and nl_tagger is not None:
-            vlm_pool = ThreadPoolExecutor(max_workers=vlm_workers)
-
-        def _vlm_task(path, precomputed):
-            try:
-                raw = _process_one_image(image_path=path, req=req,
-                                          tagger=tagger, nl_tagger=nl_tagger,
-                                          precomputed_tagger_outputs=precomputed)
-                return SmartTagResult(
-                    image_path=path, caption=raw.get("caption", ""),
-                    general_tags=raw.get("general_tags", []),
-                    copyright_tags=raw.get("copyright_tags", []),
-                    character_tags=raw.get("character_tags", []),
-                    rating=raw.get("rating"),
-                    nl_text=raw.get("nl_text", ""),
-                    noise_stripped_count=raw.get("noise_stripped_count", 0),
-                )
-            except Exception as exc:
-                logger.error("Smart tag failed on %s: %s", path, exc)
-                return SmartTagResult(image_path=path, error=str(exc))
-
-        def _wd14_worker(img_list, batch_sz, start_idx):
-            """Process WD14 in chunks, sending results as each chunk completes."""
-            cs = 0
-            while cs < len(img_list):
-                ce = min(len(img_list), cs + CHUNK)
-                chunk = img_list[cs:ce]
-                if use_batch:
-                    chunk_results = tagger.tag_batch(
-                        chunk, preferred_batch_size=batch_sz,
-                        threshold=req.general_threshold,
-                        character_threshold=req.character_threshold,
-                        copyright_threshold=req.copyright_threshold,
-                    )
-                else:
-                    chunk_results = [tagger.tag(p) if tagger else {} for p in chunk]
-                wd14_queue.put((chunk_results, start_idx + cs, ce - cs))
-                cs = ce
-
-        # Kick off first WD14 chunk in background
-        wd14_thread = _threading.Thread(target=_wd14_worker,
-                                         args=(image_paths, wd14_batch_size, 0), daemon=True)
-        wd14_thread.start()
-
-        start = 0
-        while start < total:
-            try:
-                wd14_res, wd14_start, wd14_count = wd14_queue.get(timeout=7200)
-            except _queue.Empty:
-                break
-
-            # Submit VLM tasks for completed WD14 chunk
-            if vlm_pool:
-                wd14_map = {}
-                for r in wd14_res:
-                    if r and "image_path" in r:
-                        wd14_map[r["image_path"]] = r
-                for j in range(wd14_count):
-                    idx = wd14_start + j
-                    if idx >= total:
-                        break
-                    path = image_paths[idx]
-                    pre = [wd14_map.get(path)] if wd14_map else None
-                    fut = vlm_pool.submit(_vlm_task, path, pre)
-                    vlm_futures[fut] = idx
-
-            # Collect done VLM futures
-            done = [f for f in vlm_futures if f.done()]
-            for f in done:
-                results.append(f.result())
-                del vlm_futures[f]
-                if progress_callback:
-                    progress_callback(len(results), total, f"VLM {len(results)}/{total}")
-
-            start = wd14_start + wd14_count
-            if progress_callback and not vlm_pool:
-                progress_callback(start, total, f"WD14 {start}/{total}")
-
-        # Final VLM collection
-        if vlm_pool:
-            for future in as_completed(vlm_futures):
-                results.append(future.result())
-                if progress_callback:
-                    progress_callback(len(results), total, f"VLM {len(results)}/{total}")
-            vlm_pool.shutdown(wait=False)
-
-        wd14_thread.join(timeout=10)
-
-    return results
-
-
-def _process_sequentially(image_paths, results, req, tagger, nl_tagger,
-                           wd14_outputs, progress_callback, total):
-    """Sequential fallback: loop one image at a time."""
-    wd14_map = {}
-    if wd14_outputs is not None:
-        wd14_map = {r.get("image_path", ""): r for r in wd14_outputs}
-    for idx, path in enumerate(image_paths):
+        wd14_prepared = [
+            _prepare_wd14_fields_from_consensus(per_image_outputs[idx] or [], req)
+            for idx in range(total)
+        ]
+    elif enable_wd14:
         if progress_callback:
-            progress_callback(idx + 1, total, f"Processing {idx + 1}/{total}")
-        try:
-            pre = [wd14_map[path]] if path in wd14_map else None
-            raw = _process_one_image(
-                image_path=path,
-                req=req,
-                tagger=tagger,
-                nl_tagger=nl_tagger,
-                precomputed_tagger_outputs=pre,
+            progress_callback(0, total, "Loading local booru tagger...")
+        if tagger_model.startswith("oppai-oracle"):
+            from oppai_oracle_tagger import get_oppai_oracle_tagger
+
+            tagger = get_oppai_oracle_tagger(
+                model_name=tagger_model,
+                threshold=general_threshold,
+                character_threshold=character_threshold,
+                use_gpu=use_gpu,
+                force_reload=False,
             )
-            results.append(SmartTagResult(
-                image_path=path,
-                caption=raw.get("caption", ""),
-                general_tags=raw.get("general_tags", []),
-                copyright_tags=raw.get("copyright_tags", []),
-                character_tags=raw.get("character_tags", []),
-                rating=raw.get("rating"),
-                nl_text=raw.get("nl_text", ""),
-                noise_stripped_count=raw.get("noise_stripped_count", 0),
-            ))
+        else:
+            from tagger import get_tagger
+
+            tagger = get_tagger(
+                model_name=tagger_model or None,
+                threshold=general_threshold,
+                character_threshold=character_threshold,
+                copyright_threshold=copyright_threshold,
+                use_gpu=use_gpu,
+                force_reload=False,
+            )
+        if hasattr(tagger, "load"):
+            tagger.load()
+
+        wd14_prepared = _run_wd14_single_tagger_phase(
+            image_paths,
+            tagger,
+            req,
+            wd14_batch_size,
+            progress_callback,
+        )
+    else:
+        wd14_prepared = [_empty_wd14_prepared() for _ in image_paths]
+
+    if enable_wd14 and enable_vlm and vlm_backend_norm == "transformers":
+        tagger = None
+        _release_ai_memory()
+
+    # ── Phase 2: VLM batch (shared prompt template) ────────────
+    nl_tagger = None
+    nl_texts = [""] * total
+    if enable_vlm:
+        nl_tagger = _load_nl_tagger(
+            use_gpu=use_gpu,
+            vlm_backend=req.vlm_backend,
+            vllm_api_url=req.vllm_api_url,
+            vllm_model=req.vllm_model,
+            progress_callback=progress_callback,
+            total=total,
+        )
+        vlm_label = "VLM" if vlm_backend_norm == "transformers" else "vLLM"
+        nl_texts = _run_vlm_batch_phase(
+            image_paths,
+            wd14_prepared,
+            nl_tagger,
+            req,
+            vlm_batch_size,
+            progress_callback,
+            phase_label=vlm_label,
+        )
+
+    # ── Phase 3: Assemble captions ───────────────────────────────
+    for path, prep, nl_text in zip(image_paths, wd14_prepared, nl_texts):
+        try:
+            results.append(_finalize_smart_result(path, prep, nl_text, req))
         except Exception as exc:
             logger.error("Smart tag failed on %s: %s", path, exc)
             results.append(SmartTagResult(image_path=path, error=str(exc)))
+
+    return results

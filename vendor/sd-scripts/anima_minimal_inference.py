@@ -98,8 +98,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--flow_shift",
         type=float,
-        default=5.0,
-        help="Shift factor for flow matching schedulers. Default is 5.0.",
+        default=3.0,
+        help="Shift factor for flow matching schedulers. Default is 3.0.",
     )
 
     parser.add_argument("--fp8", action="store_true", help="use fp8 for DiT model")

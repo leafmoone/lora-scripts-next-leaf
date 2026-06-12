@@ -24,6 +24,7 @@ from mikazuki.differential_lora.task_runner import (
     run_differential_lora,
 )
 from mikazuki.log import log
+from mikazuki.utils.tagger_cmd import build_tagger_cmd, default_tagger_dir
 
 router = APIRouter(prefix="/api/differential-lora")
 
@@ -155,55 +156,37 @@ def _run_auto_tagging(folder_a: str, config: dict) -> None:
     """调用 tools/differential_tagger/main.py 打标，直接生成 .txt 到 folder_a。"""
     import subprocess
 
-    tagger_dir = os.path.join(os.path.dirname(__file__), "..", "..", "tools", "differential_tagger")
-    tagger_dir = os.path.abspath(tagger_dir)
+    tagger_dir = default_tagger_dir()
     main_py = os.path.join(tagger_dir, "main.py")
 
     if not os.path.isfile(main_py):
         log.error(f"[DiffLoRA] 标注器脚本不存在: {main_py}")
         return
 
-    mode = config.get("tagger_mode", "smart")
-    tagger_model = config.get("tagger_model", "wd-eva02-large-tagger-v3")
-
-    cmd = [
-        sys.executable, main_py,
-        "--input", folder_a,
-        "--output", folder_a,
-        f"--{mode}",
-        "--save-captions",
-        "--model", tagger_model,
-        "--threshold", str(config.get("tagger_threshold", 0.35)),
-        "--character-threshold", str(config.get("tagger_char_threshold", 0.85)),
-    ]
-
-    if config.get("tagger_use_vlm", True):
-        cmd.append("--vlm")
-    else:
-        cmd.append("--no-vlm")
-    if config.get("tagger_use_cpu", False):
-        cmd.append("--cpu")
-    if config.get("tagger_recursive", False):
-        cmd.append("--recursive")
-    if mode == "smart":
-        cmd.extend(["--purpose", config.get("tagger_purpose", "character")])
-        taggers = config.get("tagger_taggers", "")
-        if taggers:
-            tagger_list = [t.strip() for t in taggers.split() if t.strip()]
-            if len(tagger_list) >= 2:
-                cmd += ["--taggers"] + tagger_list + ["--consensus", str(config.get("tagger_consensus", 2))]
-    max_tags = config.get("tagger_max_tags", 0)
-    if max_tags > 0:
-        cmd.extend(["--max-tags", str(max_tags)])
-    blacklist = config.get("tagger_blacklist", "")
-    if blacklist:
-        tokens = [t.strip() for t in blacklist.split(",") if t.strip()]
-        if tokens:
-            cmd += ["--blacklist"] + tokens
-
-    data_dir = os.path.join(os.path.dirname(tagger_dir), "..", "models")
-    data_dir = os.path.abspath(data_dir)
-    cmd += ["--data-dir", data_dir]
+    cmd = build_tagger_cmd({
+        "input_dir": folder_a,
+        "output_dir": folder_a,
+        "mode": config.get("tagger_mode", "smart"),
+        "save_captions": True,
+        "model": config.get("tagger_model", "wd-eva02-large-tagger-v3"),
+        "threshold": config.get("tagger_threshold", 0.35),
+        "char_threshold": config.get("tagger_char_threshold", 0.85),
+        "use_vlm": config.get("tagger_use_vlm", True),
+        "use_cpu": config.get("tagger_use_cpu", False),
+        "recursive": config.get("tagger_recursive", False),
+        "resume": config.get("tagger_resume", False),
+        "purpose": config.get("tagger_purpose", "character"),
+        "taggers": config.get("tagger_taggers", ""),
+        "consensus": config.get("tagger_consensus", 2),
+        "max_tags": config.get("tagger_max_tags", 0),
+        "blacklist": config.get("tagger_blacklist", ""),
+        "wd14_batch": config.get("tagger_wd14_batch", 8),
+        "vlm_batch": config.get("tagger_vlm_batch", 4),
+        "vlm_backend": config.get("tagger_vlm_backend", "transformers"),
+        "vllm_api_url": config.get("tagger_vllm_api_url", ""),
+        "vllm_model": config.get("tagger_vllm_model", ""),
+        "data_dir": config.get("tagger_data_dir", ""),
+    }, python_executable=sys.executable, tagger_dir=tagger_dir)
 
     log.info(f"[DiffLoRA] 自动打标: {' '.join(cmd)}")
 

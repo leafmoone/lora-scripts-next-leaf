@@ -1,0 +1,47 @@
+{
+  "hatsune_miku": {
+    "aliases": ["初音未来", "miku", "hatsune miku"],
+    "blocked_tags": [],
+    "metadata": {
+      "copyright_tag": "vocaloid",
+      "count": 99999,
+      "_source": "manual"
+    }
+  },
+  "rem_(re:zero)": {
+    "aliases": ["蕾姆", "rem", "re zero rem"],
+    "blocked_tags": [],
+    "metadata": {
+      "copyright_tag": "re:zero_kara_hajimeru_isekai_seikatsu",
+      "count": 50000,
+      "_source": "manual"
+    }
+  },
+  "asuna_(sao)": {
+    "aliases": ["亚丝娜", "asuna", "sword art online asuna"],
+    "blocked_tags": [],
+    "metadata": {
+      "copyright_tag": "sword_art_online",
+      "count": 40000,
+      "_source": "manual"
+    }
+  },
+  "gawr_gura": {
+    "aliases": ["gura", "鲨鱼", "噶呜·古拉"],
+    "blocked_tags": [],
+    "metadata": {
+      "copyright_tag": "hololive",
+      "count": 30000,
+      "_source": "manual"
+    }
+  },
+  "marin_kitagawa": {
+    "aliases": ["喜多川海梦", "kitagawa marin", "marin"],
+    "blocked_tags": [],
+    "metadata": {
+      "copyright_tag": "sono_bisque_doll_wa_koi_wo_suru",
+      "count": 25000,
+      "_source": "manual"
+    }
+  }
+}

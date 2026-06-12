@@ -2,7 +2,7 @@
 
 import os
 import random
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -265,6 +265,20 @@ class AnimaLatentsCachingStrategy(LatentsCachingStrategy):
 
     def get_latents_npz_path(self, absolute_path: str, image_size: Tuple[int, int]) -> str:
         return os.path.splitext(absolute_path)[0] + f"_{image_size[0]:04d}x{image_size[1]:04d}" + self.ANIMA_LATENTS_NPZ_SUFFIX
+
+    def get_vae_encode_context(self, model: Any) -> Tuple[Callable[[torch.Tensor], torch.Tensor], torch.device, torch.dtype, bool]:
+        vae = model
+        device = vae.device
+        dtype = vae.dtype
+
+        def encode_by_vae(img_tensor: torch.Tensor) -> torch.Tensor:
+            with torch.no_grad():
+                latents = vae.encode_pixels_to_latents(img_tensor)
+                if latents.device.type != "cpu":
+                    latents = latents.to("cpu")
+            return latents
+
+        return encode_by_vae, device, dtype, True
 
     def is_disk_cached_latents_expected(self, bucket_reso: Tuple[int, int], npz_path: str, flip_aug: bool, alpha_mask: bool):
         return self._default_is_disk_cached_latents_expected(8, bucket_reso, npz_path, flip_aug, alpha_mask, multi_resolution=True)

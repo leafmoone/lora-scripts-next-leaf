@@ -61,7 +61,7 @@ Two-mode AI image tagger with WD14 booru tags (*simple*) and ToriiGate VLM natur
 
 - **Page**: Homepage card → DiffSynth Tagger, or `/tag-edit-leaf.html`
 - **API**: `POST /api/tag-edit-leaf/scan`, `POST /api/tag-edit-leaf/run`
-- **Parallelism**: Set `--wd14-batch 8 --vlm-workers 2` for WD14 batched inference + VLM pipeline
+- **Parallelism**: Smart mode runs WD14 first (`--wd14-batch 8`), then VLM batch (`--vlm-batch 4`)
 - **Design doc**: `[cursor_docs/ipa-lsnet-review.md](cursor_docs/ipa-lsnet-review.md)`
 
 ### 🔗 Multi-Stream vs Auxiliary Encoders

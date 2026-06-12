@@ -51,7 +51,7 @@ from torch.nn.functional import interpolate
 
 from .anima_ip_attention import AnimaIPCrossAttention
 from .anima_ip_converter import AnimaIPAConverter
-from .anima_ip_image_proj import ImageProjModel, MultiStreamProj
+from .anima_ip_image_proj import ImageProjModel, MLPImageProjModel, MultiStreamProj
 
 # CLIP image normalization (OpenAI CLIP mean/std), applied to [0,1] pixels.
 _CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
@@ -69,6 +69,36 @@ def _clip_normalize(x: torch.Tensor) -> torch.Tensor:
 def _make_projection(in_dim: int = 768, out_dim: int = 1024) -> nn.Module:
     """Trainable 768→1024 projection (fp32) — must match the trainer exactly."""
     return nn.Sequential(nn.Linear(in_dim, out_dim), nn.LayerNorm(out_dim)).float()
+
+
+def _build_omni_stream(num_queries: int, dim: int = 1024, num_heads: int = 16) -> nn.Module:
+    """Build the experimental Omni Adapter stream used by trainer adapter_type=omni."""
+    from ._adapter_modules import RMSNormNoAffine, OmniRefinerBlock
+
+    class OmniStream(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.num_queries = num_queries
+            self.output_dim = dim
+            self.norm = RMSNormNoAffine(dim)
+            self.proj = nn.Linear(dim, dim)
+            self.expand = nn.Linear(dim, dim * num_queries)
+            self.refiner = nn.ModuleList([OmniRefinerBlock(dim, num_heads) for _ in range(2)])
+            self.out_proj = nn.Linear(dim, dim, bias=False)
+            self.out_norm = nn.Identity()
+
+        def forward(self, x):
+            batch, length, width = x.shape
+            normed = self.norm(x).to(self.proj.weight.dtype)
+            if length == 1:
+                tokens = self.expand(normed[:, 0]).reshape(batch, self.num_queries, width)
+            else:
+                tokens = self.proj(normed)
+            for block in self.refiner:
+                tokens = block(tokens)
+            return self.out_norm(self.out_proj(tokens))
+
+    return OmniStream()
 
 
 def _to_image01(img: ImageLike) -> torch.Tensor:
@@ -168,6 +198,8 @@ class AnimaIPAdapter:
         nt_lsnet = int(metadata.get("ipa_num_ip_tokens_lsnet", str(num_ip_tokens)))
         cad = int(metadata.get("ipa_cross_attention_dim", "1024"))
         ipa_mode = metadata.get("ipa_mode", "simple")
+        adapter_type = metadata.get("ipa_adapter_type", "linear")
+        resampler_type = metadata.get("ipa_resampler_type", "resampler")
         need_patches = ipa_mode != "simple"
 
         # Per-stream token list: [CLIP, CCIP?, LSNet?]
@@ -185,8 +217,11 @@ class AnimaIPAdapter:
         if "ccip" in aux_encoders:
             from .ccip_encoder import load_ccip_encoder, DEFAULT_CKPT as _DEF_CCIP
 
+            resolved_ccip_ckpt = ccip_ckpt or _DEF_CCIP
+            if not resolved_ccip_ckpt:
+                raise ValueError("ccip_ckpt or CCIP_CKPT is required: this sidecar uses a CCIP stream")
             ccip_encoder = load_ccip_encoder(
-                ckpt_path=ccip_ckpt or _DEF_CCIP, device="cpu", dtype=dtype
+                ckpt_path=resolved_ccip_ckpt, device="cpu", dtype=dtype
             )
             ccip_proj = _make_projection()
         if "lsnet" in aux_encoders:
@@ -197,7 +232,23 @@ class AnimaIPAdapter:
             lsnet_encoder = load_lsnet_encoder(ckpt_path=lsnet_ckpt, device="cpu", dtype=dtype)
             lsnet_proj = _make_projection()
 
-        if num_streams > 1:
+        if adapter_type == "mlp":
+            if num_streams > 1:
+                image_proj = MultiStreamProj.from_modules([
+                    MLPImageProjModel(
+                        feature_dim=cad,
+                        cross_attention_dim=cad,
+                        num_tokens=tokens_per_stream[i],
+                    )
+                    for i in range(num_streams)
+                ])
+            else:
+                image_proj = MLPImageProjModel(
+                    feature_dim=cad,
+                    cross_attention_dim=cad,
+                    num_tokens=tokens_per_stream[0],
+                )
+        elif num_streams > 1:
             image_proj = MultiStreamProj(
                 num_streams=num_streams,
                 cross_attention_dim=cad,
@@ -222,11 +273,14 @@ class AnimaIPAdapter:
                 queries_per_stream.append(nq_ccip)
             if "lsnet" in aux_encoders:
                 queries_per_stream.append(nq_lsnet)
-            modules = [
-                Resampler(dim=1024, depth=4, dim_head=64, heads=16,
-                          num_queries=nq, output_dim=1024)
-                for nq in queries_per_stream
-            ]
+            if resampler_type == "omni" or adapter_type == "omni":
+                modules = [_build_omni_stream(nq, dim=1024, num_heads=16) for nq in queries_per_stream]
+            else:
+                modules = [
+                    Resampler(dim=1024, depth=4, dim_head=64, heads=16,
+                              num_queries=nq, output_dim=1024)
+                    for nq in queries_per_stream
+                ]
             if ipa_mode == "resampler":
                 image_proj = MultiStreamProj.from_modules(modules)
             else:
@@ -291,7 +345,8 @@ class AnimaIPAdapter:
 
     def _eval_all(self):
         for m in (self.clip_image_encoder, self.ccip_encoder, self.lsnet_encoder,
-                  self.clip_proj, self.ccip_proj, self.lsnet_proj, self.image_proj):
+                  self.clip_proj, self.ccip_proj, self.lsnet_proj, self.image_proj,
+                  self.image_proj_resampler):
             if m is not None:
                 m.eval()
                 for p in m.parameters():
@@ -454,11 +509,18 @@ class AnimaIPAdapter:
         ip = _scaled("clip", scale)
         ccip = _scaled("ccip", scale)
         lsnet = _scaled("lsnet", scale)
-        ip_fine = tokens.get("clip_fine")
-        if ip_fine is not None:
-            s = clip_scale if clip_scale is not None else scale
-            if s != 1.0:
-                ip_fine = ip_fine * s
+        fine_parts = []
+        for name, stream_scale in (
+            ("clip", clip_scale),
+            ("ccip", ccip_scale),
+            ("lsnet", lsnet_scale),
+        ):
+            fine = tokens.get(f"{name}_fine")
+            if fine is None:
+                continue
+            s = scale if stream_scale is None else stream_scale
+            fine_parts.append(fine * s if s != 1.0 else fine)
+        ip_fine = torch.cat(fine_parts, dim=1) if len(fine_parts) > 1 else (fine_parts[0] if fine_parts else None)
         self._stash(ip, ccip, lsnet, ip_fine)
 
     def _stash(self, ip, ccip, lsnet, ip_fine=None):

@@ -110,6 +110,39 @@ def format_result(result: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _format_simple_result(
+    raw: Dict[str, Any],
+    *,
+    threshold: float,
+    character_threshold: float,
+    blacklist: Optional[set] = None,
+    max_tags: int = 0,
+) -> Dict[str, Any]:
+    """Normalize a single WD14 ``tag()`` / ``tag_batch()`` row for ``run_simple``."""
+    all_tags = list(raw.get("all_tags") or [])
+    if blacklist:
+        all_tags = [
+            t for t in all_tags
+            if str(t.get("tag", "")).strip().lower() not in blacklist
+        ]
+    if max_tags > 0 and len(all_tags) > max_tags:
+        all_tags.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+        all_tags = all_tags[:max_tags]
+
+    result: Dict[str, Any] = {
+        "image_path": raw.get("image_path", ""),
+        "rating": raw.get("rating", "unknown"),
+        "rating_confidences": raw.get("rating_confidences", {}),
+        "general_tags": raw.get("general_tags", []),
+        "character_tags": raw.get("character_tags", []),
+        "copyright_tags": raw.get("copyright_tags", []),
+        "all_tags": all_tags,
+    }
+    if raw.get("error"):
+        result["error"] = raw["error"]
+    return result
+
+
 def run_simple(
     image_paths: List[str],
     *,
@@ -150,10 +183,19 @@ def run_simple(
             threshold=threshold,
             character_threshold=character_threshold,
         )
-        for raw in batch_results:
-            out = _format_simple_result(raw, threshold=threshold,
-                                        character_threshold=character_threshold,
-                                        blacklist=blacklist_lower, max_tags=max_tags)
+        for path, raw in zip(image_paths, batch_results):
+            if raw is None:
+                raw = {"error": "empty batch result"}
+            else:
+                raw = dict(raw)
+            raw.setdefault("image_path", path)
+            out = _format_simple_result(
+                raw,
+                threshold=threshold,
+                character_threshold=character_threshold,
+                blacklist=blacklist_lower or None,
+                max_tags=max_tags,
+            )
             results.append(out)
         return results
 
@@ -168,37 +210,21 @@ def run_simple(
                 threshold=threshold,
                 character_threshold=character_threshold,
             )
+            raw.setdefault("image_path", path)
         except Exception as exc:
             logger.error("Failed to tag %s: %s", path, exc)
             results.append({"image_path": path, "error": str(exc)})
             continue
 
-        # Apply blacklist filter
-        all_tags = raw.get("all_tags", [])
-        if blacklist_lower:
-            all_tags = [
-                t for t in all_tags
-                if str(t.get("tag", "")).strip().lower() not in blacklist_lower
-            ]
-
-        # Apply max_tags limit (only to all_tags, keep categories intact)
-        if max_tags > 0 and len(all_tags) > max_tags:
-            all_tags.sort(key=lambda x: x.get("confidence", 0), reverse=True)
-            all_tags = all_tags[:max_tags]
-
-        result = {
-            "image_path": path,
-            "rating": raw.get("rating", "unknown"),
-            "rating_confidences": raw.get("rating_confidences", {}),
-            "general_tags": raw.get("general_tags", []),
-            "character_tags": raw.get("character_tags", []),
-            "copyright_tags": raw.get("copyright_tags", []),
-            "all_tags": all_tags,
-        }
-        if "error" in raw:
-            result["error"] = raw["error"]
-
-        results.append(result)
+        results.append(
+            _format_simple_result(
+                raw,
+                threshold=threshold,
+                character_threshold=character_threshold,
+                blacklist=blacklist_lower or None,
+                max_tags=max_tags,
+            )
+        )
 
     return results
 
@@ -214,11 +240,18 @@ def run_smart(
     character_threshold: float = TAGGER_CHARACTER_THRESHOLD,
     max_tags: int = 0,
     enable_vlm: bool = True,
+    enable_wd14: bool = True,
     taggers: Optional[List[Dict[str, Any]]] = None,
     consensus_min: int = 2,
     progress_callback=None,
-    wd14_batch_size: int = 1,
-    vlm_workers: int = 1,
+    wd14_batch_size: int = 8,
+    vlm_batch_size: int = 4,
+    vlm_backend: str = "transformers",
+    vllm_api_url: str = "",
+    vllm_model: str = "",
+    vlm_prompt_mode: str = "lora",
+    inject_wd14_tags: bool = True,
+    blacklist: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Run Smart Tag pipeline."""
     from smart_tag import run_smart_tag_pipeline
@@ -228,7 +261,7 @@ def run_smart(
         training_purpose=training_purpose,
         trigger_word=trigger_word,
         auto_strip_noise=True,
-        enable_wd14=True,
+        enable_wd14=enable_wd14,
         enable_vlm=enable_vlm,
         tagger_model=tagger_model,
         use_gpu=use_gpu,
@@ -239,7 +272,13 @@ def run_smart(
         consensus_min=consensus_min,
         progress_callback=progress_callback,
         wd14_batch_size=wd14_batch_size,
-        vlm_workers=vlm_workers,
+        vlm_batch_size=vlm_batch_size,
+        vlm_backend=vlm_backend,
+        vllm_api_url=vllm_api_url,
+        vllm_model=vllm_model,
+        vlm_prompt_mode=vlm_prompt_mode,
+        inject_wd14_tags=inject_wd14_tags,
+        blacklist=blacklist,
     )
 
     results: List[Dict[str, Any]] = []
@@ -345,6 +384,21 @@ def main():
         "--no-vlm", action="store_true",
         help="Disable VLM even in smart mode",
     )
+    parser.add_argument(
+        "--no-wd14", action="store_true",
+        help="Disable WD14 booru tagging in smart mode (VLM-only)",
+    )
+    parser.add_argument(
+        "--vlm-prompt-mode",
+        default="lora",
+        choices=["lora", "official_short", "official_long", "official_min_structured_md"],
+        help="ToriiGate VLM user prompt template (default: lora purpose presets)",
+    )
+    parser.add_argument(
+        "--no-inject-wd14-tags",
+        action="store_true",
+        help="Do not inject WD14 tags into ToriiGate user prompt",
+    )
 
     # Multi-tagger consensus
     parser.add_argument(
@@ -377,14 +431,30 @@ def main():
     )
     # Parallelism
     parser.add_argument(
-        "--wd14-batch", type=int, default=1,
-        help="Batch size for WD14 ONNX inference (default: 1 = sequential). "
-             "Higher values trade VRAM for speed (8 recommended for RTX) "
+        "--wd14-batch", type=int, default=8,
+        help="Batch size for WD14 ONNX inference (default: 8). "
+             "Higher values trade VRAM for speed."
     )
     parser.add_argument(
-        "--vlm-workers", type=int, default=1,
-        help="Number of parallel VLM workers in smart mode (default: 1 = sequential). "
-             "Set > 1 to pipeline WD14 ahead of VLM (e.g., 2-4 recommended)"
+        "--vlm-batch", type=int, default=4,
+        help="Batch size for local Transformers VLM, or HTTP concurrency for vLLM (default: 4). "
+             "WD14 completes first, then VLM runs with a shared prompt template."
+    )
+    parser.add_argument(
+        "--vlm-backend",
+        default="transformers",
+        choices=["transformers", "vllm", "toriigate"],
+        help="ToriiGate runtime: local HuggingFace transformers (default) or remote vLLM server",
+    )
+    parser.add_argument(
+        "--vllm-api-url",
+        default="",
+        help="vLLM OpenAI API URL (default: SD_TORIIGATE_VLLM_API_URL or http://127.0.0.1:18901/v1/chat/completions)",
+    )
+    parser.add_argument(
+        "--vllm-model",
+        default="",
+        help="Model name exposed by vLLM server (default: SD_TORIIGATE_VLLM_MODEL or toriigate-0.5)",
     )
     parser.add_argument(
         "--resume", action="store_true",
@@ -448,12 +518,36 @@ def main():
 
     def progress(current, total, message):
         pct = current / total * 100 if total > 0 else 0
-        print(f"\r  [{current}/{total}] {pct:5.1f}% — {message}", end="", flush=True)
+        text = f"  [{current}/{total}] {pct:5.1f}% - {message}"
+        print(
+            json.dumps(
+                {
+                    "type": "progress",
+                    "phase": "tagging",
+                    "current": current,
+                    "total": total,
+                    "message": message,
+                },
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+        if sys.stdout.isatty():
+            print(f"\r{text}", end="", flush=True)
+        else:
+            print(text, flush=True)
 
     start_time = time.time()
 
     if args.smart:
-        print(f"Smart Tag mode: purpose={args.purpose}, vlm={'ToriiGate' if args.vlm and not args.no_vlm else 'disabled'}")
+        enable_vlm = args.vlm and not args.no_vlm
+        enable_wd14 = not args.no_wd14
+        print(
+            f"Smart Tag mode: purpose={args.purpose}, wd14={'on' if enable_wd14 else 'off'}, "
+            f"vlm={'ToriiGate' if enable_vlm else 'disabled'}, "
+            f"vlm_prompt={args.vlm_prompt_mode}, "
+            f"inject_wd14_tags={not args.no_inject_wd14_tags}"
+        )
         if args.taggers:
             print(f"Multi-tagger consensus: {args.taggers} (min votes: {args.consensus})")
 
@@ -471,6 +565,10 @@ def main():
                     "copyright_threshold": args.threshold,
                 })
 
+        if not enable_wd14 and not enable_vlm:
+            print("Error: smart mode requires at least WD14 (--no-wd14 off) or VLM (--vlm).")
+            sys.exit(1)
+
         results = run_smart(
             image_paths=image_paths,
             training_purpose=args.purpose,
@@ -480,12 +578,19 @@ def main():
             general_threshold=args.threshold,
             character_threshold=args.character_threshold,
             max_tags=args.max_tags,
-            enable_vlm=args.vlm and not args.no_vlm,
+            enable_vlm=enable_vlm,
+            enable_wd14=enable_wd14,
             taggers=tagger_configs,
             consensus_min=args.consensus,
             progress_callback=progress,
             wd14_batch_size=args.wd14_batch,
-            vlm_workers=args.vlm_workers,
+            vlm_batch_size=args.vlm_batch,
+            vlm_backend=args.vlm_backend,
+            vllm_api_url=args.vllm_api_url,
+            vllm_model=args.vllm_model,
+            vlm_prompt_mode=args.vlm_prompt_mode,
+            inject_wd14_tags=not args.no_inject_wd14_tags,
+            blacklist=args.blacklist if args.blacklist else None,
         )
     else:
         print(f"Simple mode: model={args.model}, threshold={args.threshold}")
@@ -516,10 +621,16 @@ def main():
     # Save individual caption files alongside original images
     if args.save_captions:
         saved = 0
+        skipped = 0
         for r in formatted:
             if "error" in r:
                 continue
-            image_path = Path(r["image_path"])
+            raw_path = (r.get("image_path") or "").strip()
+            if not raw_path:
+                logger.warning("Skipping caption save: result has no image_path")
+                skipped += 1
+                continue
+            image_path = Path(raw_path)
             caption_file = image_path.with_suffix(".txt")
             caption = r.get("ai_caption", "") or ", ".join(
                 t.get("tag", "") for t in r.get("all_tags", [])
@@ -527,6 +638,8 @@ def main():
             caption_file.write_text(caption, encoding="utf-8")
             saved += 1
         print(f"Saved {saved} caption .txt files alongside images")
+        if skipped:
+            print(f"Skipped {skipped} result(s) with missing image_path")
 
     # Summary
     errors = [r for r in formatted if "error" in r]
@@ -552,7 +665,7 @@ def auto_tag_images(
     """为目录中所有图片自动生成 .txt 标签文件。
 
     每张图片 img.png 会生成 img.txt，内容为逗号分隔的标签列表。
-    如果 .txt 已存在则跳过，避免重复标注。
+    如果 .txt 已存在且内容大于 10 字节则跳过，避免重复标注。
     """
     if verbose:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -568,7 +681,7 @@ def auto_tag_images(
     skipped = 0
     for p in image_paths:
         tag_file = os.path.splitext(p)[0] + ".txt"
-        if os.path.exists(tag_file):
+        if os.path.isfile(tag_file) and os.path.getsize(tag_file) > 10:
             skipped += 1
             continue
         pending.append(p)

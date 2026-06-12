@@ -3,7 +3,7 @@
 import argparse
 import ast
 import asyncio
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 import datetime
 import importlib
 import json
@@ -1150,6 +1150,7 @@ class BaseDataset(torch.utils.data.Dataset):
                     and self.random_crop == other.random_crop
                 )
 
+        batches_to_cache: List[Tuple[Condition, List[ImageInfo]]] = []
         batch: List[ImageInfo] = []
         current_condition = None
 
@@ -1157,76 +1158,46 @@ class BaseDataset(torch.utils.data.Dataset):
         num_processes = accelerator.num_processes
         process_index = accelerator.process_index
 
-        # define a function to submit a batch to cache
-        def submit_batch(batch, cond):
-            for info in batch:
-                if info.image is not None and isinstance(info.image, Future):
-                    info.image = info.image.result()  # future to image
-            caching_strategy.cache_batch_latents(model, batch, cond.flip_aug, cond.alpha_mask, cond.random_crop)
+        logger.info("collecting latent cache batches...")
+        for i, info in enumerate(tqdm(image_infos, desc="checking cache")):
+            subset = self.image_to_subset[info.image_key]
 
-            # remove image from memory
-            for info in batch:
-                info.image = None
+            if info.latents_npz is not None:  # fine tuning dataset
+                continue
 
-        # define ThreadPoolExecutor to load images in parallel
-        max_workers = min(os.cpu_count(), len(image_infos))
-        max_workers = max(1, max_workers // num_processes)  # consider multi-gpu
-        max_workers = min(max_workers, caching_strategy.batch_size)  # max_workers should be less than batch_size
-        executor = ThreadPoolExecutor(max_workers)
+            if caching_strategy.cache_to_disk:
+                info.latents_npz = caching_strategy.get_latents_npz_path(info.absolute_path, info.image_size)
 
-        try:
-            # iterate images
-            logger.info("caching latents...")
-            for i, info in enumerate(tqdm(image_infos)):
-                subset = self.image_to_subset[info.image_key]
-
-                if info.latents_npz is not None:  # fine tuning dataset
+                if i % num_processes != process_index:
                     continue
 
-                # check disk cache exists and size of latents
-                if caching_strategy.cache_to_disk:
-                    # info.latents_npz = os.path.splitext(info.absolute_path)[0] + file_suffix
-                    info.latents_npz = caching_strategy.get_latents_npz_path(info.absolute_path, info.image_size)
+                cache_available = caching_strategy.is_disk_cached_latents_expected(
+                    info.bucket_reso, info.latents_npz, subset.flip_aug, subset.alpha_mask
+                )
+                if cache_available:
+                    continue
 
-                    # if the modulo of num_processes is not equal to process_index, skip caching
-                    # this makes each process cache different latents
-                    if i % num_processes != process_index:
-                        continue
+            condition = Condition(info.bucket_reso, subset.flip_aug, subset.alpha_mask, subset.random_crop)
+            if len(batch) > 0 and current_condition != condition:
+                batches_to_cache.append((current_condition, batch))
+                batch = []
 
-                    # print(f"{process_index}/{num_processes} {i}/{len(image_infos)} {info.latents_npz}")
+            batch.append(info)
+            current_condition = condition
 
-                    cache_available = caching_strategy.is_disk_cached_latents_expected(
-                        info.bucket_reso, info.latents_npz, subset.flip_aug, subset.alpha_mask
-                    )
-                    if cache_available:  # do not add to batch
-                        continue
+            if len(batch) >= caching_strategy.batch_size:
+                batches_to_cache.append((current_condition, batch))
+                batch = []
 
-                # if batch is not empty and condition is changed, flush the batch. Note that current_condition is not None if batch is not empty
-                condition = Condition(info.bucket_reso, subset.flip_aug, subset.alpha_mask, subset.random_crop)
-                if len(batch) > 0 and current_condition != condition:
-                    submit_batch(batch, current_condition)
-                    batch = []
-                if condition != current_condition and HIGH_VRAM:  # even with high VRAM, if shape is changed
-                    clean_memory_on_device(accelerator.device)
+        if len(batch) > 0:
+            batches_to_cache.append((current_condition, batch))
 
-                if info.image is None:
-                    # load image in parallel
-                    info.image = executor.submit(load_image, info.absolute_path, condition.alpha_mask)
+        if len(batches_to_cache) == 0:
+            logger.info("no latents to cache")
+            return
 
-                batch.append(info)
-                current_condition = condition
-
-                # if number of data in batch is enough, flush the batch
-                if len(batch) >= caching_strategy.batch_size:
-                    submit_batch(batch, current_condition)
-                    batch = []
-                    # current_condition = None  # keep current_condition to avoid next `clean_memory_on_device` call
-
-            if len(batch) > 0:
-                submit_batch(batch, current_condition)
-
-        finally:
-            executor.shutdown()
+        logger.info(f"caching {sum(len(b) for _, b in batches_to_cache)} latents in {len(batches_to_cache)} batches (pipelined)")
+        pipeline_cache_latent_batches(model, caching_strategy, batches_to_cache, accelerator)
 
     def cache_latents(self, vae, vae_batch_size=1, cache_to_disk=False, is_main_process=True, file_suffix=".npz"):
         # マルチGPUには対応していないので、そちらはtools/cache_latents.pyを使うこと
@@ -3108,8 +3079,102 @@ def trim_and_resize_if_required(
 
 
 # for new_cache_latents
+def resolve_batch_image_futures(image_infos: List[ImageInfo]) -> None:
+    for info in image_infos:
+        if info.image is not None and isinstance(info.image, Future):
+            info.image = info.image.result()
+
+
+def _process_one_image_for_caching(
+    info: ImageInfo, use_alpha_mask: bool, random_crop: bool
+) -> Tuple[torch.Tensor, Optional[torch.Tensor], Tuple[int, int], Tuple[int, int, int, int]]:
+    image = load_image(info.absolute_path, use_alpha_mask) if info.image is None else np.array(info.image, np.uint8)
+    image, original_size, crop_ltrb = trim_and_resize_if_required(
+        random_crop, image, info.bucket_reso, info.resized_size, resize_interpolation=info.resize_interpolation
+    )
+
+    if use_alpha_mask:
+        if image.shape[2] == 4:
+            alpha_mask = image[:, :, 3].astype(np.float32) / 255.0
+            alpha_mask = torch.FloatTensor(alpha_mask)
+        else:
+            alpha_mask = torch.ones_like(image[:, :, 0], dtype=torch.float32)
+    else:
+        alpha_mask = None
+
+    image = image[:, :, :3]
+    image = IMAGE_TRANSFORMS(image)
+    return image, alpha_mask, original_size, crop_ltrb
+
+
+def _persist_encoded_latent_batch_and_cleanup(caching_strategy: LatentsCachingStrategy, batch: List[ImageInfo], encoded) -> None:
+    caching_strategy.persist_encoded_batch(batch, encoded)
+    for info in batch:
+        info.image = None
+
+
+def pipeline_cache_latent_batches(
+    model: Any,
+    caching_strategy: LatentsCachingStrategy,
+    batches: List[Tuple[Any, List[ImageInfo]]],
+    accelerator: Accelerator,
+) -> None:
+    cpu_count = os.cpu_count() or 8
+    batch_size = max(1, caching_strategy.batch_size)
+    prep_workers = 2  # only one next-batch prefetch is in flight
+    load_workers = batch_size  # parallel decode threads per batch; no benefit beyond batch size
+    save_workers = min(16, max(12, cpu_count // 8))  # async npz writes
+
+    prep_executor = ThreadPoolExecutor(max_workers=prep_workers)
+    save_executor = ThreadPoolExecutor(max_workers=save_workers)
+
+    next_prep_future = None
+    pending_save_futures: List[Future] = []
+
+    try:
+        for batch_idx, (cond, batch) in enumerate(tqdm(batches, desc="caching latents", smoothing=1)):
+            if next_prep_future is not None:
+                prepared = next_prep_future.result()
+                next_prep_future = None
+            else:
+                prepared = caching_strategy.prepare_batch_for_caching(
+                    batch, cond.alpha_mask, cond.random_crop, load_workers=load_workers
+                )
+
+            if batch_idx + 1 < len(batches):
+                next_cond, next_batch = batches[batch_idx + 1]
+                next_prep_future = prep_executor.submit(
+                    caching_strategy.prepare_batch_for_caching,
+                    next_batch,
+                    next_cond.alpha_mask,
+                    next_cond.random_crop,
+                    load_workers,
+                )
+
+            encoded = caching_strategy.encode_prepared_batch(model, prepared, cond.flip_aug)
+
+            if batch_idx + 1 < len(batches) and cond != batches[batch_idx + 1][0] and HIGH_VRAM:
+                clean_memory_on_device(accelerator.device)
+            elif not HIGH_VRAM:
+                clean_memory_on_device(accelerator.device)
+
+            pending_save_futures.append(
+                save_executor.submit(_persist_encoded_latent_batch_and_cleanup, caching_strategy, batch, encoded)
+            )
+            if len(pending_save_futures) >= save_workers:
+                pending_save_futures.pop(0).result()
+
+        for pending_save_future in pending_save_futures:
+            pending_save_future.result()
+        if next_prep_future is not None:
+            next_prep_future.result()
+    finally:
+        prep_executor.shutdown(wait=True)
+        save_executor.shutdown(wait=True)
+
+
 def load_images_and_masks_for_caching(
-    image_infos: List[ImageInfo], use_alpha_mask: bool, random_crop: bool
+    image_infos: List[ImageInfo], use_alpha_mask: bool, random_crop: bool, max_workers: int = 1
 ) -> Tuple[torch.Tensor, List[np.ndarray], List[Tuple[int, int]], List[Tuple[int, int, int, int]]]:
     r"""
     requires image_infos to have: [absolute_path or image], bucket_reso, resized_size
@@ -3122,33 +3187,39 @@ def load_images_and_masks_for_caching(
     crop_ltrbs: List[Tuple[int, int, int, int]] = [(L, T, R, B), ...]
     """
     images: List[torch.Tensor] = []
-    alpha_masks: List[np.ndarray] = []
+    alpha_masks: List[Optional[torch.Tensor]] = []
     original_sizes: List[Tuple[int, int]] = []
-    crop_ltrbs: List[Tuple[int, int, int, int]] = []
-    for info in image_infos:
-        image = load_image(info.absolute_path, use_alpha_mask) if info.image is None else np.array(info.image, np.uint8)
-        # TODO 画像のメタデータが壊れていて、メタデータから割り当てたbucketと実際の画像サイズが一致しない場合があるのでチェック追加要
-        image, original_size, crop_ltrb = trim_and_resize_if_required(
-            random_crop, image, info.bucket_reso, info.resized_size, resize_interpolation=info.resize_interpolation
-        )
+    crop_ltrbs: List[Tuple[int, int, int, int]] = [(0, 0, 0, 0)] * len(image_infos)
 
-        original_sizes.append(original_size)
-        crop_ltrbs.append(crop_ltrb)
+    if max_workers <= 1 or len(image_infos) <= 1:
+        for idx, info in enumerate(image_infos):
+            image, alpha_mask, original_size, crop_ltrb = _process_one_image_for_caching(info, use_alpha_mask, random_crop)
+            images.append(image)
+            alpha_masks.append(alpha_mask)
+            original_sizes.append(original_size)
+            crop_ltrbs[idx] = crop_ltrb
+    else:
+        worker_count = min(max_workers, len(image_infos))
+        results: List[Optional[Tuple[torch.Tensor, Optional[torch.Tensor], Tuple[int, int], Tuple[int, int, int, int]]]] = [
+            None
+        ] * len(image_infos)
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            future_to_idx = {
+                executor.submit(_process_one_image_for_caching, info, use_alpha_mask, random_crop): idx
+                for idx, info in enumerate(image_infos)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                results[idx] = future.result()
 
-        if use_alpha_mask:
-            if image.shape[2] == 4:
-                alpha_mask = image[:, :, 3]  # [H,W]
-                alpha_mask = alpha_mask.astype(np.float32) / 255.0
-                alpha_mask = torch.FloatTensor(alpha_mask)  # [H,W]
-            else:
-                alpha_mask = torch.ones_like(image[:, :, 0], dtype=torch.float32)  # [H,W]
-        else:
-            alpha_mask = None
-        alpha_masks.append(alpha_mask)
-
-        image = image[:, :, :3]  # remove alpha channel if exists
-        image = IMAGE_TRANSFORMS(image)
-        images.append(image)
+        for idx, result in enumerate(results):
+            if result is None:
+                raise RuntimeError(f"failed to load image for caching at index {idx}")
+            image, alpha_mask, original_size, crop_ltrb = result
+            images.append(image)
+            alpha_masks.append(alpha_mask)
+            original_sizes.append(original_size)
+            crop_ltrbs[idx] = crop_ltrb
 
     img_tensor = torch.stack(images, dim=0)
     return img_tensor, alpha_masks, original_sizes, crop_ltrbs

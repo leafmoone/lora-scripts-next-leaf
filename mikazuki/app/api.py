@@ -70,7 +70,7 @@ from mikazuki.utils.tk_window import (open_directory_selector,
 router = APIRouter()
 router.include_router(dataset_editor_router)
 
-ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora", "anima-finetune"}
+ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora", "anima-finetune", "anima-ipa"}
 ANIMA_FINETUNE_TYPE = "anima-finetune"
 ANIMA_DEFAULT_SAMPLE_POSITIVE = (
     "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looki"
@@ -220,7 +220,9 @@ def _is_invalid_value(value) -> bool:
 _PATH_FIELDS = {
     "pretrained_model_name_or_path", "vae", "qwen3", "llm_adapter_path",
     "t5_tokenizer_path", "resume", "train_data_dir", "reg_data_dir",
-    "output_dir", "logging_dir", "network_weights", "sample_prompts",
+    "output_dir", "logging_dir", "network_weights", "ip_adapter_weights",
+    "sample_prompts", "sample_reference_image", "ip_adapter_precomputed_emb_dir",
+    "ccip_ckpt", "lsnet_ckpt",
 }
 
 

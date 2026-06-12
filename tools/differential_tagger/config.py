@@ -135,6 +135,26 @@ TAGGER_USE_GPU: bool = os.environ.get(
     "STANDALONE_TAGGER_USE_GPU", "true"
 ).lower() in ("true", "1", "yes")
 
+# ToriiGate vLLM (OpenAI-compatible remote server)
+TORIIGATE_VLLM_API_URL: str = os.environ.get(
+    "SD_TORIIGATE_VLLM_API_URL",
+    "http://127.0.0.1:18901/v1/chat/completions",
+).strip()
+TORIIGATE_VLLM_MODEL: str = os.environ.get(
+    "SD_TORIIGATE_VLLM_MODEL", "toriigate-0.5"
+).strip()
+TORIIGATE_VLLM_API_KEY: str = os.environ.get(
+    "SD_TORIIGATE_VLLM_API_KEY", "not-needed"
+)
+TORIIGATE_VLLM_MAX_TOKENS: int = read_int_env("SD_TORIIGATE_VLLM_MAX_TOKENS", 2048)
+TORIIGATE_VLLM_TEMPERATURE: float = read_float_env("SD_TORIIGATE_VLLM_TEMPERATURE", 0.0)
+TORIIGATE_VLLM_REQUEST_TIMEOUT: float = read_float_env(
+    "SD_TORIIGATE_VLLM_REQUEST_TIMEOUT", 120.0
+)
+TORIIGATE_VLLM_MAX_PIXELS_MP: float = read_float_env(
+    "SD_TORIIGATE_VLLM_MAX_PIXELS_MP", 1.0
+)
+
 RATING_CATEGORIES: list = ["general", "sensitive", "questionable", "explicit"]
 
 ALLOWED_IMAGE_EXTENSIONS: set = {

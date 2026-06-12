@@ -261,8 +261,9 @@ class ToriiGateTagger:
         except Exception as exc:
             logger.debug("ToriiGate CUDA memory guard was unavailable: %s", exc)
 
-    def _make_prompt(self) -> str:
-        return TORIIGATE_SHORT_QUERY
+    def _make_prompt(self, user_prompt: Optional[str] = None) -> str:
+        text = str(user_prompt or "").strip()
+        return text if text else TORIIGATE_SHORT_QUERY
 
     def load(self) -> None:
         if self._loaded:
@@ -548,39 +549,37 @@ class ToriiGateTagger:
         resampling = getattr(Image, "Resampling", Image).LANCZOS
         return image.resize((resized_width, resized_height), resampling)
 
-    def _generate_text(self, image_path: str) -> str:
-        if not self._loaded:
-            self.load()
+    def _build_chat_prompt(self, user_prompt: Optional[str] = None) -> str:
+        assert self.processor is not None
+        prompt_text = self._make_prompt(user_prompt)
+        messages = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": TORIIGATE_SYSTEM_PROMPT}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": prompt_text},
+                ],
+            },
+        ]
+        return self.processor.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
+    @staticmethod
+    def _is_oom_error(exc: BaseException) -> bool:
+        message = str(exc).lower()
+        return "out of memory" in message or "cuda error" in message
+
+    def _run_generate(self, inputs: Dict[str, Any]) -> List[str]:
         assert self.model is not None
         assert self.processor is not None
         assert torch is not None
-
-        with Image.open(image_path) as image:
-            image = self._resize_for_inference(image.convert("RGB"))
-            messages = [
-                {
-                    "role": "system",
-                    "content": [{"type": "text", "text": TORIIGATE_SYSTEM_PROMPT}],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image"},
-                        {"type": "text", "text": self._make_prompt()},
-                    ],
-                },
-            ]
-            prompt_text = self.processor.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-            inputs = self.processor(
-                text=[prompt_text],
-                images=[image],
-                return_tensors="pt",
-            )
 
         model_device = next(self.model.parameters()).device
         inputs = {
@@ -598,12 +597,64 @@ class ToriiGateTagger:
 
         prompt_tokens = inputs["input_ids"].shape[1]
         new_tokens = generated[:, prompt_tokens:]
-        text = self.processor.batch_decode(new_tokens, skip_special_tokens=True)[0]
-        return text.strip()
+        return [
+            text.strip()
+            for text in self.processor.batch_decode(new_tokens, skip_special_tokens=True)
+        ]
 
-    def tag(self, image_path: str) -> Dict[str, Any]:
+    def _generate_text(self, image_path: str, user_prompt: Optional[str] = None) -> str:
+        if not self._loaded:
+            self.load()
+
+        assert self.processor is not None
+
+        with Image.open(image_path) as image:
+            image = self._resize_for_inference(image.convert("RGB"))
+            prompt_text = self._build_chat_prompt(user_prompt)
+            inputs = self.processor(
+                text=[prompt_text],
+                images=[image],
+                return_tensors="pt",
+            )
+        return self._run_generate(inputs)[0]
+
+    def _generate_text_batch(
+        self,
+        image_paths: List[str],
+        user_prompt: Optional[str] = None,
+        user_prompts: Optional[List[str]] = None,
+    ) -> List[str]:
+        if not self._loaded:
+            self.load()
+
+        assert self.processor is not None
+
+        images = []
+        for path in image_paths:
+            with Image.open(path) as image:
+                images.append(self._resize_for_inference(image.convert("RGB")))
+
+        if user_prompts is not None:
+            if len(user_prompts) != len(image_paths):
+                raise ValueError(
+                    f"user_prompts length ({len(user_prompts)}) must match image_paths ({len(image_paths)})"
+                )
+            texts = [self._build_chat_prompt(prompt) for prompt in user_prompts]
+        else:
+            prompt_text = self._build_chat_prompt(user_prompt)
+            texts = [prompt_text] * len(images)
+
+        inputs = self.processor(
+            text=texts,
+            images=images,
+            return_tensors="pt",
+            padding=True,
+        )
+        return self._run_generate(inputs)
+
+    def tag(self, image_path: str, user_prompt: Optional[str] = None) -> Dict[str, Any]:
         try:
-            return self._build_result(self._generate_text(image_path))
+            return self._build_result(self._generate_text(image_path, user_prompt=user_prompt))
         except Exception as exc:
             logger.error("ToriiGate failed on %s: %s", image_path, exc)
             if self.use_gpu:
@@ -612,7 +663,9 @@ class ToriiGateTagger:
                 self.device = "cpu"
                 self._recreate_session()
                 try:
-                    return self._build_result(self._generate_text(image_path))
+                    return self._build_result(
+                        self._generate_text(image_path, user_prompt=user_prompt)
+                    )
                 except Exception as retry_exc:
                     logger.error("ToriiGate CPU retry failed on %s: %s", image_path, retry_exc)
                     return {
@@ -636,20 +689,92 @@ class ToriiGateTagger:
         self,
         image_paths: List[str],
         *,
+        user_prompt: Optional[str] = None,
+        user_prompts: Optional[List[str]] = None,
         preferred_batch_size: Optional[int] = None,
         min_batch_size: int = 1,
         return_runtime_info: bool = False,
     ) -> Any:
-        del preferred_batch_size, min_batch_size
+        if user_prompts is not None and user_prompt is not None:
+            raise ValueError("Pass either user_prompt or user_prompts, not both.")
+        if user_prompts is not None and len(user_prompts) != len(image_paths):
+            raise ValueError(
+                f"user_prompts length ({len(user_prompts)}) must match image_paths ({len(image_paths)})"
+            )
 
-        results = [self.tag(path) for path in image_paths]
+        if not image_paths:
+            empty: List[Dict[str, Any]] = []
+            if return_runtime_info:
+                return empty, {
+                    "initial_chunk_size": 0,
+                    "final_chunk_size": 0,
+                    "backoff_steps": [],
+                    "used_cpu_fallback": not self.use_gpu,
+                    "attempted_gpu_backoff": False,
+                }
+            return empty
+
+        chunk_size = max(min_batch_size, int(preferred_batch_size or 1))
         runtime_info = {
-            "initial_chunk_size": 1,
-            "final_chunk_size": 1,
+            "initial_chunk_size": chunk_size,
+            "final_chunk_size": chunk_size,
             "backoff_steps": [],
             "used_cpu_fallback": not self.use_gpu,
             "attempted_gpu_backoff": False,
         }
+        results: List[Dict[str, Any]] = []
+
+        start = 0
+        while start < len(image_paths):
+            end = min(len(image_paths), start + chunk_size)
+            chunk_paths = image_paths[start:end]
+            chunk_prompts = user_prompts[start:end] if user_prompts is not None else None
+            try:
+                texts = self._generate_text_batch(
+                    chunk_paths,
+                    user_prompt=user_prompt,
+                    user_prompts=chunk_prompts,
+                )
+                for text in texts:
+                    results.append(self._build_result(text))
+                start = end
+            except Exception as exc:
+                if chunk_size > min_batch_size and self._is_oom_error(exc):
+                    runtime_info["attempted_gpu_backoff"] = True
+                    old_size = chunk_size
+                    runtime_info["backoff_steps"].append(old_size)
+                    chunk_size = max(min_batch_size, chunk_size // 2)
+                    runtime_info["final_chunk_size"] = chunk_size
+                    logger.warning(
+                        "ToriiGate batch OOM at size %s, retrying with %s",
+                        old_size,
+                        chunk_size,
+                    )
+                    if torch is not None and getattr(torch, "cuda", None) is not None:
+                        torch.cuda.empty_cache()
+                    continue
+
+                logger.error("ToriiGate batch failed for %s image(s): %s", len(chunk_paths), exc)
+                for offset, path in enumerate(chunk_paths):
+                    prompt = chunk_prompts[offset] if chunk_prompts is not None else user_prompt
+                    try:
+                        results.append(
+                            self._build_result(
+                                self._generate_text(path, user_prompt=prompt)
+                            )
+                        )
+                    except Exception as single_exc:
+                        logger.error("ToriiGate failed on %s: %s", path, single_exc)
+                        results.append({
+                            "general_tags": [],
+                            "character_tags": [],
+                            "rating": "unknown",
+                            "rating_confidences": {},
+                            "all_tags": [],
+                            "error": str(single_exc),
+                        })
+                start = end
+
         if return_runtime_info:
             return results, runtime_info
         return results

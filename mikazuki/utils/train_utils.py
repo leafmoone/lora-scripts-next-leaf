@@ -329,7 +329,7 @@ def fix_config_types(config: dict):
         if k in config:
             config[k] = float(config[k])
     # bitsandbytes 0.49+ requires numeric lr; TOML may store them as strings
-    for k in ("learning_rate", "unet_lr", "text_encoder_lr"):
+    for k in ("learning_rate", "unet_lr", "text_encoder_lr", "ip_adapter_lr"):
         v = config.get(k)
         if isinstance(v, str):
             config[k] = float(v)

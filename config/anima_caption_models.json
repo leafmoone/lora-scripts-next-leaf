@@ -1,0 +1,19 @@
+{
+  "vlm_models": {
+    "toriigate-0.5": {
+      "display_name": "ToriiGate 0.5",
+      "default_api_url": "http://127.0.0.1:18901/v1/chat/completions",
+      "default_served_name": "toriigate-0.5",
+      "local_model_dir": "models/toriigate/toriigate-0.5",
+      "port": 18901
+    },
+    "gemma-4-e4b": {
+      "display_name": "Gemma-4-E4B (vLLM)",
+      "default_api_url": "http://127.0.0.1:9002/v1/chat/completions",
+      "default_served_name": "spawner-gemma-4-e4b-it",
+      "local_model_dir": "models/gemma-4-E3B-it",
+      "modelscope_id": "spawner/spawner-gemma-4-E4B-it",
+      "port": 9002
+    }
+  }
+}

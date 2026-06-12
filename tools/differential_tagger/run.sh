@@ -29,13 +29,13 @@ set -euo pipefail
 
 # ─── 默认值 ──────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INPUT="/root/lanyun-tmp/DiffSynth-Studio-leaf/data/seele_vollerei_(wings_of_panacea)/before"
-OUTPUT="/root/lanyun-tmp/DiffSynth-Studio-leaf/data/seele_vollerei_(wings_of_panacea)/after"
+INPUT="${TAGGER_INPUT:-}"
+OUTPUT="${TAGGER_OUTPUT:-}"
 MODE="smart"
 USE_VLM=true
 USE_GPU=true
 PURPOSE="character"
-TRIGGER="seele_vollerei_(wings_of_panacea)"
+TRIGGER=""
 TAGGER_MODEL="wd-eva02-large-tagger-v3"
 TAGGERS=()
 CONSENSUS=2

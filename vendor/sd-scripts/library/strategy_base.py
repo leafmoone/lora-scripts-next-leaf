@@ -2,7 +2,7 @@
 
 import os
 import re
-from typing import Any, List, Optional, Tuple, Union, Callable
+from typing import Any, List, NamedTuple, Optional, Tuple, Union, Callable
 
 import numpy as np
 import torch
@@ -18,6 +18,22 @@ setup_logging()
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class PreparedLatentsBatch(NamedTuple):
+    img_tensor: torch.Tensor
+    alpha_masks: List[Any]
+    original_sizes: List[Tuple[int, int]]
+    crop_ltrbs: List[Tuple[int, int, int, int]]
+
+
+class EncodedLatentsBatch(NamedTuple):
+    latents_tensors: torch.Tensor
+    flipped_latents: Any
+    alpha_masks: List[Any]
+    original_sizes: List[Tuple[int, int]]
+    crop_ltrbs: List[Tuple[int, int, int, int]]
+    multi_resolution: bool
 
 
 class TokenizeStrategy:
@@ -426,6 +442,44 @@ class LatentsCachingStrategy:
     def cache_batch_latents(self, model: Any, batch: List, flip_aug: bool, alpha_mask: bool, random_crop: bool):
         raise NotImplementedError
 
+    def get_vae_encode_context(self, model: Any) -> Tuple[Callable[[torch.Tensor], torch.Tensor], torch.device, torch.dtype, bool]:
+        """Return (encode_by_vae, device, dtype, multi_resolution) for pipelined latent caching."""
+        vae = model
+        device = vae.device
+        dtype = vae.dtype
+
+        def encode_by_vae(img_tensor: torch.Tensor) -> torch.Tensor:
+            with torch.no_grad():
+                encoded = vae.encode(img_tensor)
+                if hasattr(encoded, "latent_dist"):
+                    latents = encoded.latent_dist.sample()
+                elif hasattr(encoded, "sample") and callable(encoded.sample):
+                    latents = encoded.sample()
+                else:
+                    latents = encoded
+                if isinstance(latents, torch.Tensor) and latents.device.type != "cpu":
+                    latents = latents.to("cpu")
+            return latents
+
+        return encode_by_vae, device, dtype, True
+
+    def prepare_batch_for_caching(
+        self, image_infos: List, apply_alpha_mask: bool, random_crop: bool, load_workers: int = 1
+    ) -> PreparedLatentsBatch:
+        from library import train_util
+
+        train_util.resolve_batch_image_futures(image_infos)
+        return PreparedLatentsBatch(
+            *train_util.load_images_and_masks_for_caching(image_infos, apply_alpha_mask, random_crop, max_workers=load_workers)
+        )
+
+    def encode_prepared_batch(self, model: Any, prepared: PreparedLatentsBatch, flip_aug: bool) -> EncodedLatentsBatch:
+        encode_by_vae, vae_device, vae_dtype, multi_resolution = self.get_vae_encode_context(model)
+        return self._default_encode_batch_latents(encode_by_vae, vae_device, vae_dtype, prepared, flip_aug, multi_resolution)
+
+    def persist_encoded_batch(self, image_infos: List, encoded: EncodedLatentsBatch) -> None:
+        self._default_persist_batch_latents(image_infos, encoded)
+
     def _default_is_disk_cached_latents_expected(
         self,
         latents_stride: int,
@@ -476,6 +530,67 @@ class LatentsCachingStrategy:
 
         return True
 
+    def _default_encode_batch_latents(
+        self,
+        encode_by_vae: Callable,
+        vae_device: torch.device,
+        vae_dtype: torch.dtype,
+        prepared: PreparedLatentsBatch,
+        flip_aug: bool,
+        multi_resolution: bool = False,
+    ) -> EncodedLatentsBatch:
+        img_tensor = prepared.img_tensor.to(device=vae_device, dtype=vae_dtype)
+
+        with torch.no_grad():
+            latents_tensors = encode_by_vae(img_tensor)
+            if isinstance(latents_tensors, torch.Tensor) and latents_tensors.device.type != "cpu":
+                latents_tensors = latents_tensors.to("cpu")
+        if flip_aug:
+            img_tensor = torch.flip(img_tensor, dims=[3])
+            with torch.no_grad():
+                flipped_latents = encode_by_vae(img_tensor)
+                if isinstance(flipped_latents, torch.Tensor) and flipped_latents.device.type != "cpu":
+                    flipped_latents = flipped_latents.to("cpu")
+        else:
+            flipped_latents = [None] * len(prepared.alpha_masks)
+
+        return EncodedLatentsBatch(
+            latents_tensors=latents_tensors,
+            flipped_latents=flipped_latents,
+            alpha_masks=prepared.alpha_masks,
+            original_sizes=prepared.original_sizes,
+            crop_ltrbs=prepared.crop_ltrbs,
+            multi_resolution=multi_resolution,
+        )
+
+    def _default_persist_batch_latents(self, image_infos: List, encoded: EncodedLatentsBatch) -> None:
+        latents_tensors = encoded.latents_tensors
+        flipped_latents = encoded.flipped_latents
+        multi_resolution = encoded.multi_resolution
+
+        for i in range(len(image_infos)):
+            info = image_infos[i]
+            latents = latents_tensors[i]
+            flipped_latent = flipped_latents[i]
+            alpha_mask = encoded.alpha_masks[i]
+            original_size = encoded.original_sizes[i]
+            crop_ltrb = encoded.crop_ltrbs[i]
+
+            latents_size = latents.shape[-2:]
+            key_reso_suffix = f"_{latents_size[0]}x{latents_size[1]}" if multi_resolution else ""
+
+            if self.cache_to_disk:
+                self.save_latents_to_disk(
+                    info.latents_npz, latents, original_size, crop_ltrb, flipped_latent, alpha_mask, key_reso_suffix
+                )
+            else:
+                info.latents_original_size = original_size
+                info.latents_crop_ltrb = crop_ltrb
+                info.latents = latents
+                if flipped_latent is not None:
+                    info.latents_flipped = flipped_latent
+                info.alpha_mask = alpha_mask
+
     # TODO remove circular dependency for ImageInfo
     def _default_cache_batch_latents(
         self,
@@ -504,45 +619,9 @@ class LatentsCachingStrategy:
         Returns:
             None
         """
-        from library import train_util  # import here to avoid circular import
-
-        img_tensor, alpha_masks, original_sizes, crop_ltrbs = train_util.load_images_and_masks_for_caching(
-            image_infos, apply_alpha_mask, random_crop
-        )
-        img_tensor = img_tensor.to(device=vae_device, dtype=vae_dtype)
-
-        with torch.no_grad():
-            latents_tensors = encode_by_vae(img_tensor).to("cpu")
-        if flip_aug:
-            img_tensor = torch.flip(img_tensor, dims=[3])
-            with torch.no_grad():
-                flipped_latents = encode_by_vae(img_tensor).to("cpu")
-        else:
-            flipped_latents = [None] * len(latents_tensors)
-
-        # for info, latents, flipped_latent, alpha_mask in zip(image_infos, latents_tensors, flipped_latents, alpha_masks):
-        for i in range(len(image_infos)):
-            info = image_infos[i]
-            latents = latents_tensors[i]
-            flipped_latent = flipped_latents[i]
-            alpha_mask = alpha_masks[i]
-            original_size = original_sizes[i]
-            crop_ltrb = crop_ltrbs[i]
-
-            latents_size = latents.shape[-2:]  # H, W (supports both 4D and 5D latents)
-            key_reso_suffix = f"_{latents_size[0]}x{latents_size[1]}" if multi_resolution else ""  # e.g. "_32x64", HxW
-
-            if self.cache_to_disk:
-                self.save_latents_to_disk(
-                    info.latents_npz, latents, original_size, crop_ltrb, flipped_latent, alpha_mask, key_reso_suffix
-                )
-            else:
-                info.latents_original_size = original_size
-                info.latents_crop_ltrb = crop_ltrb
-                info.latents = latents
-                if flip_aug:
-                    info.latents_flipped = flipped_latent
-                info.alpha_mask = alpha_mask
+        prepared = self.prepare_batch_for_caching(image_infos, apply_alpha_mask, random_crop)
+        encoded = self._default_encode_batch_latents(encode_by_vae, vae_device, vae_dtype, prepared, flip_aug, multi_resolution)
+        self._default_persist_batch_latents(image_infos, encoded)
 
     def load_latents_from_disk(
         self, npz_path: str, bucket_reso: Tuple[int, int]

@@ -24,8 +24,7 @@ from library.attention import AttentionParams
 
 class AnimaIPCrossAttention(nn.Module):
 
-    def __init__(self, original_attn: nn.Module, ip_scale: float = 1.0,
-                 aux_encoders: tuple[str, ...] = ()):
+    def __init__(self, original_attn: nn.Module, ip_scale: float = 1.0):
         super().__init__()
         self.orig = original_attn
         self.ip_scale = ip_scale

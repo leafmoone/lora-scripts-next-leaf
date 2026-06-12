@@ -59,6 +59,13 @@
     参数释义: "Parameter glossary",
     "Differential LoRA训练": "Differential LoRA Training",
     "Tagger-leaf": "Tagger-leaf",
+    "标注工具": "Tagging Tools",
+    "Differential LoRA": "Differential LoRA",
+    "差分角色 LoRA": "Character-split differential LoRA",
+    "Anima IP-Adapter": "Anima IP-Adapter",
+    "多编码器图像条件": "Multi-encoder image conditioning",
+    "DiffSynth Tagger": "DiffSynth Tagger",
+    "WD14 + VLM 智能打标": "WD14 + VLM smart tagging",
   };
 
   const EN_TO_ZH = Object.fromEntries(
@@ -240,7 +247,72 @@
     setSidebarAnchorLabel(native, "原生标签编辑");
   }
 
+  function ensureHomePortalLinks() {
+    const hub = document.querySelector(".sd-home-hub");
+    if (!hub) return;
+
+    function appendPortals(sectionTitle, portals) {
+      const titles = hub.querySelectorAll(".sd-home-section-title");
+      let anchor = null;
+      titles.forEach(function (title) {
+        if (normalize(title.textContent) === normalize(sectionTitle)) {
+          anchor = title;
+        }
+      });
+      if (!anchor) {
+        anchor = document.createElement("h2");
+        anchor.className = "sd-home-section-title";
+        anchor.textContent = sectionTitle;
+        hub.insertBefore(anchor, hub.querySelector(".sd-home-foot"));
+      }
+      let container = anchor.nextElementSibling;
+      if (!container || !container.classList.contains("sd-home-portals")) {
+        container = document.createElement("div");
+        container.className = "sd-home-portals";
+        anchor.after(container);
+      }
+      portals.forEach(function (portal) {
+        if (hub.querySelector('a[href="' + portal.href + '"]')) return;
+        const link = document.createElement("a");
+        link.className = "sd-home-portal" + (portal.primary ? " sd-home-portal--primary" : "");
+        link.href = portal.href;
+        link.target = "_self";
+        link.innerHTML =
+          '<span class="sd-home-portal__title">' +
+          portal.title +
+          '</span><span class="sd-home-portal__desc">' +
+          portal.desc +
+          "</span>";
+        container.appendChild(link);
+      });
+    }
+
+    appendPortals("LoRA 训练", [
+      {
+        href: "/lora/differential-lora.html",
+        title: "Differential LoRA",
+        desc: "差分角色 LoRA",
+      },
+      {
+        href: "/lora/anima-ipa.html",
+        title: "Anima IP-Adapter",
+        desc: "多编码器图像条件",
+      },
+    ]);
+
+    appendPortals("标注工具", [
+      {
+        href: "/tag-edit-leaf.html",
+        title: "DiffSynth Tagger",
+        desc: "WD14 + VLM 智能打标",
+        primary: true,
+      },
+    ]);
+  }
+
   function ensureNewFeatureLinks() {
+    ensureHomePortalLinks();
+
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (!sidebar) return;
 

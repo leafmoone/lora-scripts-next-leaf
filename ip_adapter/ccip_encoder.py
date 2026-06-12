@@ -34,7 +34,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 ATTN_HEAD_DIM = 32  # CAFormer Attention default head_dim
-DEFAULT_CKPT = "/root/lanyun-tmp/workspace/ccip/ccip-caformer_b36-24.ckpt"
+DEFAULT_CKPT = os.environ.get("CCIP_CKPT", "")
 
 
 # ── primitives ────────────────────────────────────────────────────
