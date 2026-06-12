@@ -9,6 +9,8 @@ output/*
 !output/.keep
 outputs/
 ipa_out/
+ipa_emb/
+test_tag_input/
 .tmp/
 .runtime/
 
