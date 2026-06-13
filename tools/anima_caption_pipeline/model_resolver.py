@@ -102,21 +102,26 @@ def resolve_vlm_runtime(
     api_url, served_name = resolve_vlm_endpoint(model_key, user_url, user_served_name)
     local_dir: Path | None = None
     backend = "auto"
+    if preset:
+        if not user_url and preset.get("default_api_url"):
+            api_url = str(preset.get("default_api_url") or "").strip()
+        if not user_served_name and preset.get("default_served_name"):
+            served_name = str(preset.get("default_served_name") or "").strip()
 
     if model_key in {"gemma-4-e4b", "gemma", "spawner-gemma-4-e4b-it"}:
         local_dir = ensure_gemma_model(project_root, auto_download=auto_download_gemma)
-        if not user_url:
+        if not user_url and not api_url:
             api_url = GEMMA_VLLM_URL
-        if not user_served_name:
+        if not user_served_name and not served_name:
             served_name = GEMMA_SERVED_NAME
         preset_backend = ""
         if preset:
             preset_backend = str(preset.get("gemma_vlm_backend", "")).strip()
         backend = normalize_gemma_vlm_backend(gemma_vlm_backend or preset_backend or "auto")
     elif model_key in {"toriigate-0.5", "toriigate", "toriigate-0.5-vllm"}:
-        if not user_url:
+        if not user_url and not api_url:
             api_url = TORIIGATE_VLLM_URL
-        if not user_served_name:
+        if not user_served_name and not served_name:
             served_name = TORIIGATE_SERVED_NAME
 
     return {

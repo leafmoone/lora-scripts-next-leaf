@@ -11,6 +11,7 @@ import json
 import logging
 import threading
 import time
+import inspect
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple, TYPE_CHECKING, Literal, overload
 
@@ -368,6 +369,8 @@ class WD14Tagger:
                     "tqdm_args": {"disable": False, "file": sys.stdout, "desc": filename,
                                   "unit": "B", "unit_scale": True, "miniters": 1},
                 }
+                supported_kwargs = set(inspect.signature(hf_hub.hf_hub_download).parameters)
+                kwargs = {key: value for key, value in kwargs.items() if key in supported_kwargs}
                 return hf_hub.hf_hub_download(**kwargs)
             except Exception as exc:
                 last_error = exc

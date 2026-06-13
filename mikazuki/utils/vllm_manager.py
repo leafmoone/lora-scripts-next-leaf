@@ -208,12 +208,69 @@ def _cuda_library_paths() -> list[str]:
     return lib_paths
 
 
-def _build_vllm_env() -> dict[str, str]:
+def _resolve_vllm_bin(preset: dict[str, Any], vlm_model: str) -> str:
+    candidates: list[str] = []
+    configured_bin = str(preset.get("vllm_executable") or "").strip()
+    if configured_bin:
+        candidates.append(configured_bin)
+    env_bin = os.environ.get("ANIMA_VLLM_BIN") or os.environ.get("ANIMA_GEMMA_VLLM_BIN")
+    if env_bin:
+        candidates.append(env_bin)
+    if _is_gemma_vllm_model(vlm_model):
+        candidates.append("/root/autodl-tmp/vllm-gemma-cu128/bin/vllm")
+
+    for candidate in candidates:
+        path = Path(candidate).expanduser()
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path)
+
+    vllm_bin = shutil.which("vllm")
+    if vllm_bin:
+        return vllm_bin
+    raise RuntimeError("未找到 vllm 命令，请先安装: pip install vllm")
+
+
+def _build_vllm_env(preset: dict[str, Any] | None = None) -> dict[str, str]:
     env = os.environ.copy()
+    preset = preset or {}
+    cuda_home = str(
+        preset.get("cuda_home")
+        or os.environ.get("ANIMA_VLLM_CUDA_HOME")
+        or ""
+    ).strip()
+    if cuda_home:
+        cuda_root = Path(cuda_home).expanduser()
+        env["CUDA_HOME"] = str(cuda_root)
+        env["CUDA_PATH"] = str(cuda_root)
+        cuda_lib_paths = [
+            str(path)
+            for path in (
+                cuda_root / "lib64",
+                cuda_root / "lib",
+                cuda_root / "targets" / "x86_64-linux" / "lib",
+            )
+            if path.is_dir()
+        ]
+    else:
+        cuda_lib_paths = []
+
     lib_paths = _cuda_library_paths()
-    if lib_paths:
+    all_lib_paths = cuda_lib_paths + lib_paths
+    if all_lib_paths:
         existing = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = ":".join(lib_paths + ([existing] if existing else []))
+        env["LD_LIBRARY_PATH"] = ":".join(all_lib_paths + ([existing] if existing else []))
+    path_entries: list[str] = []
+    vllm_executable = str(preset.get("vllm_executable") or "").strip()
+    if vllm_executable:
+        path_entries.append(str(Path(vllm_executable).expanduser().parent))
+    if cuda_home:
+        cuda_bin = Path(cuda_home).expanduser() / "bin"
+        if cuda_bin.is_dir():
+            path_entries.append(str(cuda_bin))
+    if path_entries:
+        env["PATH"] = ":".join(path_entries + [env.get("PATH", "")])
+    for key, value in dict(preset.get("env") or {}).items():
+        env[str(key)] = str(value)
     env.setdefault("TORCHDYNAMO_DISABLE", "1")
     return env
 
@@ -269,14 +326,10 @@ def _validate_model_dir(vlm_model: str, preset: dict[str, Any], *, auto_download
 
 
 def _parse_vllm_version(version: str) -> tuple[int, int, int]:
-    parts: list[int] = []
-    for piece in str(version or "0").split("."):
-        if not piece.isdigit():
-            break
-        parts.append(int(piece))
-    while len(parts) < 3:
-        parts.append(0)
-    return parts[0], parts[1], parts[2]
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", str(version or "0"))
+    if not match:
+        return 0, 0, 0
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
 
 
 def _check_vllm_runtime_deps() -> None:
@@ -293,7 +346,28 @@ def _check_vllm_runtime_deps() -> None:
         ) from exc
 
 
-def _check_vllm_runtime_compat(vlm_model: str, model_dir: Path) -> None:
+def _read_vllm_version(vllm_bin: str, env: dict[str, str]) -> str:
+    try:
+        proc = subprocess.run(
+            [vllm_bin, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+        if proc.returncode == 0:
+            return (proc.stdout or proc.stderr or "").strip()
+    except Exception:
+        pass
+    try:
+        import vllm
+
+        return str(getattr(vllm, "__version__", "0"))
+    except Exception:
+        return "0"
+
+
+def _check_vllm_runtime_compat(vlm_model: str, model_dir: Path, *, vllm_bin: str, env: dict[str, str]) -> None:
     """Fail fast when the installed vLLM cannot serve the selected VLM."""
     gemma_keys = {"gemma-4-e4b", "gemma", "spawner-gemma-4-e4b-it"}
     if vlm_model not in gemma_keys:
@@ -312,18 +386,12 @@ def _check_vllm_runtime_compat(vlm_model: str, model_dir: Path) -> None:
     if model_type != "gemma4":
         return
 
-    try:
-        import vllm
+    version = _read_vllm_version(vllm_bin, env)
 
-        version = getattr(vllm, "__version__", "0")
-    except Exception:
-        version = "0"
-
-    if _parse_vllm_version(version) < (0, 22, 0):
+    if _parse_vllm_version(version) < (0, 19, 1):
         raise RuntimeError(
-            f"Gemma 4 需要 vLLM >= 0.22，当前为 vLLM {version}。"
+            f"Gemma 4 vLLM 后端需要 vLLM >= 0.19.1，当前为 vLLM {version}。"
             "请改用 ToriiGate (toriigate-0.5)，或在独立环境中部署新版 vLLM 服务并通过 API URL 连接。"
-            "（Gemma 4 使用 rope_parameters 新格式，vLLM 0.9.x 无法加载。）"
         )
 
 
@@ -448,13 +516,12 @@ def start_vllm(
             })
         return get_vllm_status(vlm_model)
 
-    vllm_bin = shutil.which("vllm")
-    if not vllm_bin:
-        raise RuntimeError("未找到 vllm 命令，请先安装: pip install vllm")
+    vllm_bin = _resolve_vllm_bin(preset, vlm_model)
+    vllm_env = _build_vllm_env(preset)
 
     model_dir = _validate_model_dir(vlm_model, preset, auto_download_gemma=auto_download_gemma)
     _check_vllm_runtime_deps()
-    _check_vllm_runtime_compat(vlm_model, model_dir)
+    _check_vllm_runtime_compat(vlm_model, model_dir, vllm_bin=vllm_bin, env=vllm_env)
 
     with _lock:
         if _proc and _proc.poll() is None and _state.get("vlm_model") not in ("", vlm_model):
@@ -499,7 +566,7 @@ def start_vllm(
         stderr=subprocess.STDOUT,
         text=True,
         cwd=str(PROJECT_ROOT),
-        env=_build_vllm_env(),
+        env=vllm_env,
     )
 
     with _lock:

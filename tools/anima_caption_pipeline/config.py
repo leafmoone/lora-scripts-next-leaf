@@ -11,7 +11,7 @@ PROJECT_ROOT = PACKAGE_ROOT.parents[1]
 GEMMA_LOCAL_DIR = "models/gemma-4-E3B-it"
 GEMMA_MODELSCOPE_ID = "spawner/spawner-gemma-4-E4B-it"
 GEMMA_SERVED_NAME = "spawner-gemma-4-e4b-it"
-GEMMA_VLLM_PORT = 9002
+GEMMA_VLLM_PORT = 9003
 GEMMA_VLLM_URL = f"http://127.0.0.1:{GEMMA_VLLM_PORT}/v1/chat/completions"
 
 TORIIGATE_SERVED_NAME = "toriigate-0.5"
