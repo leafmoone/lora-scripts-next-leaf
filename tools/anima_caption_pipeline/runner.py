@@ -13,9 +13,10 @@ from typing import Any, Callable
 
 from .alias_index import AliasIndex
 from .config import IMAGE_EXTENSIONS, PROJECT_ROOT, project_root_from
-from .model_resolver import resolve_vlm_runtime
+from .model_resolver import resolve_vlm_runtime, should_start_vllm_for_gemma
+from .gemma_local_client import LocalGemmaVlmClient
 from .pipeline import run_single_image_pipeline
-from .vlm_client import VlmClient
+from .vlm_client import create_vlm_client, is_gemma_vlm_model
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,83 @@ def _release_wd14_runtime() -> None:
     gc.collect()
 
 
+def _stop_managed_vllm_before_wd14(
+    vlm_model: str,
+    *,
+    project_root: Path,
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+) -> None:
+    """Free GPU for WD14 when a previous vLLM session is still running."""
+    root_str = str(project_root.resolve())
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+
+    from mikazuki.utils.vllm_manager import get_vllm_status, stop_vllm
+
+    status = get_vllm_status(vlm_model)
+    if not (status.get("ready") or status.get("managed") or status.get("status") in {"running", "starting"}):
+        return
+
+    _emit_progress(
+        progress_callback,
+        phase="wd14",
+        current=0,
+        total=0,
+        message="检测到 vLLM 占用显存，正在停止以便 WD14 打标...",
+    )
+    stop_vllm(vlm_model)
+    gc.collect()
+
+
+def _ensure_vllm_if_needed(
+    *,
+    vlm_model: str,
+    auto_download_gemma: bool,
+    auto_start_vllm: bool,
+    project_root: Path,
+    progress_callback: Callable[[dict[str, Any]], None] | None,
+) -> None:
+    if not auto_start_vllm:
+        return
+
+    root_str = str(project_root.resolve())
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+
+    from mikazuki.utils.vllm_manager import ensure_vllm_ready
+
+    _emit_progress(
+        progress_callback,
+        phase="vllm",
+        current=0,
+        total=0,
+        message="WD14 完成，正在启动 vLLM...",
+    )
+    ensure_vllm_ready(vlm_model, auto_download_gemma=auto_download_gemma)
+
+
+def _stop_vllm_if_local_gemma(
+    *,
+    vlm_model: str,
+    client: Any,
+    project_root: Path,
+) -> None:
+    if not isinstance(client, LocalGemmaVlmClient):
+        return
+    if not is_gemma_vlm_model(vlm_model):
+        return
+
+    root_str = str(project_root.resolve())
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+
+    from mikazuki.utils.vllm_manager import stop_vllm
+
+    logger.info("Stopping managed vLLM to free GPU for local Gemma inference")
+    stop_vllm(vlm_model)
+    gc.collect()
+
+
 def run_anima_train_batch(
     *,
     input_dir: str,
@@ -138,6 +216,9 @@ def run_anima_train_batch(
     style_hint: str = "",
     use_alias_index: bool = True,
     auto_download_gemma: bool = True,
+    auto_start_vllm: bool = False,
+    gemma_vlm_backend: str = "",
+    vlm_preset: dict[str, Any] | None = None,
     resume: bool = False,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     project_root: str | Path | None = None,
@@ -155,6 +236,13 @@ def run_anima_train_batch(
 
     total = len(image_paths)
     path_strings = [str(path) for path in image_paths]
+
+    if auto_start_vllm and use_gpu:
+        _stop_managed_vllm_before_wd14(
+            vlm_model,
+            project_root=root,
+            progress_callback=progress_callback,
+        )
 
     _emit_progress(progress_callback, phase="wd14", current=0, total=total, message=f"WD14 打标 0/{total}")
     wd14_results = _run_wd14_batch(
@@ -177,13 +265,37 @@ def run_anima_train_batch(
         user_served_name=vllm_model,
         project_root=root,
         auto_download_gemma=auto_download_gemma,
+        gemma_vlm_backend=gemma_vlm_backend,
+        preset=vlm_preset,
     )
-    client = VlmClient(
+    backend = str(runtime.get("gemma_vlm_backend") or "auto")
+    if auto_start_vllm and should_start_vllm_for_gemma(backend):
+        _ensure_vllm_if_needed(
+            vlm_model=vlm_model,
+            auto_download_gemma=auto_download_gemma,
+            auto_start_vllm=True,
+            project_root=root,
+            progress_callback=progress_callback,
+        )
+    elif auto_start_vllm and backend == "transformers":
+        _emit_progress(
+            progress_callback,
+            phase="vlm",
+            current=0,
+            total=0,
+            message="Gemma 使用本地 transformers，跳过 vLLM 启动",
+        )
+
+    client = create_vlm_client(
+        vlm_model=vlm_model,
         api_url=str(runtime["api_url"]),
         model_name=str(runtime["served_name"]),
+        local_model_dir=runtime.get("local_model_dir"),
         max_tokens=vlm_max_tokens,
         temperature=temperature,
+        gemma_vlm_backend=backend,
     )
+    _stop_vllm_if_local_gemma(vlm_model=vlm_model, client=client, project_root=root)
     alias_index = AliasIndex(enabled=use_alias_index)
 
     results: list[dict[str, Any]] = []
@@ -230,7 +342,7 @@ def run_anima_train_batch(
         }
 
     _emit_progress(progress_callback, phase="vlm", current=0, total=total, message=f"VLM 两步链 0/{total}")
-    workers = max(1, int(vlm_workers))
+    workers = 1 if isinstance(client, LocalGemmaVlmClient) else max(1, int(vlm_workers))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(process_one, image_path): image_path for image_path in image_paths}
         for future in as_completed(futures):

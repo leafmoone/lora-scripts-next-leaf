@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +23,18 @@ from .config import (
 logger = logging.getLogger(__name__)
 
 HF_WEIGHT_MARKERS = ("config.json", "model.safetensors", "pytorch_model.bin")
+GEMMA_VLM_BACKENDS = frozenset({"auto", "vllm", "transformers"})
+
+
+def normalize_gemma_vlm_backend(value: str | None, *, default: str = "auto") -> str:
+    backend = str(value or default).strip().lower()
+    if backend not in GEMMA_VLM_BACKENDS:
+        raise ValueError(f"Unsupported gemma_vlm_backend: {backend!r} (expected auto/vllm/transformers)")
+    return backend
+
+
+def should_start_vllm_for_gemma(gemma_vlm_backend: str) -> bool:
+    return normalize_gemma_vlm_backend(gemma_vlm_backend) != "transformers"
 
 
 def is_valid_hf_model_dir(path: Path) -> bool:
@@ -29,6 +43,23 @@ def is_valid_hf_model_dir(path: Path) -> bool:
     if (path / "config.json").is_file():
         return True
     return any((path / marker).is_file() for marker in HF_WEIGHT_MARKERS[1:])
+
+
+def _modelscope_download_cmd(model_id: str, local_dir: Path) -> list[str]:
+    venv_bin = os.path.dirname(os.path.abspath(sys.executable))
+    modelscope_bin = shutil.which("modelscope", path=venv_bin)
+    if modelscope_bin:
+        return [modelscope_bin, "download", model_id, "--local_dir", str(local_dir)]
+    # modelscope>=1.37 dropped `python -m modelscope`; CLI lives in modelscope.cli.cli
+    return [
+        sys.executable,
+        "-m",
+        "modelscope.cli.cli",
+        "download",
+        model_id,
+        "--local_dir",
+        str(local_dir),
+    ]
 
 
 def ensure_gemma_model(project_root: str | Path | None = None, auto_download: bool = True) -> Path:
@@ -44,15 +75,7 @@ def ensure_gemma_model(project_root: str | Path | None = None, auto_download: bo
         )
 
     local_dir.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        sys.executable,
-        "-m",
-        "modelscope",
-        "download",
-        GEMMA_MODELSCOPE_ID,
-        "--local_dir",
-        str(local_dir),
-    ]
+    cmd = _modelscope_download_cmd(GEMMA_MODELSCOPE_ID, local_dir)
     logger.info("Downloading Gemma model: %s", " ".join(cmd))
     proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True)
     if proc.returncode != 0:
@@ -72,10 +95,13 @@ def resolve_vlm_runtime(
     user_served_name: str = "",
     project_root: str | Path | None = None,
     auto_download_gemma: bool = True,
+    gemma_vlm_backend: str = "",
+    preset: dict | None = None,
 ) -> dict[str, str | Path | None]:
     model_key = str(vlm_model or "toriigate-0.5").strip().lower()
     api_url, served_name = resolve_vlm_endpoint(model_key, user_url, user_served_name)
     local_dir: Path | None = None
+    backend = "auto"
 
     if model_key in {"gemma-4-e4b", "gemma", "spawner-gemma-4-e4b-it"}:
         local_dir = ensure_gemma_model(project_root, auto_download=auto_download_gemma)
@@ -83,6 +109,10 @@ def resolve_vlm_runtime(
             api_url = GEMMA_VLLM_URL
         if not user_served_name:
             served_name = GEMMA_SERVED_NAME
+        preset_backend = ""
+        if preset:
+            preset_backend = str(preset.get("gemma_vlm_backend", "")).strip()
+        backend = normalize_gemma_vlm_backend(gemma_vlm_backend or preset_backend or "auto")
     elif model_key in {"toriigate-0.5", "toriigate", "toriigate-0.5-vllm"}:
         if not user_url:
             api_url = TORIIGATE_VLLM_URL
@@ -94,4 +124,5 @@ def resolve_vlm_runtime(
         "api_url": api_url,
         "served_name": served_name,
         "local_model_dir": local_dir,
+        "gemma_vlm_backend": backend,
     }

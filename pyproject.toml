@@ -7,7 +7,8 @@ authors = [{ name = "SD-Trainer Team" }]
 
 dependencies = [
     # ── PyTorch (cu128 = CUDA 12.8, from PyTorch index) ──
-    "torch>=2.5,<2.8",
+    # vLLM >= 0.22 (Gemma 4 caption) requires torch 2.11.x
+    "torch>=2.5,<2.12",
     "torchvision>=0.20",
 
     # ── Training core ──
@@ -84,10 +85,15 @@ dependencies = [
     "onnxruntime-gpu>=1.16",
 ]
 
+[project.optional-dependencies]
+# Gemma-4 caption needs vLLM >= 0.22 (torch 2.11 + numpy 2). Conflicts with gradio 3.x
+# metadata on numpy<2, so install separately: uv sync --extra vllm
+vllm = ["vllm>=0.22.0,<0.23"]
+
 [tool.uv]
 # Default to copying sources (not hardlinking) — simpler for container/portable use
 link-mode = "copy"
-cache-dir = "/root/lanyun-tmp/cache"
+cache-dir = "/root/autodl-tmp/uv-cache"
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }

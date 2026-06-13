@@ -538,22 +538,13 @@ def _run_anima_train_tagging(data: dict) -> dict:
     use_alias_index = data.get("use_alias_index", True)
     auto_download_gemma = data.get("auto_download_gemma", True)
     auto_start_vllm = data.get("auto_start_vllm", False)
+    gemma_vlm_backend = data.get("gemma_vlm_backend", "")
 
     preset = get_vlm_preset(vlm_model)
     if not vllm_api_url:
         vllm_api_url = str(preset.get("default_api_url", ""))
     if not vllm_model:
         vllm_model = str(preset.get("default_served_name", ""))
-
-    if auto_start_vllm:
-        try:
-            ensure_vllm_ready(
-                str(data.get("vlm_model", "toriigate-0.5")),
-                auto_download_gemma=auto_download_gemma,
-            )
-        except Exception as exc:
-            log.error("[TagLeaf Anima] vLLM 自动启动失败: %s", exc)
-            return APIResponseFail(message=f"vLLM 自动启动失败: {exc}")
 
     project_root = Path(__file__).resolve().parents[2]
     pipeline_root = project_root / "tools"
@@ -609,6 +600,9 @@ def _run_anima_train_tagging(data: dict) -> dict:
                 style_hint=style_hint,
                 use_alias_index=use_alias_index,
                 auto_download_gemma=auto_download_gemma,
+                auto_start_vllm=auto_start_vllm,
+                gemma_vlm_backend=gemma_vlm_backend,
+                vlm_preset=preset,
                 resume=resume,
                 progress_callback=_progress_callback,
                 project_root=project_root,

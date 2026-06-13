@@ -23,7 +23,13 @@ from anima_caption_pipeline.parser import (  # noqa: E402
     split_tag_like_text,
 )
 from anima_caption_pipeline.pipeline import run_single_image_pipeline  # noqa: E402
-from anima_caption_pipeline.vlm_client import VlmClient  # noqa: E402
+from anima_caption_pipeline.vlm_client import (  # noqa: E402
+    GemmaVllmUnavailableError,
+    VlmClient,
+    create_vlm_client,
+    is_broken_vllm_output,
+    probe_vllm_generation,
+)
 
 
 def test_split_tag_like_text_dedupes_and_normalizes():
@@ -88,6 +94,46 @@ def test_is_valid_hf_model_dir(tmp_path: Path):
     assert not is_valid_hf_model_dir(model_dir)
     (model_dir / "config.json").write_text("{}", encoding="utf-8")
     assert is_valid_hf_model_dir(model_dir)
+
+
+def test_is_broken_vllm_output_detects_pad_tokens():
+    assert is_broken_vllm_output("", [0, 0, 0]) is True
+    assert is_broken_vllm_output("hello", [1, 2, 3]) is False
+    assert is_broken_vllm_output("<pad><pad>", [0, 0]) is True
+
+
+def test_create_vlm_client_falls_back_to_local_gemma(tmp_path: Path):
+    model_dir = tmp_path / "gemma"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text('{"model_type":"gemma4"}', encoding="utf-8")
+
+    with patch("anima_caption_pipeline.gemma_local_client.LocalGemmaVlmClient") as local_cls:
+        local_cls.return_value = MagicMock()
+        client = create_vlm_client(
+            vlm_model="gemma-4-e4b",
+            api_url="http://127.0.0.1:9002/v1/chat/completions",
+            model_name="spawner-gemma-4-e4b-it",
+            local_model_dir=model_dir,
+            gemma_vlm_backend="transformers",
+        )
+    local_cls.assert_called_once()
+    assert client is local_cls.return_value
+
+
+def test_create_vlm_client_forced_gemma_vllm_requires_probe(tmp_path: Path):
+    model_dir = tmp_path / "gemma"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text('{"model_type":"gemma4"}', encoding="utf-8")
+
+    with patch("anima_caption_pipeline.vlm_client.probe_vllm_generation", return_value=False):
+        with pytest.raises(GemmaVllmUnavailableError, match="generation probe"):
+            create_vlm_client(
+                vlm_model="gemma-4-e4b",
+                api_url="http://127.0.0.1:9002/v1/chat/completions",
+                model_name="spawner-gemma-4-e4b-it",
+                local_model_dir=model_dir,
+                gemma_vlm_backend="vllm",
+            )
 
 
 def test_run_single_image_pipeline_mock_vlm(tmp_path: Path):

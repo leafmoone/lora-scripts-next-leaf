@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import re
 import shutil
@@ -42,6 +43,11 @@ def _default_presets() -> dict[str, dict[str, Any]]:
             "default_served_name": "toriigate-0.5",
             "local_model_dir": "models/toriigate/toriigate-0.5",
             "port": 18901,
+            "vllm_serve": {
+                "max_model_len": 4096,
+                "gpu_memory_utilization": 0.35,
+                "max_num_seqs": 16,
+            },
         },
         "gemma-4-e4b": {
             "display_name": "Gemma-4-E4B (vLLM)",
@@ -50,6 +56,11 @@ def _default_presets() -> dict[str, dict[str, Any]]:
             "local_model_dir": "models/gemma-4-E3B-it",
             "modelscope_id": "spawner/spawner-gemma-4-E4B-it",
             "port": 9002,
+            "vllm_serve": {
+                "max_model_len": 4096,
+                "gpu_memory_utilization": 0.42,
+                "max_num_seqs": 8,
+            },
         },
     }
 
@@ -142,14 +153,59 @@ def check_vllm_health(api_url: str, served_name: str = "", timeout: float = 5.0)
         }
 
 
+def _site_packages_dirs() -> list[Path]:
+    """Collect likely site-packages roots for vLLM CUDA runtime wheels."""
+    dirs: list[Path] = []
+    seen: set[str] = set()
+
+    def _add(path: Path) -> None:
+        resolved = path.resolve()
+        key = str(resolved)
+        if key in seen or not resolved.is_dir():
+            return
+        seen.add(key)
+        dirs.append(resolved)
+
+    py_tag = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    _add(PROJECT_ROOT / ".venv" / "lib" / py_tag / "site-packages")
+
+    try:
+        import vllm
+
+        _add(Path(vllm.__file__).resolve().parent.parent)
+    except Exception:
+        pass
+
+    vllm_bin = shutil.which("vllm")
+    if vllm_bin:
+        _add(Path(vllm_bin).resolve().parent.parent / "lib" / py_tag / "site-packages")
+
+    _add(Path(sys.executable).resolve().parent.parent / "lib" / py_tag / "site-packages")
+    return dirs
+
+
 def _cuda_library_paths() -> list[str]:
-    site_packages = Path(sys.executable).resolve().parent.parent / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
-    candidates = [
-        site_packages / "nvidia" / "cu13" / "lib",
-        site_packages / "nvidia" / "cuda_runtime" / "lib",
-        Path("/usr/local/cuda/lib64"),
-    ]
-    return [str(path) for path in candidates if path.is_dir()]
+    lib_paths: list[str] = []
+    seen: set[str] = set()
+    subdirs = (
+        ("nvidia", "cu13", "lib"),
+        ("nvidia", "cuda_runtime", "lib"),
+    )
+    for site_packages in _site_packages_dirs():
+        for parts in subdirs:
+            path = site_packages.joinpath(*parts)
+            if not path.is_dir():
+                continue
+            resolved = str(path.resolve())
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            lib_paths.append(resolved)
+
+    system_cuda = Path("/usr/local/cuda/lib64")
+    if system_cuda.is_dir():
+        lib_paths.append(str(system_cuda))
+    return lib_paths
 
 
 def _build_vllm_env() -> dict[str, str]:
@@ -160,6 +216,36 @@ def _build_vllm_env() -> dict[str, str]:
         env["LD_LIBRARY_PATH"] = ":".join(lib_paths + ([existing] if existing else []))
     env.setdefault("TORCHDYNAMO_DISABLE", "1")
     return env
+
+
+def _append_vllm_serve_options(cmd: list[str], preset: dict[str, Any]) -> None:
+    """Append memory-safe vLLM serve flags for caption workloads."""
+    serve = dict(preset.get("vllm_serve") or {})
+    max_model_len = int(serve.get("max_model_len", 4096))
+    gpu_memory_utilization = float(serve.get("gpu_memory_utilization", 0.42))
+    max_num_seqs = int(serve.get("max_num_seqs", 8))
+    enable_custom_ops = bool(serve.get("enable_custom_ops", False))
+
+    cmd.extend(
+        [
+            "--max-model-len",
+            str(max_model_len),
+            "--gpu-memory-utilization",
+            str(gpu_memory_utilization),
+            "--max-num-seqs",
+            str(max_num_seqs),
+            "--trust-remote-code",
+            "--dtype",
+            "bfloat16",
+            "--enforce-eager",
+            "--generation-config",
+            "vllm",
+        ]
+    )
+    if not enable_custom_ops:
+        # CUDA 12.8 driver cannot run vLLM 0.22 _C kernels built for CUDA 13.
+        # Set vllm_serve.enable_custom_ops=true after upgrading to a CUDA-13-capable driver.
+        cmd.extend(["-cc.custom_ops", '["none"]'])
 
 
 def _validate_model_dir(vlm_model: str, preset: dict[str, Any], *, auto_download_gemma: bool) -> Path:
@@ -180,6 +266,84 @@ def _validate_model_dir(vlm_model: str, preset: dict[str, Any], *, auto_download
         return ensure_gemma_model(PROJECT_ROOT, auto_download=auto_download_gemma)
 
     raise FileNotFoundError(f"模型目录无效: {model_dir}")
+
+
+def _parse_vllm_version(version: str) -> tuple[int, int, int]:
+    parts: list[int] = []
+    for piece in str(version or "0").split("."):
+        if not piece.isdigit():
+            break
+        parts.append(int(piece))
+    while len(parts) < 3:
+        parts.append(0)
+    return parts[0], parts[1], parts[2]
+
+
+def _check_vllm_runtime_deps() -> None:
+    """Fail fast when optional deps break vLLM engine startup."""
+    if importlib.util.find_spec("flash_attn") is None:
+        return
+    try:
+        import flash_attn  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "检测到 flash-attn 与当前 PyTorch/vLLM 不兼容，会导致 vLLM 引擎启动失败。"
+            "请执行: uv pip uninstall flash-attn"
+            f"（{exc}）"
+        ) from exc
+
+
+def _check_vllm_runtime_compat(vlm_model: str, model_dir: Path) -> None:
+    """Fail fast when the installed vLLM cannot serve the selected VLM."""
+    gemma_keys = {"gemma-4-e4b", "gemma", "spawner-gemma-4-e4b-it"}
+    if vlm_model not in gemma_keys:
+        return
+
+    config_path = model_dir / "config.json"
+    if not config_path.is_file():
+        return
+
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    model_type = str(cfg.get("model_type", "")).lower()
+    if model_type != "gemma4":
+        return
+
+    try:
+        import vllm
+
+        version = getattr(vllm, "__version__", "0")
+    except Exception:
+        version = "0"
+
+    if _parse_vllm_version(version) < (0, 22, 0):
+        raise RuntimeError(
+            f"Gemma 4 需要 vLLM >= 0.22，当前为 vLLM {version}。"
+            "请改用 ToriiGate (toriigate-0.5)，或在独立环境中部署新版 vLLM 服务并通过 API URL 连接。"
+            "（Gemma 4 使用 rope_parameters 新格式，vLLM 0.9.x 无法加载。）"
+        )
+
+
+def _is_gemma_vllm_model(vlm_model: str) -> bool:
+    return str(vlm_model or "").strip().lower() in {"gemma-4-e4b", "gemma", "spawner-gemma-4-e4b-it"}
+
+
+def _probe_gemma_vllm_or_raise(api_url: str, served_name: str) -> None:
+    """Fail when vLLM is reachable but Gemma generation is empty/pad-only."""
+    tools_root = PROJECT_ROOT / "tools"
+    if str(tools_root) not in sys.path:
+        sys.path.insert(0, str(tools_root))
+    from anima_caption_pipeline.vlm_client import (
+        GemmaVllmUnavailableError,
+        gemma_vllm_unavailable_message,
+        probe_vllm_generation,
+    )
+
+    if not probe_vllm_generation(api_url=api_url, model_name=served_name, request_timeout=120.0):
+        raise GemmaVllmUnavailableError(gemma_vllm_unavailable_message(api_url, served_name))
 
 
 def _read_process_output(proc: subprocess.Popen) -> None:
@@ -270,6 +434,8 @@ def start_vllm(
 
     existing = check_vllm_health(api_url, served_name, timeout=3.0)
     if existing.get("ready"):
+        if _is_gemma_vllm_model(vlm_model):
+            _probe_gemma_vllm_or_raise(api_url, served_name)
         with _lock:
             _state.update({
                 "vlm_model": vlm_model,
@@ -287,6 +453,8 @@ def start_vllm(
         raise RuntimeError("未找到 vllm 命令，请先安装: pip install vllm")
 
     model_dir = _validate_model_dir(vlm_model, preset, auto_download_gemma=auto_download_gemma)
+    _check_vllm_runtime_deps()
+    _check_vllm_runtime_compat(vlm_model, model_dir)
 
     with _lock:
         if _proc and _proc.poll() is None and _state.get("vlm_model") not in ("", vlm_model):
@@ -308,13 +476,10 @@ def start_vllm(
         served_name,
         "--port",
         str(port),
-        "--max-model-len",
-        "8192",
-        "--trust-remote-code",
-        "--dtype",
-        "bfloat16",
-        "--enforce-eager",
     ]
+    _append_vllm_serve_options(cmd, preset)
+    if vlm_model in {"gemma-4-e4b", "gemma", "spawner-gemma-4-e4b-it"}:
+        cmd.extend(["--limit-mm-per-prompt", '{"image": 1}'])
 
     with _lock:
         _log_lines = []
@@ -351,13 +516,22 @@ def start_vllm(
     while time.time() < deadline:
         if proc.poll() is not None:
             with _lock:
-                tail = "\n".join(_log_lines[-20:])
+                tail = "\n".join(_log_lines[-40:])
                 _state["status"] = "error"
                 _state["message"] = f"vLLM 进程已退出 (code={proc.returncode})"
             raise RuntimeError(f"vLLM 启动失败 (exit {proc.returncode})\n{tail}")
 
         health = check_vllm_health(api_url, served_name, timeout=5.0)
         if health.get("ready"):
+            try:
+                if _is_gemma_vllm_model(vlm_model):
+                    _probe_gemma_vllm_or_raise(api_url, served_name)
+            except Exception as exc:
+                with _lock:
+                    tail = "\n".join(_log_lines[-40:])
+                    _state["status"] = "error"
+                    _state["message"] = str(exc)
+                raise RuntimeError(f"{exc}\n{tail}") from exc
             with _lock:
                 _state["status"] = "running"
                 _state["message"] = health.get("message", "vLLM 已就绪")

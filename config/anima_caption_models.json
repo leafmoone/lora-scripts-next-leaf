@@ -13,7 +13,13 @@
       "default_served_name": "spawner-gemma-4-e4b-it",
       "local_model_dir": "models/gemma-4-E3B-it",
       "modelscope_id": "spawner/spawner-gemma-4-E4B-it",
-      "port": 9002
+      "port": 9002,
+      "gemma_vlm_backend": "transformers",
+      "vllm_serve": {
+        "max_model_len": 4096,
+        "gpu_memory_utilization": 0.9,
+        "max_num_seqs": 24
+      }
     }
   }
 }

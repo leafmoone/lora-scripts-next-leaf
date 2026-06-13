@@ -301,12 +301,12 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
       </div>
       <div class="row" style="margin-top:4px">
         <label class="toggle" onclick="toggleAnimaAutoStartVllm()">
-          <span class="toggle-switch on" id="animaAutoStartVllm-sw"></span> 自动启动 vLLM 服务
+          <span class="toggle-switch on" id="animaAutoStartVllm-sw"></span> WD14 完成后自动启动 vLLM
         </label>
         <span class="status" id="animaVllmStatus" style="font-size:12px;margin-left:8px"></span>
       </div>
       <div class="input-helper" id="animaVllmAutoHint" style="margin-bottom:8px">
-        开启后：按所选 VLM 模型自动填入 API URL / served name，并尝试启动本地 vLLM（已运行则跳过）。
+        开启后：WD14 打标结束并释放显存后，再启动本地 vLLM（已运行则跳过）。不会在打标前占用 GPU。
       </div>
       <div class="row" id="animaVllmRow">
         <div class="col">
@@ -670,13 +670,9 @@ async function ensureAnimaVllmReady(showProgress) {
 async function toggleAnimaAutoStartVllm() {
   state.animaAutoStartVllm = !state.animaAutoStartVllm;
   document.getElementById('animaAutoStartVllm-sw').classList.toggle('on', state.animaAutoStartVllm);
-  if (state.animaAutoStartVllm) {
-    const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
-    applyAnimaVlmPreset(vlmModel, true);
-    await ensureAnimaVllmReady(false);
-  } else {
-    await refreshAnimaVllmStatus();
-  }
+  const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
+  applyAnimaVlmPreset(vlmModel, true);
+  await refreshAnimaVllmStatus();
 }
 
 async function updateAnimaTrainSections() {
@@ -685,13 +681,8 @@ async function updateAnimaTrainSections() {
   const gemmaRow = document.getElementById('animaGemmaDirRow');
   if (gemmaRow) gemmaRow.style.display = isGemma ? '' : 'none';
 
-  if (state.animaAutoStartVllm) {
-    applyAnimaVlmPreset(vlmModel, true);
-    await ensureAnimaVllmReady(false);
-  } else {
-    applyAnimaVlmPreset(vlmModel, false);
-    await refreshAnimaVllmStatus();
-  }
+  applyAnimaVlmPreset(vlmModel, true);
+  await refreshAnimaVllmStatus();
 }
 
 function updateMode() {
@@ -835,18 +826,6 @@ async function runTagger() {
   document.getElementById('progressText').textContent='提交中...';
   document.getElementById('progressFill').style.width='0%';
 
-  if (config.mode === 'anima_train' && state.animaAutoStartVllm) {
-    const ready = await ensureAnimaVllmReady(true);
-    if (!ready) {
-      document.getElementById('progressText').textContent = 'vLLM 未就绪，已取消标注';
-      document.getElementById('btnRun').disabled = false;
-      document.getElementById('btnClear').style.display = '';
-      return;
-    }
-    config.vllm_api_url = document.getElementById('animaVllmApiUrl').value.trim();
-    config.vllm_model = document.getElementById('animaVllmModel').value.trim();
-  }
-
   try {
     const resp = await fetch('/api/tag-edit-leaf/run', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -970,11 +949,7 @@ renderConsensusModels();
 loadAnimaVlmModels();
 updateMode();
 updateSmartSections();
-if (state.animaAutoStartVllm && document.getElementById('mode').value === 'anima_train') {
-  ensureAnimaVllmReady(false).catch(function(){});
-} else {
-  refreshAnimaVllmStatus().catch(function(){});
-}
+refreshAnimaVllmStatus().catch(function(){});
 </script>
 </body>
 </html>
