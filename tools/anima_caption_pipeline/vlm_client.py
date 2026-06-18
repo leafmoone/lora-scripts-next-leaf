@@ -25,10 +25,9 @@ def gemma_vllm_unavailable_message(api_url: str, model_name: str) -> str:
     return (
         "Gemma vLLM backend is not usable: the server is reachable but the generation "
         f"probe returned empty/pad output (url={api_url}, model={model_name}). "
-        "On this machine NVIDIA driver 570 / CUDA 12.8 cannot run the vLLM 0.22.x "
-        "CUDA 13 custom kernels; disabling custom ops lets the server start but breaks "
-        "Gemma generation. Use gemma_vlm_backend=auto/transformers, or move the vLLM "
-        "backend to a CUDA-13-capable driver/instance and enable custom ops."
+        "Use the verified Gemma sidecar environment based on vLLM 0.19.1+cu128 "
+        "and torch 2.10.0+cu128, or set gemma_vlm_backend=auto/transformers "
+        "while repairing the vLLM server."
     )
 
 
@@ -50,11 +49,11 @@ def build_data_url_for_image_path(image_path: str, *, max_pixels: float = DEFAUL
 
 def build_user_message_content(image_path: str, user_prompt: str, *, max_pixels: float = DEFAULT_MAX_PIXELS) -> list[dict[str, Any]]:
     return [
+        {"type": "text", "text": str(user_prompt or "").strip()},
         {
             "type": "image_url",
             "image_url": {"url": build_data_url_for_image_path(image_path, max_pixels=max_pixels)},
         },
-        {"type": "text", "text": str(user_prompt or "").strip()},
     ]
 
 
@@ -68,7 +67,7 @@ class VlmClient:
         model_name: str,
         api_key: str = "not-needed",
         max_tokens: int = 2048,
-        temperature: float = 0.2,
+        temperature: float = 0.4,
         request_timeout: float = DEFAULT_REQUEST_TIMEOUT,
         max_pixels: float = DEFAULT_MAX_PIXELS,
     ) -> None:
@@ -209,7 +208,7 @@ def create_vlm_client(
     model_name: str,
     local_model_dir: str | Path | None = None,
     max_tokens: int = 2048,
-    temperature: float = 0.2,
+    temperature: float = 0.4,
     gemma_vlm_backend: str = "auto",
     request_timeout: float = DEFAULT_REQUEST_TIMEOUT,
 ):

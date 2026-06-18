@@ -11,9 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "tools"))
 
 from anima_caption_pipeline.alias_index import (  # noqa: E402
-    CHARACTER_ALIASES_PATH,
     DEFAULT_DB_PATH,
+    GENERATED_CHARACTER_ALIASES_PATH,
     build_sqlite_index,
+    ensure_resource_file,
 )
 
 
@@ -22,8 +23,8 @@ def main() -> int:
     parser.add_argument(
         "--json",
         type=Path,
-        default=CHARACTER_ALIASES_PATH,
-        help="Source danbooru_character_aliases.json",
+        default=GENERATED_CHARACTER_ALIASES_PATH,
+        help="Source danbooru_character_aliases.generated.json",
     )
     parser.add_argument(
         "--output",
@@ -32,10 +33,11 @@ def main() -> int:
         help="Output SQLite database path",
     )
     args = parser.parse_args()
+    ensure_resource_file(args.json)
     if not args.json.is_file():
         print(f"JSON not found: {args.json}", file=sys.stderr)
         return 1
-    count = build_sqlite_index(args.json, args.output)
+    count = build_sqlite_index(args.json, args.output, source_name="generated")
     print(f"Wrote {count} alias rows to {args.output}")
     return 0
 

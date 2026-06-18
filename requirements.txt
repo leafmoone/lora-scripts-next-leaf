@@ -1,11 +1,14 @@
 # ────────── PyTorch (CUDA 12.8 / cu128) ──────────
-# Install manually:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-torch>=2.5
-torchvision>=0.20
+# Single verified env for UI/training/WD14/Gemma vLLM.
+# Prefer: uv sync
+torch==2.10.0+cu128
+torchvision==0.25.0+cu128
+torchaudio==2.10.0+cu128
 
 # ────────── Training core ──────────
 accelerate>=0.33.0
-transformers>=4.53.0
+transformers>=4.56.0,<5.0
+vllm==0.19.1
 diffusers[torch]>=0.33.0
 bitsandbytes>=0.46.0
 safetensors>=0.4.0
@@ -31,7 +34,7 @@ huggingface-hub>=0.36.0
 optimum-quanto>=0
 
 # ────────── Numeric / Image ──────────
-numpy>=1.26
+numpy>=2.0,<3.0
 scipy>=1.10
 pandas>=2.0
 pillow>=10.0
@@ -45,7 +48,7 @@ flash-linear-attention>=0.2
 fastapi>=0.100
 uvicorn>=0.22
 httpx>=0.24.0
-gradio>=3.44,<4.0
+gradio>=5.0,<6.0
 websockets>=10.0
 
 # ────────── Training tools ──────────

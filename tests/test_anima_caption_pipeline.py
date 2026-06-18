@@ -8,12 +8,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_ROOT = PROJECT_ROOT / "tools"
 sys.path.insert(0, str(PIPELINE_ROOT))
 
-from anima_caption_pipeline.alias_index import AliasIndex, build_sqlite_index  # noqa: E402
+from anima_caption_pipeline.alias_index import AliasIndex, build_sqlite_index, should_skip_character_alias  # noqa: E402
 from anima_caption_pipeline.config import resolve_vlm_endpoint  # noqa: E402
 from anima_caption_pipeline.formatter import format_anima_train_v1  # noqa: E402
 from anima_caption_pipeline.model_resolver import is_valid_hf_model_dir  # noqa: E402
@@ -26,6 +27,7 @@ from anima_caption_pipeline.pipeline import run_single_image_pipeline  # noqa: E
 from anima_caption_pipeline.vlm_client import (  # noqa: E402
     GemmaVllmUnavailableError,
     VlmClient,
+    build_user_message_content,
     create_vlm_client,
     is_broken_vllm_output,
     probe_vllm_generation,
@@ -61,14 +63,27 @@ def test_format_anima_train_v1_prefers_wd14_tags():
     }
     inputs = {"wd14_raw_tags_en": ["1girl", "blue_hair", "smile"]}
     formatted = format_anima_train_v1(json_result, inputs)
-    assert formatted["formatted_training_text"].startswith("1girl, blue_hair, smile")
+    assert formatted["formatted_training_text"].startswith("1girl, blue hair, smile,\n\n")
     assert "\n\nA cheerful anime girl with blue hair." in formatted["formatted_training_text"]
     assert formatted["formatted_negative_prompt"] == ""
 
 
+def test_format_anima_train_v1_prefers_original_wd14_tags_over_refined_tags():
+    json_result = {
+        "caption_long_en": "A cheerful anime girl with blue hair.",
+        "expanded_tags_en": ["short_refined_tag"],
+    }
+    inputs = {
+        "wd14_raw_tags_en": ["short_refined_tag"],
+        "original_wd14_raw_tags_en": ["1girl", "blue_hair", "looking_at_viewer"],
+    }
+    formatted = format_anima_train_v1(json_result, inputs)
+    assert formatted["formatted_training_text"].startswith("1girl, blue hair, looking at viewer,\n\n")
+
+
 def test_resolve_vlm_endpoint_defaults():
     url, name = resolve_vlm_endpoint("gemma-4-e4b", "", "")
-    assert "9002" in url
+    assert "9003" in url
     assert name == "spawner-gemma-4-e4b-it"
 
 
@@ -79,13 +94,22 @@ def test_alias_index_detects_manual_alias():
 
 
 def test_build_sqlite_index_roundtrip(tmp_path: Path):
-    json_path = PIPELINE_ROOT / "anima_caption_pipeline" / "resources" / "danbooru_character_aliases.json"
+    json_path = PIPELINE_ROOT / "anima_caption_pipeline" / "resources" / "danbooru_character_aliases.generated.json"
     db_path = tmp_path / "aliases.sqlite"
-    count = build_sqlite_index(json_path, db_path)
+    count = build_sqlite_index(json_path, db_path, source_name="generated")
     assert count > 0
     index = AliasIndex(db_path=db_path, enabled=True)
-    hits = index.detect_in_tag_list("rem, 1girl")
+    hits = index.detect_in_tag_list("蕾姆, 1girl")
     assert any(hit["canonical_tag"] == "rem_(re:zero)" for hit in hits)
+
+
+def test_generated_single_word_alias_is_skipped_in_free_text():
+    assert should_skip_character_alias(
+        "orange",
+        "orange_(touhou)",
+        {"_source": "generated", "count": 999999},
+        mode="free_text",
+    )
 
 
 def test_is_valid_hf_model_dir(tmp_path: Path):
@@ -136,6 +160,21 @@ def test_create_vlm_client_forced_gemma_vllm_requires_probe(tmp_path: Path):
             )
 
 
+def test_vlm_message_content_matches_comfyui_order(tmp_path: Path):
+    image_path = tmp_path / "sample.png"
+    Image.new("RGB", (1, 1), color=(255, 255, 255)).save(image_path)
+
+    content = build_user_message_content(str(image_path), "prompt text")
+    assert content[0]["type"] == "text"
+    assert content[0]["text"] == "prompt text"
+    assert content[1]["type"] == "image_url"
+
+
+def test_vlm_client_default_temperature_matches_comfyui():
+    client = VlmClient(api_url="http://127.0.0.1:9003/v1/chat/completions", model_name="spawner-gemma-4-e4b-it")
+    assert client.temperature == 0.4
+
+
 def test_run_single_image_pipeline_mock_vlm(tmp_path: Path):
     image_path = tmp_path / "sample.png"
     image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
@@ -161,8 +200,17 @@ def test_run_single_image_pipeline_mock_vlm(tmp_path: Path):
         alias_index=AliasIndex(enabled=False),
     )
     assert client.complete.call_count == 2
-    assert "1girl, solo, smile" in result["formatted_training_text"]
+    first_call = client.complete.call_args_list[0].kwargs
+    second_call = client.complete.call_args_list[1].kwargs
+    assert "WD14 原始 tags" in first_call["user_prompt"]
+    assert "目标输出范式：\ngeneric_tag_model" in first_call["user_prompt"]
+    assert "1girl" in second_call["user_prompt"]
+    assert "目标输出范式：\nanima_train_v1" in second_call["user_prompt"]
+    assert result["formatted_training_text"].startswith("1girl, solo, smile,\n\n")
+    assert result["wd14_raw_tags_en"] == ["1girl", "solo", "smile"]
     assert "A cute anime girl standing in soft light." in result["formatted_training_text"]
+    assert result["_task_agent_chain"] == ["refine_wd14_tags", "generate_natural_caption"]
+    assert "refine_tags_result" in result
 
 
 def test_ensure_gemma_model_without_download(tmp_path: Path):

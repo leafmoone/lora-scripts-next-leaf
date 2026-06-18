@@ -11,20 +11,26 @@ def normalize_tag_for_anima(tag: str) -> str:
     text = str(tag or "").strip().lower()
     if not text:
         return ""
-    if text.startswith("score_") or "_" in text:
+    if text.startswith("score_"):
         return text.replace(" ", "_")
-    return text.replace("_", " ")
+    return text.replace("_", " ").replace("(", r"\(").replace(")", r"\)")
 
 
 def build_training_two_line_text(tag_items: list[str], caption_text: str) -> str:
     first_line = ", ".join(str(item).strip() for item in tag_items if str(item).strip()).strip()
     second_line = str(caption_text or "").strip()
+    if first_line and not first_line.endswith(","):
+        first_line += ","
     if first_line and second_line:
         return first_line + "\n\n" + second_line
     return first_line or second_line
 
 
 def get_training_base_tags(json_result: dict[str, Any], inputs: dict[str, Any]) -> list[str]:
+    explicit_base_tags = inputs.get("training_base_tags_en", []) or inputs.get("original_wd14_raw_tags_en", [])
+    if isinstance(explicit_base_tags, list) and explicit_base_tags:
+        return dedupe_tags([str(item).strip() for item in explicit_base_tags if str(item).strip()])
+
     raw_tags = inputs.get("wd14_raw_tags_en", [])
     if isinstance(raw_tags, list) and raw_tags:
         return dedupe_tags([str(item).strip() for item in raw_tags if str(item).strip()])
@@ -60,7 +66,10 @@ def format_anima_train_v1(json_result: dict[str, Any], inputs: dict[str, Any]) -
 
 def enrich_json_result(task_type: str, json_result: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(json_result)
-    if inputs.get("wd14_raw_tags_en"):
+    original_wd14_tags = inputs.get("original_wd14_raw_tags_en") or inputs.get("training_base_tags_en")
+    if original_wd14_tags:
+        enriched["wd14_raw_tags_en"] = list(original_wd14_tags)
+    elif inputs.get("wd14_raw_tags_en"):
         enriched["wd14_raw_tags_en"] = list(inputs.get("wd14_raw_tags_en", []))
     enriched.update(format_anima_train_v1(enriched, inputs))
     enriched["_task_agent_chain"] = inputs.get("_task_agent_chain", [])

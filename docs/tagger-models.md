@@ -77,14 +77,14 @@ Minthy 仓库提供的 **caption_distributed.py**（vLLM 并行打标示例脚�
 
 ### Anima Train 模式
 
-`/tag-edit-leaf.html` → 标注模式 **Anima Train**：WD14 batch → 两步 VLM（`extract_tags_from_image` → `generate_natural_caption`）→ `anima_train_v1` 输出（`tags 行` + 空行 + `caption 行`）。训练 tags 行优先使用 **WD14 原始标签**，不添加质量词/负面词。
+`/tag-edit-leaf.html` → 标注模式 **Anima Train**：WD14 batch → 两步 VLM（`refine_wd14_tags` → `generate_natural_caption`）→ `anima_train_v1` 输出（`tags 行` + 空行 + `caption 行`）。链路与 ComfyUI-Studio-Suite 的 `chain_wd14_to_anima_train_caption` bundle 对齐：第一段以 WD14 为主做清洗、去噪和少量补充，第二段生成自然语言训练描述，不添加质量词/负面词。
 
 | 项 | 值 |
 |----|-----|
 | 流水线代码 | `tools/anima_caption_pipeline/` |
 | VLM 后端 | **Gemma**：vLLM 或 transformers（见 [anima-gemma-vllm.md](./anima-gemma-vllm.md)）；**ToriiGate**：vLLM |
 | ToriiGate | 默认 `http://127.0.0.1:18901/v1/chat/completions`，served name `toriigate-0.5` |
-| Gemma-4-E4B | ModelScope `spawner/spawner-gemma-4-E4B-it`，本地目录 `./models/gemma-4-E3B-it`，端口 9002 |
+| Gemma-4-E4B | ModelScope `spawner/spawner-gemma-4-E4B-it`，本地目录 `./models/gemma-4-E3B-it`，端口 9003 |
 
 > **Gemma vLLM / transformers 详细说明**（CUDA 限制、配置项、故障排查）：[docs/anima-gemma-vllm.md](./anima-gemma-vllm.md)
 
@@ -99,17 +99,13 @@ modelscope download spawner/spawner-gemma-4-E4B-it \
 启动 Gemma vLLM（或使用 `scripts/start_gemma_vllm.sh`）：
 
 ```bash
-vllm serve ./models/gemma-4-E3B-it \
-  --served-model-name spawner-gemma-4-e4b-it \
-  --port 9002 \
-  --limit-mm-per-prompt image=1 \
-  --max-model-len 8192 \
-  --trust-remote-code
+uv sync
+bash scripts/start_gemma_vllm.sh
 ```
 
 同卡部署时 Runner 先完成 WD14 并释放 ONNX，再并发调用 vLLM；可通过 UI 调低 `VLM 并发数` 避免与 Gemma 抢显存。
 
-角色别名（可选）：`tools/anima_caption_pipeline/resources/danbooru_character_aliases.json`；大表可执行 `python scripts/build_alias_index.py` 生成 SQLite。
+角色别名：运行时优先使用 `tools/anima_caption_pipeline/resources/character_aliases.sqlite`；可用 `tools/anima_caption_pipeline/resources/danbooru_character_aliases.generated.json` 重新生成 SQLite。
 
 ## 目录结构
 

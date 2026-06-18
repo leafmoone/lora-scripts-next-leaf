@@ -15,7 +15,7 @@ from .alias_index import AliasIndex
 from .config import IMAGE_EXTENSIONS, PROJECT_ROOT, project_root_from
 from .model_resolver import resolve_vlm_runtime, should_start_vllm_for_gemma
 from .gemma_local_client import LocalGemmaVlmClient
-from .pipeline import run_single_image_pipeline
+from .pipeline import DEFAULT_ANIMA_TRAIN_PURPOSE, DEFAULT_ANIMA_TRAIN_STYLE_HINT, run_single_image_pipeline
 from .vlm_client import create_vlm_client, is_gemma_vlm_model
 
 logger = logging.getLogger(__name__)
@@ -210,10 +210,10 @@ def run_anima_train_batch(
     vllm_model: str = "",
     vlm_workers: int = 4,
     vlm_max_tokens: int = 2048,
-    temperature: float = 0.2,
+    temperature: float = 0.4,
     trigger: str = "",
-    purpose: str = "character",
-    style_hint: str = "",
+    purpose: str = DEFAULT_ANIMA_TRAIN_PURPOSE,
+    style_hint: str = DEFAULT_ANIMA_TRAIN_STYLE_HINT,
     use_alias_index: bool = True,
     auto_download_gemma: bool = True,
     auto_start_vllm: bool = False,

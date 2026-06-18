@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import patch
-import sys
-import types
 
 from mikazuki.utils.vllm_manager import (
     get_vlm_preset,
@@ -19,7 +17,9 @@ def test_load_vlm_presets_contains_gemma_and_toriigate():
     presets = load_vlm_presets()
     assert "gemma-4-e4b" in presets
     assert "toriigate-0.5" in presets
-    assert presets["gemma-4-e4b"]["port"] == 9002
+    assert presets["gemma-4-e4b"]["port"] == 9003
+    assert presets["gemma-4-e4b"]["gemma_vlm_backend"] == "vllm"
+    assert "vllm_executable" not in presets["gemma-4-e4b"]
     assert presets["toriigate-0.5"]["local_model_dir"]
 
 
@@ -29,8 +29,8 @@ def test_get_vlm_preset_aliases():
 
 
 def test_parse_port_and_models_endpoint():
-    assert parse_port("http://127.0.0.1:9002/v1/chat/completions") == 9002
-    assert models_endpoint("http://127.0.0.1:9002/v1/chat/completions") == "http://127.0.0.1:9002/v1/models"
+    assert parse_port("http://127.0.0.1:9003/v1/chat/completions") == 9003
+    assert models_endpoint("http://127.0.0.1:9003/v1/chat/completions") == "http://127.0.0.1:9003/v1/models"
 
 
 def test_get_vllm_status_stopped_when_no_server():
@@ -40,7 +40,7 @@ def test_get_vllm_status_stopped_when_no_server():
         with patch("mikazuki.utils.vllm_manager.check_vllm_health", return_value={"ready": False, "message": "down"}):
             status = get_vllm_status("gemma-4-e4b")
     assert status["ready"] is False
-    assert status["port"] == 9002
+    assert status["port"] == 9003
 
 
 def test_start_vllm_existing_gemma_server_requires_generation_probe():
@@ -69,10 +69,9 @@ def test_check_vllm_runtime_compat_blocks_gemma4_on_old_vllm():
     model_dir = Path(__file__).resolve().parents[1] / "models" / "gemma-4-E3B-it"
     if not (model_dir / "config.json").is_file():
         return
-    fake_vllm = types.SimpleNamespace(__version__="0.9.2")
-    with patch.dict(sys.modules, {"vllm": fake_vllm}):
+    with patch("mikazuki.utils.vllm_manager._read_vllm_version", return_value="0.9.2"):
         try:
-            _check_vllm_runtime_compat("gemma-4-e4b", model_dir)
+            _check_vllm_runtime_compat("gemma-4-e4b", model_dir, vllm_bin="/usr/bin/vllm", env={})
         except RuntimeError as exc:
             assert "Gemma 4" in str(exc)
             assert "0.9.2" in str(exc)
@@ -93,14 +92,15 @@ def test_cuda_library_paths_prefers_project_venv():
     assert (venv_cu13 / "libcudart.so.13").is_file()
 
 
-def test_start_vllm_cmd_disables_custom_ops_for_cuda128():
+def test_start_vllm_cmd_uses_project_venv_and_custom_ops_by_default():
     from mikazuki.utils.vllm_manager import PROJECT_ROOT
 
     model_dir = PROJECT_ROOT / "models" / "gemma-4-E3B-it"
     if not (model_dir / "config.json").is_file():
         return
+    vllm_bin = str(PROJECT_ROOT / ".venv" / "bin" / "vllm")
 
-    with patch("mikazuki.utils.vllm_manager.shutil.which", return_value="/usr/bin/vllm"):
+    with patch("mikazuki.utils.vllm_manager._resolve_vllm_bin", return_value=vllm_bin):
         with patch("mikazuki.utils.vllm_manager._validate_model_dir", return_value=model_dir):
             with patch("mikazuki.utils.vllm_manager._check_vllm_runtime_deps"):
                 with patch("mikazuki.utils.vllm_manager._check_vllm_runtime_compat"):
@@ -113,13 +113,15 @@ def test_start_vllm_cmd_disables_custom_ops_for_cuda128():
 
                                 start_vllm("gemma-4-e4b", wait_ready=False)
                                 cmd = popen.call_args.args[0]
-    assert "-cc.custom_ops" in cmd
-    assert '["none"]' in cmd
+    env = popen.call_args.kwargs["env"]
+    assert cmd[0] == vllm_bin
+    assert "-cc.custom_ops" not in cmd
     assert "--limit-mm-per-prompt" in cmd
     assert '{"image": 1}' in cmd
     assert "--gpu-memory-utilization" in cmd
     assert "--generation-config" in cmd
     assert "vllm" in cmd
+    assert "CUDA_HOME" not in env
 
 
 def test_tag_edit_leaf_api_has_vllm_routes():

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import gzip
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from .parser import dedupe_tags, split_tag_like_text
 PACKAGE_ROOT = Path(__file__).resolve().parent
 RESOURCES_DIR = PACKAGE_ROOT / "resources"
 CHARACTER_ALIASES_PATH = RESOURCES_DIR / "danbooru_character_aliases.json"
+GENERATED_CHARACTER_ALIASES_PATH = RESOURCES_DIR / "danbooru_character_aliases.generated.json"
 CHARACTER_ALIAS_SAFETY_PATH = RESOURCES_DIR / "character_alias_safety.json"
 DEFAULT_DB_PATH = RESOURCES_DIR / "character_aliases.sqlite"
 
@@ -39,8 +42,21 @@ def contains_cjk(text: str) -> bool:
 
 
 def load_json_file(path: Path) -> Any:
+    ensure_resource_file(path)
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def ensure_resource_file(path: Path) -> Path:
+    if path.is_file():
+        return path
+    compressed_path = Path(str(path) + ".gz")
+    if not compressed_path.is_file():
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(compressed_path, "rb") as src, path.open("wb") as dst:
+        shutil.copyfileobj(src, dst)
+    return path
 
 
 def load_character_alias_safety() -> dict[str, Any]:
@@ -111,9 +127,9 @@ def should_skip_character_alias(alias_clean: str, canonical_clean: str, metadata
     if source_name != "manual" and is_generic_descriptor_alias(alias_clean):
         return True
     if is_single_ascii_word(alias_clean):
-        if mode == "tag_text" and source_name != "manual":
+        if source_name != "manual" and mode in {"tag_text", "free_text"}:
             return True
-        if mode == "free_text" and count < int(safety.get("single_word_ascii_min_count", 50)):
+        if mode == "free_text" and source_name == "manual" and count < int(safety.get("single_word_ascii_min_count", 50)):
             return True
         if copyright_tag_key in suspicious_copyrights and count < 1000:
             return True
@@ -127,13 +143,19 @@ class AliasIndex:
         self.enabled = enabled
         self.db_path = db_path or DEFAULT_DB_PATH
         self._aliases: dict[str, dict[str, Any]] = {}
+        self._sqlite_available = False
         if enabled:
             self._load()
 
     def _load(self) -> None:
+        ensure_resource_file(self.db_path)
+        ensure_resource_file(GENERATED_CHARACTER_ALIASES_PATH)
         if self.db_path.is_file():
-            self._load_from_sqlite()
-        elif CHARACTER_ALIASES_PATH.is_file():
+            self._sqlite_available = True
+            return
+        if GENERATED_CHARACTER_ALIASES_PATH.is_file():
+            self._load_from_json(GENERATED_CHARACTER_ALIASES_PATH, source_name="generated")
+        if CHARACTER_ALIASES_PATH.is_file():
             self._load_from_json(CHARACTER_ALIASES_PATH, source_name="manual")
 
     def _load_from_json(self, path: Path, *, source_name: str) -> None:
@@ -209,14 +231,45 @@ class AliasIndex:
                 "_metadata": metadata,
             }
 
+    def _lookup_alias(self, alias_key: str) -> dict[str, Any] | None:
+        if self._sqlite_available:
+            conn = sqlite3.connect(str(self.db_path))
+            try:
+                row = conn.execute(
+                    "SELECT matched_alias, canonical_tag, blocked_tags, metadata_json, priority "
+                    "FROM character_aliases WHERE alias_key = ?",
+                    (alias_key,),
+                ).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                return None
+            matched_alias, canonical_tag, blocked_tags_json, metadata_json, priority = row
+            try:
+                blocked_tags = json.loads(blocked_tags_json or "[]")
+            except Exception:
+                blocked_tags = []
+            try:
+                metadata = json.loads(metadata_json or "{}")
+            except Exception:
+                metadata = {}
+            return {
+                "canonical_tag": str(canonical_tag),
+                "matched_alias": str(matched_alias),
+                "blocked_tags": blocked_tags,
+                "_priority": int(priority or 0),
+                "_metadata": metadata,
+            }
+        return self._aliases.get(alias_key)
+
     def detect_in_tag_list(self, raw_tags: str | list[str]) -> list[dict[str, Any]]:
-        if not self.enabled or not self._aliases:
+        if not self.enabled or (not self._aliases and not self._sqlite_available):
             return []
         tokens = split_tag_like_text(raw_tags) if isinstance(raw_tags, str) else list(raw_tags or [])
         hits: list[dict[str, Any]] = []
         seen_canonical: set[str] = set()
         for token in tokens:
-            alias = self._aliases.get(normalize_alias_key(token))
+            alias = self._lookup_alias(normalize_alias_key(token))
             if not alias:
                 continue
             if should_skip_character_alias(
@@ -239,11 +292,119 @@ class AliasIndex:
             )
         return hits
 
+    def detect_in_text(self, text: str) -> list[dict[str, Any]]:
+        if not self.enabled or (not self._aliases and not self._sqlite_available):
+            return []
+        normalized_text = normalize_alias_key(text)
+        if not normalized_text:
+            return []
+        if self._sqlite_available and not self._aliases:
+            return self._detect_in_text_with_sqlite(normalized_text)
+        padded = f" {normalized_text} "
+        candidates: list[dict[str, Any]] = []
+        for alias_key, alias in self._aliases.items():
+            if should_skip_character_alias(
+                alias["matched_alias"],
+                alias["canonical_tag"],
+                alias.get("_metadata", {}),
+                mode="free_text",
+            ):
+                continue
+            if contains_cjk(alias_key):
+                start_index = normalized_text.find(alias_key)
+                matched = start_index >= 0
+            else:
+                if len(alias_key) < 3:
+                    continue
+                probe = f" {alias_key} "
+                start_index = padded.find(probe)
+                matched = start_index >= 0 or normalized_text == alias_key
+            if not matched:
+                continue
+            candidates.append(
+                {
+                    "matched_alias": alias["matched_alias"],
+                    "canonical_tag": alias["canonical_tag"],
+                    "blocked_tags": list(alias.get("blocked_tags", [])),
+                    "_length": len(alias_key),
+                    "_start": start_index if start_index >= 0 else 0,
+                }
+            )
+
+        candidates.sort(key=lambda item: (-item["_length"], item["_start"]))
+        hits: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        occupied: list[tuple[int, int]] = []
+        for candidate in candidates:
+            canonical = candidate["canonical_tag"]
+            if canonical in seen:
+                continue
+            start = candidate["_start"]
+            end = start + candidate["_length"]
+            if any(not (end <= occ_start or start >= occ_end) for occ_start, occ_end in occupied):
+                continue
+            occupied.append((start, end))
+            seen.add(canonical)
+            hits.append(
+                {
+                    "matched_alias": candidate["matched_alias"],
+                    "canonical_tag": canonical,
+                    "blocked_tags": candidate["blocked_tags"],
+                }
+            )
+        return hits
+
+    def _detect_in_text_with_sqlite(self, normalized_text: str) -> list[dict[str, Any]]:
+        words = re.findall(r"[a-z0-9_()]+|[\u4e00-\u9fff]+", normalized_text)
+        candidate_keys: set[str] = set()
+        for index, word in enumerate(words):
+            if len(word) >= 2 or contains_cjk(word):
+                candidate_keys.add(word)
+            for width in (2, 3, 4):
+                phrase = " ".join(words[index : index + width]).strip()
+                if phrase and len(phrase) >= 3:
+                    candidate_keys.add(phrase)
+
+        hits: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for alias_key in sorted(candidate_keys, key=lambda item: -len(item)):
+            alias = self._lookup_alias(alias_key)
+            if not alias:
+                continue
+            if should_skip_character_alias(
+                alias["matched_alias"],
+                alias["canonical_tag"],
+                alias.get("_metadata", {}),
+                mode="free_text",
+            ):
+                continue
+            canonical = alias["canonical_tag"]
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            hits.append(
+                {
+                    "matched_alias": alias["matched_alias"],
+                    "canonical_tag": canonical,
+                    "blocked_tags": list(alias.get("blocked_tags", [])),
+                }
+            )
+        return hits
+
     def preprocess_inputs(self, inputs: dict[str, Any]) -> dict[str, Any]:
         prepared = dict(inputs or {})
         alias_hits = self.detect_in_tag_list(prepared.get("raw_tags", ""))
-        prepared["resolved_character_tags"] = alias_hits
-        prepared["resolved_character_tag_strings"] = [hit["canonical_tag"] for hit in alias_hits]
+        alias_hits.extend(self.detect_in_text(str(prepared.get("raw_text", ""))))
+        deduped_hits: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for hit in alias_hits:
+            canonical = hit["canonical_tag"]
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            deduped_hits.append(hit)
+        prepared["resolved_character_tags"] = deduped_hits
+        prepared["resolved_character_tag_strings"] = [hit["canonical_tag"] for hit in deduped_hits]
         return prepared
 
 
@@ -252,8 +413,11 @@ def build_sqlite_index(
     db_path: Path,
     *,
     source_name: str = "manual",
+    include_generated: bool = False,
 ) -> int:
     index = AliasIndex(enabled=False)
+    if include_generated and source_name == "manual" and GENERATED_CHARACTER_ALIASES_PATH.is_file():
+        index._load_from_json(GENERATED_CHARACTER_ALIASES_PATH, source_name="generated")
     index._load_from_json(json_path, source_name=source_name)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))

@@ -519,8 +519,14 @@ def _run_anima_train_tagging(data: dict) -> dict:
     recursive = data.get("recursive", False)
     resume = data.get("resume", False)
     trigger = data.get("trigger", "")
-    purpose = data.get("purpose", "character")
-    style_hint = data.get("style_hint", "")
+    purpose = data.get(
+        "purpose",
+        "保留 WD14 可用标签，只让 LLM 做补充、校正和自然语言训练描述。输出不要加入绘图质量词。",
+    )
+    style_hint = data.get(
+        "style_hint",
+        "training caption, keep reliable wd14 tags, add concise natural-language description line",
+    )
     wd14_model = data.get("wd14_model") or data.get("model", "wd-eva02-large-tagger-v3")
     threshold = float(data.get("threshold", 0.35))
     char_threshold = float(data.get("char_threshold", 0.85))
@@ -534,7 +540,7 @@ def _run_anima_train_tagging(data: dict) -> dict:
     vllm_model = data.get("vllm_model", "")
     vlm_workers = min(max(1, int(data.get("vlm_workers", data.get("vlm_batch", 4)))), 32)
     vlm_max_tokens = int(data.get("vlm_max_tokens", 2048))
-    temperature = float(data.get("temperature", data.get("vlm_temperature", 0.2)))
+    temperature = float(data.get("temperature", data.get("vlm_temperature", 0.4)))
     use_alias_index = data.get("use_alias_index", True)
     auto_download_gemma = data.get("auto_download_gemma", True)
     auto_start_vllm = data.get("auto_start_vllm", False)

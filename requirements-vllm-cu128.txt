@@ -1,0 +1,22 @@
+# Legacy pip constraints for the single Gemma-4-E4B vLLM environment on AutoDL CUDA 12.8.
+# Prefer `uv sync` from pyproject.toml for new installs.
+#
+# Verified runtime:
+#   Python 3.12.3
+#   NVIDIA driver 570.124.04 / CUDA runtime 12.8
+#   CUDA toolkit: /root/autodl-tmp/cuda-12.8
+#   vLLM: 0.19.1 from PyPI
+#
+# Install example:
+#   PIP_CACHE_DIR=/root/autodl-tmp/pip-cache .venv/bin/python -m pip install -r requirements-vllm-cu128.txt
+
+--index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://pypi.org/simple
+
+torch==2.10.0+cu128
+torchvision==0.25.0+cu128
+torchaudio==2.10.0+cu128
+
+transformers>=4.56.0
+huggingface-hub>=0.36.0
+vllm==0.19.1

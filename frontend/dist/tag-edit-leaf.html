@@ -283,7 +283,7 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
     </div>
     <div class="section-body show">
       <div class="input-helper" style="margin-bottom:10px">
-        WD14 原始标签 → VLM 两步链（extract_tags → generate_caption）→ anima_train_v1 输出（tags 行 + 空行 + caption 行）。仅使用 vLLM HTTP，无 GGUF / llama.cpp。
+        WD14 原始标签 → VLM 两步链（refine_wd14_tags → generate_natural_caption）→ anima_train_v1 输出（tags 行 + 空行 + caption 行）。Gemma 使用 vLLM HTTP。
       </div>
       <div class="row">
         <div class="col">
@@ -303,6 +303,7 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         <label class="toggle" onclick="toggleAnimaAutoStartVllm()">
           <span class="toggle-switch on" id="animaAutoStartVllm-sw"></span> WD14 完成后自动启动 vLLM
         </label>
+        <button class="btn btn-danger btn-sm" id="btnAnimaStopVllm" onclick="stopAnimaVllm()" style="margin-left:8px">关闭 vLLM</button>
         <span class="status" id="animaVllmStatus" style="font-size:12px;margin-left:8px"></span>
       </div>
       <div class="input-helper" id="animaVllmAutoHint" style="margin-bottom:8px">
@@ -329,7 +330,8 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         <div class="col">
           <label>训练目的</label>
           <select id="animaPurpose">
-            <option value="character" selected>角色 (character)</option>
+            <option value="保留 WD14 可用标签，只让 LLM 做补充、校正和自然语言训练描述。输出不要加入绘图质量词。" selected>训练 caption（保留 WD14）</option>
+            <option value="character">角色 (character)</option>
             <option value="style">风格 (style)</option>
             <option value="general">通用 (general)</option>
             <option value="concept">概念 (concept)</option>
@@ -337,7 +339,7 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         </div>
         <div class="col">
           <label>风格提示 <small>(可选)</small></label>
-          <input type="text" id="animaStyleHint" placeholder="如：anime cel shading, soft lighting">
+          <input type="text" id="animaStyleHint" value="training caption, keep reliable wd14 tags, add concise natural-language description line" placeholder="如：anime cel shading, soft lighting">
         </div>
       </div>
       <div class="row">
@@ -351,7 +353,7 @@ mark{background:#ffe58f;padding:0 2px;border-radius:2px}
         </div>
         <div class="col">
           <label>温度</label>
-          <input type="number" id="animaTemperature" value="0.2" min="0" max="2" step="0.1">
+          <input type="number" id="animaTemperature" value="0.4" min="0" max="2" step="0.1">
         </div>
       </div>
       <div class="row" style="margin-top:4px">
@@ -667,6 +669,36 @@ async function ensureAnimaVllmReady(showProgress) {
   }
 }
 
+async function stopAnimaVllm() {
+  if (state.animaVllmBusy) return false;
+  const vlmModel = document.getElementById('animaVlmModel')?.value || 'toriigate-0.5';
+  state.animaVllmBusy = true;
+  const btn = document.getElementById('btnAnimaStopVllm');
+  if (btn) btn.disabled = true;
+  setAnimaVllmStatus('正在关闭 vLLM...', '');
+  try {
+    const resp = await fetch('/api/tag-edit-leaf/vllm/stop', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({vlm_model: vlmModel}),
+    });
+    const data = await resp.json();
+    if (data.status === 'success') {
+      setAnimaVllmStatus(data.message || 'vLLM 已停止', 'ok');
+      return true;
+    }
+    setAnimaVllmStatus(data.message || 'vLLM 停止失败', 'err');
+    return false;
+  } catch (e) {
+    setAnimaVllmStatus('vLLM 停止失败: ' + e.message, 'err');
+    return false;
+  } finally {
+    state.animaVllmBusy = false;
+    if (btn) btn.disabled = false;
+    setTimeout(function(){ refreshAnimaVllmStatus().catch(function(){}); }, 800);
+  }
+}
+
 async function toggleAnimaAutoStartVllm() {
   state.animaAutoStartVllm = !state.animaAutoStartVllm;
   document.getElementById('animaAutoStartVllm-sw').classList.toggle('on', state.animaAutoStartVllm);
@@ -788,7 +820,7 @@ function collectConfig() {
     config.vllm_model = document.getElementById('animaVllmModel').value.trim();
     config.vlm_workers = parseInt(document.getElementById('animaVlmWorkers').value) || 4;
     config.vlm_max_tokens = parseInt(document.getElementById('animaVlmMaxTokens').value) || 2048;
-    config.temperature = parseFloat(document.getElementById('animaTemperature').value) || 0.2;
+    config.temperature = parseFloat(document.getElementById('animaTemperature').value) || 0.4;
     config.purpose = document.getElementById('animaPurpose').value;
     config.style_hint = document.getElementById('animaStyleHint').value.trim();
     config.trigger = document.getElementById('animaTrigger').value.trim();

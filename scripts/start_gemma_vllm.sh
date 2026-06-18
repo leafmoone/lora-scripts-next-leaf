@@ -6,11 +6,21 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODEL_DIR="${ROOT}/models/gemma-4-E3B-it"
-PYTHON="${ROOT}/.venv/bin/python"
-VLLM="${ROOT}/.venv/bin/vllm"
+SIDECAR_ENV="${ANIMA_GEMMA_VLLM_ENV:-${ROOT}/.venv}"
+CUDA_HOME="${ANIMA_VLLM_CUDA_HOME:-}"
+PYTHON="${SIDECAR_ENV}/bin/python"
+VLLM="${ANIMA_GEMMA_VLLM_BIN:-${SIDECAR_ENV}/bin/vllm}"
 
 if [[ ! -x "${PYTHON}" ]]; then
+  PYTHON="${ROOT}/.venv/bin/python"
+fi
+if [[ ! -x "${VLLM}" ]]; then
+  VLLM="${ROOT}/.venv/bin/vllm"
+fi
+if [[ ! -x "${PYTHON}" ]]; then
   PYTHON="$(command -v python3 || command -v python)"
+fi
+if [[ ! -x "${VLLM}" ]]; then
   VLLM="$(command -v vllm)"
 fi
 
@@ -22,20 +32,30 @@ if [[ ! -f "${MODEL_DIR}/config.json" ]]; then
 fi
 
 PY_SITE="$("${PYTHON}" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-export LD_LIBRARY_PATH="${PY_SITE}/nvidia/cu13/lib:${PY_SITE}/nvidia/cuda_runtime/lib:${LD_LIBRARY_PATH:-}"
+PATH_ENTRIES=("$(dirname "${VLLM}")")
+LIB_ENTRIES=("${PY_SITE}/nvidia/cuda_runtime/lib")
+if [[ -n "${CUDA_HOME}" && -d "${CUDA_HOME}" ]]; then
+  export CUDA_HOME
+  export CUDA_PATH="${CUDA_HOME}"
+  PATH_ENTRIES=("${CUDA_HOME}/bin" "${PATH_ENTRIES[@]}")
+  LIB_ENTRIES=("${CUDA_HOME}/lib64" "${CUDA_HOME}/lib" "${CUDA_HOME}/targets/x86_64-linux/lib" "${LIB_ENTRIES[@]}")
+fi
+export PATH="$(IFS=:; echo "${PATH_ENTRIES[*]}"):${PATH}"
+export LD_LIBRARY_PATH="$(IFS=:; echo "${LIB_ENTRIES[*]}"):${LD_LIBRARY_PATH:-}"
 export TORCHDYNAMO_DISABLE=1
 
 CUSTOM_OPS_ARGS=()
-if [[ "${VLLM_ENABLE_CUSTOM_OPS:-0}" != "1" ]]; then
+if [[ "${VLLM_DISABLE_CUSTOM_OPS:-0}" == "1" ]]; then
   CUSTOM_OPS_ARGS=(-cc.custom_ops '["none"]')
 fi
 
 exec "${VLLM}" serve "${MODEL_DIR}" \
   --served-model-name spawner-gemma-4-e4b-it \
-  --port 9002 \
+  --host 127.0.0.1 \
+  --port 9003 \
   --max-model-len 4096 \
-  --gpu-memory-utilization 0.42 \
-  --max-num-seqs 8 \
+  --gpu-memory-utilization 0.90 \
+  --max-num-seqs 4 \
   --trust-remote-code \
   --dtype bfloat16 \
   --enforce-eager \

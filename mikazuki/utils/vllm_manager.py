@@ -51,15 +51,17 @@ def _default_presets() -> dict[str, dict[str, Any]]:
         },
         "gemma-4-e4b": {
             "display_name": "Gemma-4-E4B (vLLM)",
-            "default_api_url": "http://127.0.0.1:9002/v1/chat/completions",
+            "default_api_url": "http://127.0.0.1:9003/v1/chat/completions",
             "default_served_name": "spawner-gemma-4-e4b-it",
             "local_model_dir": "models/gemma-4-E3B-it",
             "modelscope_id": "spawner/spawner-gemma-4-E4B-it",
-            "port": 9002,
+            "port": 9003,
+            "gemma_vlm_backend": "vllm",
             "vllm_serve": {
                 "max_model_len": 4096,
-                "gpu_memory_utilization": 0.42,
-                "max_num_seqs": 8,
+                "gpu_memory_utilization": 0.9,
+                "max_num_seqs": 4,
+                "enable_custom_ops": True,
             },
         },
     }
@@ -216,9 +218,6 @@ def _resolve_vllm_bin(preset: dict[str, Any], vlm_model: str) -> str:
     env_bin = os.environ.get("ANIMA_VLLM_BIN") or os.environ.get("ANIMA_GEMMA_VLLM_BIN")
     if env_bin:
         candidates.append(env_bin)
-    if _is_gemma_vllm_model(vlm_model):
-        candidates.append("/root/autodl-tmp/vllm-gemma-cu128/bin/vllm")
-
     for candidate in candidates:
         path = Path(candidate).expanduser()
         if path.is_file() and os.access(path, os.X_OK):

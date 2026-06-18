@@ -48,7 +48,7 @@ class LocalGemmaVlmClient:
         *,
         model_dir: str | Path,
         max_tokens: int = 2048,
-        temperature: float = 0.2,
+        temperature: float = 0.4,
     ) -> None:
         self.model_dir = Path(model_dir).resolve()
         self.max_tokens = int(max_tokens)

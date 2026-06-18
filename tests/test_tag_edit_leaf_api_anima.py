@@ -19,7 +19,9 @@ def test_anima_caption_models_json_structure():
     gemma = models["gemma-4-e4b"]
     assert gemma["local_model_dir"] == "models/gemma-4-E3B-it"
     assert gemma["modelscope_id"] == "spawner/spawner-gemma-4-E4B-it"
-    assert "9002" in gemma["default_api_url"]
+    assert "9003" in gemma["default_api_url"]
+    assert gemma["gemma_vlm_backend"] == "vllm"
+    assert "vllm_executable" not in gemma
 
 
 def test_tag_edit_leaf_api_has_anima_train_branch():
@@ -54,3 +56,12 @@ def test_frontend_has_anima_train_mode_option():
     assert "animaAutoStartVllm" in html
     assert "ensureAnimaVllmReady" in html
     assert "auto_start_vllm" in html
+    assert "btnAnimaStopVllm" in html
+    assert "/api/tag-edit-leaf/vllm/stop" in html
+    assert 'id="animaTemperature" value="0.4"' in html
+    assert "|| 0.4" in html
+
+
+def test_anima_train_temperature_default_matches_comfyui():
+    source = API_PATH.read_text(encoding="utf-8")
+    assert 'data.get("vlm_temperature", 0.4)' in source

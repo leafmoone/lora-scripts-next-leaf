@@ -15,8 +15,6 @@
       "modelscope_id": "spawner/spawner-gemma-4-E4B-it",
       "port": 9003,
       "gemma_vlm_backend": "vllm",
-      "vllm_executable": "/root/autodl-tmp/vllm-gemma-cu128/bin/vllm",
-      "cuda_home": "/root/autodl-tmp/cuda-12.8",
       "vllm_serve": {
         "max_model_len": 4096,
         "gpu_memory_utilization": 0.9,
