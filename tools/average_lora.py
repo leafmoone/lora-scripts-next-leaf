@@ -34,16 +34,23 @@ NON_LORA_WARNED = False
 
 
 def find_lora_pairs(state_dict: dict) -> list:
-    """在 state_dict 中匹配 lora_A / lora_B 对，返回 [(base_prefix, a_key, b_key), ...]"""
+    """在 state_dict 中匹配 LoRA down/up 矩阵对，返回 [(base_prefix, a_key, b_key), ...]"""
     pairs = []
     seen = set()
     for key in state_dict:
-        if ".lora_A." not in key:
+        if ".lora_A." in key:
+            down_marker = ".lora_A."
+            up_marker = ".lora_B."
+        elif ".lora_down." in key:
+            down_marker = ".lora_down."
+            up_marker = ".lora_up."
+        else:
             continue
-        base = key[: key.index(".lora_A.")]
+
+        base = key[: key.index(down_marker)]
         if base in seen:
             continue
-        b_key = key.replace(".lora_A.", ".lora_B.")
+        b_key = key.replace(down_marker, up_marker)
         if b_key in state_dict:
             seen.add(base)
             pairs.append((base, key, b_key))
