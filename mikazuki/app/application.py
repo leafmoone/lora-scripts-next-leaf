@@ -128,6 +128,10 @@ app.include_router(differential_lora_router)
 from mikazuki.app.tag_edit_leaf_api import router as tag_edit_leaf_router
 app.include_router(tag_edit_leaf_router)
 
+# Agent Train API (LangGraph orchestration)
+from mikazuki.app.agent_train_api import router as agent_train_router
+app.include_router(agent_train_router)
+
 
 cors_config = os.environ.get("MIKAZUKI_APP_CORS", "")
 if cors_config != "":

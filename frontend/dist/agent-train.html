@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.ico?v=20260525-nt" sizes="any">
+<title>Agent Train | Next Trainer</title>
+<style>
+:root{--c-bg:#fff;--c-text:#2c3e50;--c-border:#e2e2e2;--c-brand:#3eaf7c;--c-danger:#f56c6c;--c-muted:#6b7280;--c-panel:#f5f7fa;--c-warn:#8a5a00;--c-warn-bg:#fff7e6;--c-error-bg:#fff1f0}
+html.dark{--c-bg:#22272e;--c-text:#adbac7;--c-border:#373e47;--c-brand:#57b883;--c-muted:#8b949e;--c-panel:#2d333b;--c-warn:#e3b341;--c-warn-bg:#2a2218;--c-error-bg:#33201f}
+html,body{background:var(--c-bg);color:var(--c-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;padding:0}
+.container{max-width:1180px;margin:0 auto;padding:22px 20px}
+.back-home{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--c-brand);text-decoration:none;margin-bottom:12px}
+.back-home:hover{text-decoration:underline}
+.header{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;margin-bottom:14px}
+h1{font-size:22px;margin:0 0 4px}
+.subtitle{font-size:13px;opacity:.72;margin:0}
+.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:14px;align-items:start}
+.card{background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:14px;margin-bottom:12px}
+.card h2{font-size:14px;color:var(--c-brand);margin:0 0 10px}
+.settings{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px}
+label{display:block;font-size:12px;font-weight:600;margin-bottom:4px;opacity:.84}
+input,textarea,select{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--c-border);border-radius:6px;font-size:13px;background:var(--c-bg);color:var(--c-text)}
+textarea{resize:vertical;line-height:1.5}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--c-brand);box-shadow:0 0 0 3px rgba(62,175,124,.12)}
+.helper{font-size:11px;color:var(--c-muted);margin-top:3px}
+.chat{height:520px;overflow:auto;background:var(--c-panel);border:1px solid var(--c-border);border-radius:8px;padding:12px}
+.msg{max-width:86%;margin-bottom:10px;padding:9px 11px;border-radius:8px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.msg.user{margin-left:auto;background:var(--c-brand);color:#fff}
+.msg.assistant{background:var(--c-bg);border:1px solid var(--c-border)}
+.composer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px}
+.btn{padding:8px 14px;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600}
+.btn-primary{background:var(--c-brand);color:#fff}
+.btn-secondary{background:var(--c-border);color:var(--c-text)}
+.btn-danger{background:var(--c-danger);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.status{font-size:12px;color:var(--c-muted);margin-top:8px}
+.plan-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.plan-type{display:inline-block;font-size:11px;padding:2px 7px;border:1px solid var(--c-border);border-radius:4px;color:var(--c-muted);margin-bottom:8px}
+.meta-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.meta-chip{display:inline-block;font-size:11px;padding:2px 7px;border:1px solid var(--c-border);border-radius:4px;color:var(--c-muted)}
+.summary{font-size:13px;line-height:1.6;margin:0 0 10px;padding-left:18px}
+.warn{background:var(--c-warn-bg);border:1px solid var(--c-border);border-radius:8px;padding:10px;color:var(--c-warn);font-size:12px;line-height:1.5;margin-bottom:10px}
+.error{background:var(--c-error-bg);border:1px solid var(--c-danger);border-radius:8px;padding:10px;color:var(--c-danger);font-size:12px;line-height:1.5;margin-bottom:10px}
+.missing{background:var(--c-panel);border:1px dashed var(--c-border);border-radius:8px;padding:9px 10px;color:var(--c-muted);font-size:12px;line-height:1.5;margin:8px 0}
+.decision-log{font-size:12px;color:var(--c-muted);line-height:1.5;margin-top:10px}
+.decision-log strong{color:var(--c-text)}
+.check-list{font-size:12px;line-height:1.5;margin:8px 0;padding-left:18px;color:var(--c-muted)}
+.key-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.key-fields .wide{grid-column:1/-1}
+pre{background:var(--c-panel);border:1px solid var(--c-border);border-radius:8px;padding:10px;max-height:260px;overflow:auto;font-size:12px;white-space:pre-wrap}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.empty{color:var(--c-muted);font-size:13px;line-height:1.6}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.settings{grid-template-columns:1fr}.chat{height:420px}.header{display:block}}
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" target="_self" class="back-home">← 返回 Next Trainer 主页</a>
+  <div class="header">
+    <div>
+      <h1>Agent Train</h1>
+      <p class="subtitle">通过对话生成打标和训练计划；所有写文件、占用 GPU 的动作都需要确认后执行。</p>
+    </div>
+    <button class="btn btn-secondary" onclick="newSession()">新会话</button>
+  </div>
+
+  <div class="card">
+    <h2>模型接入</h2>
+    <div class="settings">
+      <div>
+        <label for="baseUrl">OpenAI-compatible Base URL</label>
+        <input id="baseUrl" value="http://127.0.0.1:8000/v1">
+      </div>
+      <div>
+        <label for="modelName">Model</label>
+        <input id="modelName" placeholder="gpt-4.1 / local-model">
+      </div>
+      <div>
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="不会保存到磁盘" oninput="updateModelDebug()">
+        <div class="helper" id="modelDebug">仅随本次请求发送；页面不会保存。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section>
+      <div class="card">
+        <h2>对话</h2>
+        <div class="chat" id="chat"></div>
+        <div class="composer">
+          <textarea id="message" rows="3" placeholder="例如：给 /root/dataset/role_01 打标，然后准备 Anima Fast 训练计划"></textarea>
+          <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">发送</button>
+        </div>
+        <div class="status" id="chatStatus"></div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="card">
+        <h2>待确认计划</h2>
+        <div id="planBox" class="empty">暂无计划。先在左侧描述图片目录、打标需求或训练类型。</div>
+      </div>
+      <div class="card">
+        <h2>任务状态</h2>
+        <div id="statusBox" class="empty">暂无任务。</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'mikazuki_agent_train_v1';
+let state = { session_id: '', messages: [], plan: null, pending_action: null, last_tool_result: null };
+let statusTimer = null;
+
+function saveLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    session_id: state.session_id,
+    base_url: document.getElementById('baseUrl').value,
+    model: document.getElementById('modelName').value
+  }));
+}
+
+function loadLocal() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (raw.base_url) document.getElementById('baseUrl').value = raw.base_url;
+    if (raw.model) document.getElementById('modelName').value = raw.model;
+    if (raw.session_id) restoreSession(raw.session_id);
+  } catch (e) {}
+}
+
+async function api(path, options) {
+  const resp = await fetch(path, Object.assign({
+    headers: {'Content-Type': 'application/json'}
+  }, options || {}));
+  const data = await resp.json();
+  if (data.status !== 'success') throw new Error(data.message || '请求失败');
+  return data.data || {};
+}
+
+async function newSession() {
+  setBusy(true, '正在创建会话...');
+  try {
+    state = await api('/api/agent-train/sessions', {method:'POST', body:'{}'});
+    saveLocal();
+    render();
+    setBusy(false, '已创建新会话');
+  } catch (e) {
+    setBusy(false, e.message);
+  }
+}
+
+async function restoreSession(sessionId) {
+  try {
+    state = await api('/api/agent-train/sessions/' + encodeURIComponent(sessionId));
+    render();
+    startStatusPolling();
+  } catch (e) {
+    localStorage.removeItem(STORAGE_KEY);
+    state.session_id = '';
+  }
+}
+
+function modelConfig() {
+  return {
+    base_url: document.getElementById('baseUrl').value.trim(),
+    model: document.getElementById('modelName').value.trim(),
+    api_key: document.getElementById('apiKey').value.trim()
+  };
+}
+
+function updateModelDebug() {
+  const config = modelConfig();
+  const keyState = config.api_key ? `API Key: 已填写 (${config.api_key.length} 字符)` : 'API Key: 未填写';
+  document.getElementById('modelDebug').textContent = `${keyState}；仅随本次请求发送，页面不会保存。`;
+}
+
+async function sendMessage() {
+  const text = document.getElementById('message').value.trim();
+  if (!text) return;
+  updateModelDebug();
+  const config = modelConfig();
+  setBusy(true, 'Agent 正在生成计划...');
+  try {
+    state = await api('/api/agent-train/chat', {
+      method:'POST',
+      body: JSON.stringify({session_id: state.session_id, message: text, model_config: config})
+    });
+    document.getElementById('message').value = '';
+    saveLocal();
+    render();
+    startStatusPolling();
+    setBusy(false, '计划已更新');
+  } catch (e) {
+    setBusy(false, e.message);
+  }
+}
+
+async function approve(decision) {
+  if (!state.session_id) return;
+  const payloadText = document.getElementById('payloadEdit') ? document.getElementById('payloadEdit').value : '';
+  let body = {session_id: state.session_id, decision};
+  if (decision === 'edit') {
+    try { body.payload = JSON.parse(payloadText); }
+    catch (e) { setBusy(false, 'JSON 参数无效: ' + e.message); return; }
+  }
+  setBusy(true, decision === 'reject' ? '正在取消...' : '正在执行已确认动作...');
+  try {
+    state = await api('/api/agent-train/approve', {method:'POST', body: JSON.stringify(body)});
+    render();
+    startStatusPolling();
+    setBusy(false, '操作完成');
+  } catch (e) {
+    setBusy(false, e.message);
+  }
+}
+
+function render() {
+  renderChat();
+  renderPlan();
+  renderStatus();
+}
+
+function renderChat() {
+  const box = document.getElementById('chat');
+  const messages = state.messages || [];
+  if (!messages.length) {
+    box.innerHTML = '<div class="msg assistant">描述你的数据集路径和目标。我会先生成计划，确认后再执行打标或训练。</div>';
+    return;
+  }
+  box.innerHTML = messages.map(m => `<div class="msg ${m.role === 'user' ? 'user' : 'assistant'}">${escapeHtml(m.content || '')}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderPlan() {
+  const box = document.getElementById('planBox');
+  const plan = state.plan;
+  const pending = state.pending_action;
+  const activePlan = plan || {};
+  if (!plan && !pending) {
+    box.className = 'empty';
+    box.textContent = '暂无计划。先在左侧描述图片目录、打标需求或训练类型。';
+    return;
+  }
+  const payload = pending ? pending.payload : (activePlan.payload || {});
+  const summary = (pending ? pending.summary : activePlan.summary) || [];
+  const skillId = (pending && pending.skill_id) || activePlan.skill_id || '';
+  const sideEffectLevel = (pending && pending.side_effect_level) || activePlan.side_effect_level || '';
+  const missingSlots = state.missing_slots || activePlan.missing_slots || [];
+  const workflow = state.workflow || {};
+  const planner = activePlan.planner || lastDecision() || {};
+  const validation = (pending && pending.validation) || activePlan.validation || state.validation || {};
+  const validationErrors = validation.errors || [];
+  const validationWarnings = validation.warnings || [];
+  const readonlyChecks = activePlan.readonly_checks || [];
+  const canApprove = !!pending && !missingSlots.length && !validationErrors.length;
+  box.className = '';
+  box.innerHTML = `
+    <div class="plan-title">${escapeHtml((pending && pending.title) || activePlan.title || '计划')}</div>
+    <div class="meta-row">
+      <span class="meta-chip">${escapeHtml(activePlan.type || (pending && pending.kind) || '')}</span>
+      ${skillId ? `<span class="meta-chip">Skill: ${escapeHtml(skillId)}</span>` : ''}
+      ${sideEffectLevel ? `<span class="meta-chip">风险级别: ${escapeHtml(sideEffectLevel)}</span>` : ''}
+      ${workflow.status ? `<span class="meta-chip">Workflow: ${escapeHtml(workflow.status)}</span>` : ''}
+      ${planner.source ? `<span class="meta-chip">Planner: ${escapeHtml(planner.source)}</span>` : ''}
+    </div>
+    ${planner.reason ? `<div class="missing">决策原因：${escapeHtml(planner.reason)}${planner.fallback_reason ? `；回退：${escapeHtml(planner.fallback_reason)}` : ''}</div>` : ''}
+    <ul class="summary">${summary.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+    ${renderWorkflowSteps(workflow)}
+    <div class="warn">确认前请检查输入/输出路径、训练类型、学习率、rank、epoch。批准后可能写入文件并占用 GPU。</div>
+    ${validationErrors.length ? `<div class="error">校验错误：<br>${validationErrors.map(escapeHtml).join('<br>')}</div>` : ''}
+    ${validationWarnings.length ? `<div class="warn">校验警告：<br>${validationWarnings.map(escapeHtml).join('<br>')}</div>` : ''}
+    ${renderReadOnlyChecks(readonlyChecks)}
+    ${missingSlots.length ? `<div class="missing">缺失参数：${missingSlots.map(escapeHtml).join('、')}。请在对话里补充，或直接在下方参数里填写后继续发送说明。</div>` : ''}
+    <label>关键参数</label>
+    <div class="key-fields">${renderKeyFields(payload)}</div>
+    <label for="payloadEdit">参数 JSON</label>
+    <textarea id="payloadEdit" rows="12" spellcheck="false">${escapeHtml(JSON.stringify(payload, null, 2))}</textarea>
+    <div class="actions">
+      ${canApprove ? `<button class="btn btn-primary" onclick="approve('approve')">批准执行</button>` : ''}
+      ${canApprove ? `<button class="btn btn-secondary" onclick="approve('edit')">使用修改后 JSON 执行</button>` : ''}
+      ${!canApprove ? `<button class="btn btn-primary" onclick="sendKeyFields()">提交关键参数</button>` : ''}
+      ${pending ? `<button class="btn btn-danger" onclick="approve('reject')">拒绝</button>` : ''}
+    </div>
+    ${renderDecisionLog()}`;
+}
+
+function renderWorkflowSteps(workflow) {
+  const steps = workflow.steps || [];
+  if (!steps.length) return '';
+  return `<ul class="check-list">${steps.map((step, index) => `
+    <li>${index + 1}. ${escapeHtml(step.skill_id || '')} · ${escapeHtml(step.status || '')}</li>
+  `).join('')}</ul>`;
+}
+
+function renderReadOnlyChecks(checks) {
+  if (!checks.length) return '';
+  return `<ul class="check-list">${checks.map(check => {
+    const details = check.tool === 'inspect_dataset'
+      ? `图片 ${check.image_count || 0}，caption ${check.caption_count || 0}，缺失 ${check.missing_caption_count || 0}`
+      : `${check.exists ? '存在' : '不存在'}${check.size_bytes ? `，${check.size_bytes} bytes` : ''}`;
+    return `<li>${escapeHtml(check.status || '')} · ${escapeHtml(check.path || '')} · ${escapeHtml(details)}</li>`;
+  }).join('')}</ul>`;
+}
+
+function lastDecision() {
+  const log = state.decision_log || [];
+  return log.length ? log[log.length - 1] : null;
+}
+
+function renderDecisionLog() {
+  const log = (state.decision_log || []).slice(-3).reverse();
+  if (!log.length) return '';
+  return `<div class="decision-log"><strong>最近决策</strong>${log.map(item => `
+    <div>${escapeHtml(item.planner_source || 'unknown')} · ${escapeHtml(item.skill_id || '未匹配')} · ${escapeHtml(item.reason || '')}</div>
+  `).join('')}</div>`;
+}
+
+function renderKeyFields(payload) {
+  const defs = [
+    ['input_dir', '图片目录', 'wide'],
+    ['train_data_dir', '训练目录', 'wide'],
+    ['folder_a', 'Folder A', 'wide'],
+    ['folder_b', 'Folder B', 'wide'],
+    ['pretrained_model_name_or_path', '底模', 'wide'],
+    ['vae', 'VAE', 'wide'],
+    ['qwen3', 'Qwen3', 'wide'],
+    ['output_dir', '输出目录', 'wide'],
+    ['max_train_epochs', 'Epoch', ''],
+    ['num_epochs', 'Epoch', ''],
+    ['network_dim', 'Rank / Dim', ''],
+    ['lora_rank', 'LoRA Rank', ''],
+    ['learning_rate', '学习率', ''],
+    ['train_batch_size', 'Batch Size', ''],
+    ['resolution', '分辨率', '']
+  ];
+  return defs.filter(([key]) => Object.prototype.hasOwnProperty.call(payload, key)).map(([key, label, cls]) => `
+    <div class="${cls}">
+      <label for="key_${escapeHtml(key)}">${escapeHtml(label)}</label>
+      <input id="key_${escapeHtml(key)}" data-json-key="${escapeHtml(key)}" value="${escapeHtml(payload[key] ?? '')}" oninput="syncKeyFieldToJson(this)">
+    </div>`).join('') || '<div class="empty">当前计划没有可提取的关键参数。</div>';
+}
+
+function syncKeyFieldToJson(input) {
+  const edit = document.getElementById('payloadEdit');
+  if (!edit) return;
+  let payload;
+  try { payload = JSON.parse(edit.value || '{}'); }
+  catch (e) { setBusy(false, 'JSON 参数无效，暂不能同步关键参数'); return; }
+  const key = input.getAttribute('data-json-key');
+  const current = payload[key];
+  const raw = input.value;
+  if (typeof current === 'number') {
+    payload[key] = raw === '' ? '' : Number(raw);
+  } else if (typeof current === 'boolean') {
+    payload[key] = raw === 'true' || raw === '1';
+  } else {
+    payload[key] = raw;
+  }
+  edit.value = JSON.stringify(payload, null, 2);
+}
+
+async function sendKeyFields() {
+  const edit = document.getElementById('payloadEdit');
+  if (!edit) return;
+  let payload;
+  try { payload = JSON.parse(edit.value || '{}'); }
+  catch (e) { setBusy(false, 'JSON 参数无效: ' + e.message); return; }
+  const pairs = [];
+  document.querySelectorAll('[data-json-key]').forEach(input => {
+    const key = input.getAttribute('data-json-key');
+    if (!key) return;
+    const value = payload[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      pairs.push(`${key}=${value}`);
+    }
+  });
+  if (!pairs.length) {
+    setBusy(false, '请先填写关键参数');
+    return;
+  }
+  document.getElementById('message').value = pairs.join(' ');
+  await sendMessage();
+}
+
+function renderStatus(extra) {
+  const box = document.getElementById('statusBox');
+  const result = state.last_tool_result;
+  const lines = [];
+  if (state.session_id) lines.push('会话: ' + state.session_id);
+  if (state.linked_task_ids && state.linked_task_ids.length) lines.push('关联任务: ' + state.linked_task_ids.join(', '));
+  if (result) lines.push('最近工具结果: ' + JSON.stringify(result).slice(0, 500));
+  if (extra && extra.tagger) lines.push('Tagger: ' + extra.tagger.status + ' ' + (extra.tagger.message || ''));
+  if (extra && extra.train_tasks && extra.train_tasks.length) lines.push('训练任务数: ' + extra.train_tasks.length);
+  box.className = lines.length ? '' : 'empty';
+  box.innerHTML = lines.length ? '<pre>' + escapeHtml(lines.join('\n')) + '</pre>' : '暂无任务。';
+}
+
+function startStatusPolling() {
+  if (statusTimer) clearInterval(statusTimer);
+  if (!state.session_id) return;
+  statusTimer = setInterval(async () => {
+    try {
+      const data = await api('/api/agent-train/status/' + encodeURIComponent(state.session_id));
+      renderStatus(data);
+    } catch (e) {}
+  }, 2500);
+}
+
+function setBusy(busy, text) {
+  document.getElementById('sendBtn').disabled = busy;
+  document.getElementById('chatStatus').textContent = text || '';
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+document.getElementById('baseUrl').addEventListener('change', saveLocal);
+document.getElementById('modelName').addEventListener('change', saveLocal);
+document.getElementById('baseUrl').addEventListener('input', updateModelDebug);
+document.getElementById('modelName').addEventListener('input', updateModelDebug);
+document.getElementById('message').addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') sendMessage();
+});
+loadLocal();
+updateModelDebug();
+if (!state.session_id) newSession();
+</script>
+</body>
+</html>

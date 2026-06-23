@@ -1,0 +1,1058 @@
+[
+  {
+    "field": "model_train_type",
+    "type": "string",
+    "default": "anima-lora-fast",
+    "description": "训练种类标识，由 skill 默认值固定。",
+    "aliases": [
+      "训练类型",
+      "train type",
+      "model_train_type",
+      "model train type"
+    ],
+    "intents": [
+      "选择训练类型"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "lora_type",
+    "type": "string",
+    "default": "lora",
+    "description": "LoRA 类型标识，由训练入口固定。",
+    "aliases": [
+      "lora type",
+      "lora_type"
+    ],
+    "intents": [
+      "lora 类型"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "pretrained_model_name_or_path",
+    "type": "string",
+    "default": "./sd-models/anima/anima-base-v1.0.safetensors",
+    "description": "Anima 主 DiT / transformer 权重路径，由 slots 管理。",
+    "aliases": [
+      "底模",
+      "base model",
+      "pretrained model",
+      "主模型",
+      "pretrained_model_name_or_path",
+      "pretrained model name or path"
+    ],
+    "intents": [
+      "base=/models/anima.safetensors"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "vae",
+    "type": "string",
+    "default": "./sd-models/anima/qwen_image_vae.safetensors",
+    "description": "Qwen Image VAE 模型路径，由 slots 管理。",
+    "aliases": [
+      "vae",
+      "VAE 模型"
+    ],
+    "intents": [
+      "vae=/models/vae.safetensors"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "qwen3",
+    "type": "string",
+    "default": "./sd-models/anima/qwen_3_06b_base.safetensors",
+    "description": "Qwen3 文本模型路径，由 slots 管理。",
+    "aliases": [
+      "qwen3",
+      "文本模型",
+      "text model"
+    ],
+    "intents": [
+      "qwen3=/models/qwen3.safetensors"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "resume",
+    "type": "string",
+    "default": "",
+    "description": "从已保存训练状态继续训练的路径。",
+    "aliases": [
+      "resume",
+      "断点续训",
+      "继续训练"
+    ],
+    "intents": [
+      "从 checkpoint 继续"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "method",
+    "type": "string",
+    "default": "lora",
+    "description": "Anima Fast 方法标识，由后端固定为 LoRA。",
+    "aliases": [
+      "method"
+    ],
+    "intents": [
+      "训练方法"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "methods_subdir",
+    "type": "string",
+    "default": "gui-methods",
+    "description": "Anima Fast 方法配置子目录，由后端固定。",
+    "aliases": [
+      "methods subdir",
+      "methods_subdir"
+    ],
+    "intents": [
+      "方法目录"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "qwen3_max_token_length",
+    "type": "integer",
+    "default": 512,
+    "description": "Qwen3 最大 token 长度。",
+    "aliases": [
+      "qwen3_max_token_length",
+      "qwen3 max token length"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "timestep_sampling",
+    "type": "string",
+    "default": "shift",
+    "description": "时间步采样策略。",
+    "aliases": [
+      "timestep_sampling",
+      "timestep sampling"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "discrete_flow_shift",
+    "type": "number",
+    "default": 3.0,
+    "description": "Rectified Flow 位移参数。",
+    "aliases": [
+      "discrete_flow_shift",
+      "discrete flow shift"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "attn_mode",
+    "type": "string",
+    "default": "",
+    "description": "Attention 加速实现，留空使用默认保底实现。",
+    "aliases": [
+      "attn_mode",
+      "attn mode"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "torch_compile",
+    "type": "boolean",
+    "default": true,
+    "description": "是否启用 torch.compile。",
+    "aliases": [
+      "torch compile",
+      "编译加速",
+      "torch_compile"
+    ],
+    "intents": [],
+    "risk": "high",
+    "llm_editable": true
+  },
+  {
+    "field": "static_token_count",
+    "type": "integer",
+    "default": 4096,
+    "description": "静态 token 上限，高分辨率会增加显存占用。",
+    "aliases": [
+      "static_token_count",
+      "static token count"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "compile_mode",
+    "type": "string",
+    "default": "blocks",
+    "description": "torch.compile 模式，blocks 或 full。",
+    "aliases": [
+      "compile 模式",
+      "编译模式",
+      "compile_mode",
+      "compile mode"
+    ],
+    "intents": [],
+    "risk": "high",
+    "llm_editable": true
+  },
+  {
+    "field": "train_data_dir",
+    "type": "string",
+    "default": "/data/images",
+    "description": "训练图片目录，由 slots 从用户路径解析。",
+    "aliases": [
+      "训练目录",
+      "图片目录",
+      "数据集目录",
+      "train_data_dir",
+      "train data dir"
+    ],
+    "intents": [
+      "使用 /data/train 训练"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "source_image_dir",
+    "type": "string",
+    "default": "/data/images",
+    "description": "Anima Fast 原始图片目录，默认跟随训练图片目录。",
+    "aliases": [
+      "原图目录",
+      "source image dir",
+      "source_image_dir"
+    ],
+    "intents": [
+      "原图目录"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "resized_image_dir",
+    "type": "string",
+    "default": "",
+    "description": "Anima Fast 训练实际读取的 resized 目录，留空自动使用缓存目录。",
+    "aliases": [
+      "resized 目录",
+      "缩放图目录",
+      "resized_image_dir",
+      "resized image dir"
+    ],
+    "intents": [
+      "resized 目录"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "lora_cache_dir",
+    "type": "string",
+    "default": "",
+    "description": "Anima Fast LoRA cache 目录，留空自动使用 .cache/anima_fast。",
+    "aliases": [
+      "cache 目录",
+      "lora cache",
+      "lora_cache_dir",
+      "lora cache dir"
+    ],
+    "intents": [
+      "cache 目录"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "cache_latents",
+    "type": "boolean",
+    "default": false,
+    "description": "是否使用 latent cache。",
+    "aliases": [
+      "缓存 latent",
+      "latent cache",
+      "cache_latents",
+      "cache latents"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "cache_latents_to_disk",
+    "type": "boolean",
+    "default": false,
+    "description": "是否将 latent cache 写入磁盘。",
+    "aliases": [
+      "latent 写盘",
+      "缓存写盘",
+      "cache_latents_to_disk",
+      "cache latents to disk"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "cache_text_encoder_outputs",
+    "type": "boolean",
+    "default": false,
+    "description": "是否使用文本编码 cache。",
+    "aliases": [
+      "缓存文本编码",
+      "text encoder cache",
+      "cache_text_encoder_outputs",
+      "cache text encoder outputs"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "cache_text_encoder_outputs_to_disk",
+    "type": "boolean",
+    "default": false,
+    "description": "是否将文本编码 cache 写入磁盘。",
+    "aliases": [
+      "cache_text_encoder_outputs_to_disk",
+      "cache text encoder outputs to disk"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "skip_cache_check",
+    "type": "boolean",
+    "default": false,
+    "description": "是否跳过缓存完整性检查。",
+    "aliases": [
+      "skip_cache_check",
+      "skip cache check"
+    ],
+    "intents": [],
+    "risk": "high",
+    "llm_editable": true
+  },
+  {
+    "field": "caption_extension",
+    "type": "string",
+    "default": ".txt",
+    "description": "caption 文件扩展名。",
+    "aliases": [
+      "caption 后缀",
+      "标签后缀",
+      "caption_extension",
+      "caption extension"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "resolution",
+    "type": "string",
+    "default": "1024,1024",
+    "description": "训练图片分辨率，通常为 宽,高。",
+    "aliases": [
+      "分辨率",
+      "resolution",
+      "尺寸"
+    ],
+    "intents": [
+      "分辨率 1024,1024",
+      "尺寸改 768,1024"
+    ],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "enable_bucket",
+    "type": "boolean",
+    "default": true,
+    "description": "是否启用 arb bucket 以支持不同宽高比图片。",
+    "aliases": [
+      "enable_bucket",
+      "enable bucket"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "output_name",
+    "type": "string",
+    "default": "aki",
+    "description": "输出模型文件名前缀。",
+    "aliases": [
+      "output_name",
+      "output name"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "output_dir",
+    "type": "string",
+    "default": "./output/anima_fast",
+    "description": "输出目录。训练或打标结果写入的位置，默认由 skill 或用户确认流程管理。",
+    "aliases": [
+      "输出目录",
+      "output dir",
+      "保存目录",
+      "output_dir"
+    ],
+    "intents": [
+      "输出到某目录"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "save_model_as",
+    "type": "string",
+    "default": "safetensors",
+    "description": "保存模型格式。",
+    "aliases": [
+      "save_model_as",
+      "save model as"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "save_precision",
+    "type": "string",
+    "default": "fp16",
+    "description": "保存权重时使用的精度。",
+    "aliases": [
+      "保存精度",
+      "save precision",
+      "save_precision"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "save_every_n_epochs",
+    "type": "integer",
+    "default": 2,
+    "description": "每 N 个 epoch 保存一次。",
+    "aliases": [
+      "save_every_n_epochs",
+      "save every n epochs"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "save_every_n_steps",
+    "type": "string",
+    "default": "",
+    "description": "每 N 个 step 保存一次。",
+    "aliases": [
+      "save_every_n_steps",
+      "save every n steps"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "save_state",
+    "type": "boolean",
+    "default": false,
+    "description": "是否保存训练状态以便断点续训。",
+    "aliases": [
+      "save_state",
+      "save state"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "logging_dir",
+    "type": "string",
+    "default": "./logs/anima_fast",
+    "description": "训练日志目录。",
+    "aliases": [
+      "日志目录",
+      "logging dir",
+      "logging_dir"
+    ],
+    "intents": [
+      "日志输出到"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "progress_jsonl",
+    "type": "string",
+    "default": "",
+    "description": "Anima Fast 进度 JSONL 文件路径，由后端监控使用。",
+    "aliases": [
+      "progress jsonl",
+      "进度文件",
+      "progress_jsonl"
+    ],
+    "intents": [
+      "进度文件"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "max_train_epochs",
+    "type": "integer",
+    "default": 1,
+    "description": "最大训练 epoch 轮数。",
+    "aliases": [
+      "epoch",
+      "epochs",
+      "轮",
+      "训练轮数",
+      "max_train_epochs",
+      "max train epochs"
+    ],
+    "intents": [
+      "训练 8 轮",
+      "epoch 10"
+    ],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "max_train_steps",
+    "type": "string",
+    "default": "",
+    "description": "最大训练 step；通常在 epoch 为空时使用。",
+    "aliases": [
+      "max_train_steps",
+      "max train steps"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "train_batch_size",
+    "type": "integer",
+    "default": 1,
+    "description": "训练 batch size，越大显存占用越高。",
+    "aliases": [
+      "batch size",
+      "批量大小",
+      "bs",
+      "train_batch_size",
+      "train batch size"
+    ],
+    "intents": [
+      "batch size 2",
+      "批量大小改 1"
+    ],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "gradient_checkpointing",
+    "type": "boolean",
+    "default": true,
+    "description": "是否启用梯度检查点以节省显存。",
+    "aliases": [
+      "梯度检查点",
+      "gradient checkpointing",
+      "省显存",
+      "gradient_checkpointing"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "gradient_accumulation_steps",
+    "type": "integer",
+    "default": 1,
+    "description": "梯度累加步数。",
+    "aliases": [
+      "梯度累加",
+      "grad accum",
+      "accumulation",
+      "gradient_accumulation_steps",
+      "gradient accumulation steps"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "seed",
+    "type": "integer",
+    "default": 42,
+    "description": "随机种子。",
+    "aliases": [
+      "随机种子",
+      "seed"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "learning_rate",
+    "type": "string",
+    "default": "1e-4",
+    "description": "训练学习率，保持字符串格式以兼容现有 payload。",
+    "aliases": [
+      "学习率",
+      "lr",
+      "learning rate",
+      "learning_rate"
+    ],
+    "intents": [
+      "学习率 5e-5",
+      "lr=1e-4"
+    ],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "unet_lr",
+    "type": "string",
+    "default": "1e-4",
+    "description": "UNet/DiT 分支学习率。",
+    "aliases": [
+      "unet lr",
+      "dit lr",
+      "unet 学习率",
+      "unet_lr"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "text_encoder_lr",
+    "type": "string",
+    "default": "1e-5",
+    "description": "文本编码器学习率。",
+    "aliases": [
+      "text encoder lr",
+      "文本编码器学习率",
+      "text_encoder_lr"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "lr_scheduler",
+    "type": "string",
+    "default": "cosine_with_restarts",
+    "description": "学习率调度器。",
+    "aliases": [
+      "调度器",
+      "scheduler",
+      "学习率调度",
+      "lr_scheduler",
+      "lr scheduler"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "lr_warmup_steps",
+    "type": "integer",
+    "default": 0,
+    "description": "学习率预热步数。",
+    "aliases": [
+      "lr_warmup_steps",
+      "lr warmup steps"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "lr_scheduler_num_cycles",
+    "type": "integer",
+    "default": 1,
+    "description": "cosine_with_restarts 等调度器的循环次数。",
+    "aliases": [
+      "lr_scheduler_num_cycles",
+      "lr scheduler num cycles"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "loss_type",
+    "type": "string",
+    "default": "",
+    "description": "loss 类型。",
+    "aliases": [
+      "loss_type",
+      "loss type"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "optimizer_type",
+    "type": "string",
+    "default": "AdamW8bit",
+    "description": "优化器类型。",
+    "aliases": [
+      "优化器",
+      "optimizer",
+      "optimizer_type",
+      "optimizer type"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "min_snr_gamma",
+    "type": "string",
+    "default": "",
+    "description": "最小信噪比 gamma。",
+    "aliases": [
+      "min_snr_gamma",
+      "min snr gamma"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "optimizer_args_custom",
+    "type": "array",
+    "default": [],
+    "description": "自定义 optimizer_args，一行一个 key=value。",
+    "aliases": [
+      "optimizer_args_custom",
+      "optimizer args custom"
+    ],
+    "intents": [],
+    "risk": "high",
+    "llm_editable": true
+  },
+  {
+    "field": "enable_preview",
+    "type": "boolean",
+    "default": false,
+    "description": "是否在训练过程中生成预览图。",
+    "aliases": [
+      "预览图",
+      "preview",
+      "出图预览",
+      "采样预览",
+      "enable_preview",
+      "enable preview"
+    ],
+    "intents": [
+      "开启预览图",
+      "不开预览图",
+      "关闭 preview"
+    ],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "randomly_choice_prompt",
+    "type": "boolean",
+    "default": false,
+    "description": "是否随机选择预览 Prompt。",
+    "aliases": [
+      "randomly_choice_prompt",
+      "randomly choice prompt"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "prompt_file",
+    "type": "string",
+    "default": "",
+    "description": "预览 Prompt 文件路径，填写后优先于正/负向 prompt 文本。",
+    "aliases": [
+      "prompt 文件",
+      "prompt file",
+      "prompt_file"
+    ],
+    "intents": [
+      "使用 prompt 文件"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "positive_prompts",
+    "type": "string",
+    "default": "",
+    "description": "预览图正向 Prompt。",
+    "aliases": [
+      "正向 prompt",
+      "positive prompt",
+      "positive_prompts",
+      "positive prompts"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "negative_prompts",
+    "type": "string",
+    "default": "",
+    "description": "预览图负向 Prompt。",
+    "aliases": [
+      "负向 prompt",
+      "negative prompt",
+      "negative_prompts",
+      "negative prompts"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_width",
+    "type": "integer",
+    "default": 1024,
+    "description": "预览图宽度。",
+    "aliases": [
+      "预览宽度",
+      "width",
+      "sample_width",
+      "sample width"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_height",
+    "type": "integer",
+    "default": 1024,
+    "description": "预览图高度。",
+    "aliases": [
+      "预览高度",
+      "height",
+      "sample_height",
+      "sample height"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_cfg",
+    "type": "number",
+    "default": 4.5,
+    "description": "预览图 CFG scale。",
+    "aliases": [
+      "cfg",
+      "CFG Scale",
+      "sample_cfg",
+      "sample cfg"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_seed",
+    "type": "integer",
+    "default": 42,
+    "description": "预览图随机种子。",
+    "aliases": [
+      "sample_seed",
+      "sample seed"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_steps",
+    "type": "integer",
+    "default": 40,
+    "description": "预览图推理步数。",
+    "aliases": [
+      "采样步数",
+      "推理步数",
+      "steps",
+      "sample_steps",
+      "sample steps"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_sampler",
+    "type": "string",
+    "default": "euler",
+    "description": "采样器名称。",
+    "aliases": [
+      "sample_sampler",
+      "sample sampler"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_at_first",
+    "type": "boolean",
+    "default": false,
+    "description": "是否训练开始前先生成 step 0 预览图。",
+    "aliases": [
+      "sample_at_first",
+      "sample at first"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "sample_every_n_epochs",
+    "type": "integer",
+    "default": 2,
+    "description": "每 N 个 epoch 生成一次预览图。",
+    "aliases": [
+      "sample_every_n_epochs",
+      "sample every n epochs"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "network_module",
+    "type": "string",
+    "default": "networks.lora_anima",
+    "description": "LoRA 网络模块路径，由当前训练入口固定。",
+    "aliases": [
+      "network module",
+      "network_module"
+    ],
+    "intents": [
+      "网络模块"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "network_weights",
+    "type": "string",
+    "default": "",
+    "description": "从已有 LoRA 权重继续训练的路径。",
+    "aliases": [
+      "已有 lora",
+      "network weights",
+      "继续训练 LoRA",
+      "network_weights"
+    ],
+    "intents": [
+      "加载已有 LoRA"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "network_dim",
+    "type": "integer",
+    "default": 16,
+    "description": "LoRA rank/network_dim。",
+    "aliases": [
+      "rank",
+      "network dim",
+      "network_dim",
+      "维度"
+    ],
+    "intents": [
+      "rank 32",
+      "network_dim 64"
+    ],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "network_alpha",
+    "type": "integer",
+    "default": 16,
+    "description": "LoRA alpha。",
+    "aliases": [
+      "network_alpha",
+      "network alpha"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "network_dropout",
+    "type": "integer",
+    "default": 0,
+    "description": "LoRA dropout。",
+    "aliases": [
+      "dropout",
+      "lora dropout",
+      "network_dropout",
+      "network dropout"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "network_args_custom",
+    "type": "array",
+    "default": [],
+    "description": "自定义 network_args，一行一个 key=value。",
+    "aliases": [
+      "network_args_custom",
+      "network args custom"
+    ],
+    "intents": [],
+    "risk": "high",
+    "llm_editable": true
+  }
+]

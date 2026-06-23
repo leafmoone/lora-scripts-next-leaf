@@ -1,0 +1,216 @@
+[
+  {
+    "field": "input_dir",
+    "type": "string",
+    "default": "/data/images",
+    "description": "输入图片目录，由 slots 从用户路径解析。",
+    "aliases": [
+      "图片目录",
+      "输入目录",
+      "input dir",
+      "input_dir"
+    ],
+    "intents": [
+      "给 /data/images 打标"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "output_dir",
+    "type": "string",
+    "default": "/data/images",
+    "description": "输出目录。训练或打标结果写入的位置，默认由 skill 或用户确认流程管理。",
+    "aliases": [
+      "输出目录",
+      "output dir",
+      "保存目录",
+      "output_dir"
+    ],
+    "intents": [
+      "输出到某目录"
+    ],
+    "risk": "high",
+    "llm_editable": false
+  },
+  {
+    "field": "mode",
+    "type": "string",
+    "default": "smart",
+    "description": "打标模式，smart 通常表示多阶段流程，simple 表示基础 WD 标签。",
+    "aliases": [
+      "mode"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "model",
+    "type": "string",
+    "default": "wd-eva02-large-tagger-v3",
+    "description": "Tagger 模型名称。",
+    "aliases": [
+      "model"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "threshold",
+    "type": "number",
+    "default": 0.35,
+    "description": "普通标签置信度阈值，范围 0 到 1。",
+    "aliases": [
+      "threshold"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "char_threshold",
+    "type": "number",
+    "default": 0.85,
+    "description": "角色标签置信度阈值，范围 0 到 1。",
+    "aliases": [
+      "char_threshold",
+      "char threshold"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "max_tags",
+    "type": "integer",
+    "default": 0,
+    "description": "每张图片最多保留的标签数，0 表示不限。",
+    "aliases": [
+      "max_tags",
+      "max tags"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "blacklist",
+    "type": "string",
+    "default": "",
+    "description": "需要过滤的标签，通常用逗号分隔。",
+    "aliases": [
+      "blacklist"
+    ],
+    "intents": [],
+    "risk": "low",
+    "llm_editable": true
+  },
+  {
+    "field": "additional_tags",
+    "type": "string",
+    "default": "",
+    "description": "追加到每张图片 caption 的固定标签，常用于触发词。",
+    "aliases": [
+      "触发词",
+      "trigger word",
+      "追加标签",
+      "固定标签",
+      "additional_tags",
+      "additional tags"
+    ],
+    "intents": [
+      "触发词为 kisaragi_yuuna",
+      "追加标签",
+      "固定 tag"
+    ],
+    "risk": "low",
+    "llm_editable": true
+  },
+  {
+    "field": "exclude_tags",
+    "type": "string",
+    "default": "",
+    "description": "需要排除的标签，通常用逗号分隔。",
+    "aliases": [
+      "exclude_tags",
+      "exclude tags"
+    ],
+    "intents": [],
+    "risk": "low",
+    "llm_editable": true
+  },
+  {
+    "field": "purpose",
+    "type": "string",
+    "default": "character",
+    "description": "VLM 描述方向，例如 character/style/general/concept。",
+    "aliases": [
+      "purpose"
+    ],
+    "intents": [],
+    "risk": "low",
+    "llm_editable": true
+  },
+  {
+    "field": "use_vlm",
+    "type": "boolean",
+    "default": true,
+    "description": "是否使用 VLM/vLLM 辅助生成更长 caption。",
+    "aliases": [
+      "vlm",
+      "vllm",
+      "视觉语言模型",
+      "大模型打标",
+      "use_vlm",
+      "use vlm"
+    ],
+    "intents": [
+      "不使用 vllm",
+      "不用 vlm",
+      "关闭大模型打标",
+      "启用 vlm"
+    ],
+    "risk": "low",
+    "llm_editable": true
+  },
+  {
+    "field": "use_cpu",
+    "type": "boolean",
+    "default": false,
+    "description": "是否强制使用 CPU 打标。",
+    "aliases": [
+      "use_cpu",
+      "use cpu"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "save_captions",
+    "type": "boolean",
+    "default": true,
+    "description": "是否保存 caption 文本文件。",
+    "aliases": [
+      "save_captions",
+      "save captions"
+    ],
+    "intents": [],
+    "risk": "medium",
+    "llm_editable": true
+  },
+  {
+    "field": "recursive",
+    "type": "boolean",
+    "default": false,
+    "description": "是否递归扫描子目录图片。",
+    "aliases": [
+      "recursive"
+    ],
+    "intents": [],
+    "risk": "low",
+    "llm_editable": true
+  }
+]
